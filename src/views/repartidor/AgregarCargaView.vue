@@ -27,7 +27,7 @@
                 <div class="info"><div class="nm">{{ p.nombre }}</div><div class="pr">almacén {{ fmt(p.stockAlmacen) }} · {{ p.unidad }}<span v-if="unidad[p.id]==='caja' && (cant[p.id]||0)>0"> · cargas {{ (cant[p.id]||0)*p.piezasPorCaja }} pzas</span></div></div>
                 <div class="stepper">
                   <button @click="set(p.id, (cant[p.id]||0) - 1)" :disabled="(cant[p.id]||0)<=0">−</button>
-                  <span class="q">{{ cant[p.id] || 0 }}</span>
+                  <input class="q" type="number" min="0" inputmode="numeric" :value="cant[p.id] || 0" @input="set(p.id, parseInt(String($event.target.value).replace(/[^\d]/g,''),10) || 0)" @focus="$event.target.select()">
                   <button @click="set(p.id, (cant[p.id]||0) + 1)" :disabled="(cant[p.id]||0) >= maxUnidad(p)">+</button>
                 </div>
               </div>
@@ -36,7 +36,7 @@
                 <button :class="{ on: unidad[p.id] === 'caja' }" @click="setUnidad(p.id, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
               </div>
             </div>
-            <p v-if="!filtrados.length" class="muted">No hay productos para mostrar.</p>
+            <p v-if="!filtrados.length" class="muted">Sin productos.</p>
           </div>
         </template>
       </div>
@@ -161,7 +161,8 @@ onMounted(async () => {
 .stepper { display: flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex: 0 0 auto; }
 .stepper button { width: 38px; height: 40px; border: none; background: transparent; font-size: 20px; color: var(--pine); cursor: pointer; }
 .stepper button:disabled { color: #C7CFC9; }
-.stepper .q { min-width: 30px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; }
+.stepper .q { width: 48px; height: 34px; min-width: 48px; text-align: center; border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; color: var(--ink); -moz-appearance: textfield; }
+.stepper .q::-webkit-outer-spin-button, .stepper .q::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 24px -16px rgba(0,0,0,.3); }
 .resumen { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
 .resumen b { font-family: "Bricolage Grotesque"; color: var(--ink); font-size: 16px; }

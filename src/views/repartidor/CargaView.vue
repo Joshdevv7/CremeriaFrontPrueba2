@@ -78,7 +78,7 @@
                 <div class="meta"><div class="nm">{{ p.nombre }}</div><div class="st">{{ p.categoria || '—' }} · almacén <b>{{ fmtQty(p.stockAlmacen) }}</b><span v-if="unidadNueva[p.id]==='caja' && (nueva[p.id]||0)>0"> · cargas {{ (nueva[p.id]||0)*factorP(p) }} pzas</span></div></div>
                 <div class="stepper">
                   <button @click="decNueva(p.id)" :disabled="(nueva[p.id]||0)<=0">−</button>
-                  <span class="q">{{ nueva[p.id] || 0 }}</span>
+                  <input class="q" type="number" min="0" inputmode="numeric" :value="nueva[p.id] || 0" @input="setNueva(p.id, $event.target.value)" @focus="$event.target.select()">
                   <button @click="incNueva(p.id)" :disabled="(nueva[p.id]||0) >= maxNueva(p)">+</button>
                 </div>
               </div>
@@ -177,6 +177,13 @@ const totalNueva = computed(() => Object.values(nueva).reduce((s, n) => s + (n |
 function setTab(n) { tab.value = n; bodyRef.value?.scrollTo({ top: 0 }) }
 function incNueva(id) { const p = productos.value.find((x) => x.id === id); if (p && (nueva[id] || 0) < maxNueva(p)) nueva[id] = (nueva[id] || 0) + 1 }
 function decNueva(id) { if (nueva[id] > 0) nueva[id]-- }
+function setNueva(id, val) {
+  const p = productos.value.find((x) => x.id === id)
+  let n = parseInt(String(val).replace(/[^\d]/g, ''), 10)
+  if (isNaN(n) || n < 0) n = 0
+  if (p) n = Math.min(n, maxNueva(p))
+  nueva[id] = n
+}
 function iniciarCreacion() { creando.value = true; tab.value = 1 }
 
 async function cargarCarga() {
@@ -316,7 +323,8 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .stepper { display: flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex: 0 0 auto; }
 .stepper button { width: 32px; height: 34px; border: none; background: transparent; font-size: 19px; color: var(--pine); cursor: pointer; font-weight: 600; display: grid; place-items: center; }
 .stepper button:disabled { color: #C7CFC9; }
-.stepper .q { min-width: 30px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; }
+.stepper .q { width: 48px; height: 34px; min-width: 48px; text-align: center; border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; color: var(--ink); -moz-appearance: textfield; }
+.stepper .q::-webkit-outer-spin-button, .stepper .q::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* botones */
 .acc-row { display: flex; gap: 10px; margin: 4px 0 10px; }

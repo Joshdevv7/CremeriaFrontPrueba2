@@ -29,7 +29,11 @@
             <div class="top">
               <div class="emoji"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
               <div class="meta"><div class="nm">{{ p.nombre }}</div><div class="pr">costo actual {{ money(p.costoPromedio) }} · almacén {{ fmt(p.stockAlmacen) }}</div></div>
-              <div class="stepper"><button @click="dec(p.id)" :disabled="(cant[p.id]||0)<=0">−</button><span class="q">{{ cant[p.id] || 0 }}</span><button @click="inc(p.id)">+</button></div>
+              <div class="stepper">
+                <button @click="dec(p.id)" :disabled="(cant[p.id]||0)<=0">−</button>
+                <input class="q" type="number" min="0" inputmode="numeric" :value="cant[p.id] || 0" @input="setCant(p.id, $event.target.value)" @focus="$event.target.select()">
+                <button @click="inc(p.id)">+</button>
+              </div>
             </div>
             <div v-if="p.vendePorCaja" class="uni">
               <button :class="{ on: unidad[p.id] !== 'caja' }" @click="setUnidad(p.id, 'pza')">Pieza</button>
@@ -82,8 +86,15 @@ const puede = computed(() => proveedorId.value && lineasActivas.value.length > 0
 
 function setRef(id, el) { if (el) refs[id] = el }
 function setUnidad(id, u) { unidad[id] = u; costo[id] = 0 }
-function inc(id) { cant[id] = (cant[id] || 0) + 1; if (costo[id] === undefined) costo[id] = unidad[id] === 'caja' ? 0 : (pmap.value[id]?.costoPromedio || 0) }
+function asegurarCosto(id) { if (costo[id] === undefined) costo[id] = unidad[id] === 'caja' ? 0 : (pmap.value[id]?.costoPromedio || 0) }
+function inc(id) { cant[id] = (cant[id] || 0) + 1; asegurarCosto(id) }
 function dec(id) { if (cant[id] > 0) cant[id]-- }
+function setCant(id, val) {
+  let n = parseInt(String(val).replace(/[^\d]/g, ''), 10)
+  if (isNaN(n) || n < 0) n = 0
+  cant[id] = n
+  if (n > 0) asegurarCosto(id)
+}
 function salir() { router.replace('/panel/compras') }
 function normCod(x) { return String(x || '').replace(/\s/g, '') }
 async function onScan(code) {
@@ -154,7 +165,8 @@ onMounted(async () => {
 .stepper { display: flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex: 0 0 auto; }
 .stepper button { width: 32px; height: 34px; border: none; background: transparent; font-size: 19px; color: var(--sky); cursor: pointer; font-weight: 600; }
 .stepper button:disabled { color: #C7CFC9; }
-.stepper .q { min-width: 30px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; }
+.stepper .q { width: 50px; height: 34px; min-width: 50px; text-align: center; border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; color: var(--ink); -moz-appearance: textfield; }
+.stepper .q::-webkit-outer-spin-button, .stepper .q::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .costo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
 .costo span { font-size: 12px; color: var(--muted); font-weight: 600; }
 .cinp { display: flex; align-items: center; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 6px 11px; }
