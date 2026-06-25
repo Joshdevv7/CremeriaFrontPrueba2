@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import * as signalR from '@microsoft/signalr'
 import http from '@/api/http'
 
-const HUB_URL = (import.meta.env.VITE_API_URL || 'http://localhost:54003/api').replace(/\/api\/?$/, '') + '/hubs/notificaciones'
+const HUB_URL = (import.meta.env.VITE_API_URL || '...').replace(/\/api\/?$/, '') + '/hubs/notificaciones'
 
 export const useNotifStore = defineStore('notif', () => {
   const items = ref([])
