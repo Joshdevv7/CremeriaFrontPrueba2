@@ -26,6 +26,7 @@ import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import { trashOutline } from 'ionicons/icons'
 import http from '@/api/http'
+import { confirmar } from '@/composables/useConfirm'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -40,7 +41,12 @@ const badge = (e) => ({ Abierto: 'amber', EnRuta: 'sky', CerradoCompleto: 'pine'
 
 function editar(id) { router.push(`/panel/pedido/${id}`) }
 async function eliminar(p) {
-  if (!confirm(`Eliminar el pedido de ${p.clienteNombre}?`)) return
+  const ok = await confirmar({
+    titulo: 'Eliminar pedido',
+    mensaje: `Se eliminará el pedido de ${p.clienteNombre}. Esta acción no se puede deshacer.`,
+    tipo: 'eliminar'
+  })
+  if (!ok) return
   try { await http.delete(`/pedidos/${p.id}`); await cargar() }
   catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo eliminar el pedido.' }
 }
