@@ -218,7 +218,9 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .bar .ttl .s { font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--pine); }
 .bar .ttl .n { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; letter-spacing: -.01em; margin-top: 1px; }
 
-.body { padding: 2px 18px 120px; }
+/* El padding-bottom generoso + safe-area asegura que la última sección (Mercancía)
+   nunca quede tapada por el footer fijo en móvil. */
+.body { padding: 2px 18px calc(150px + env(safe-area-inset-bottom)); }
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 20px 4px 11px; }
 
 /* hero */
@@ -233,7 +235,7 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .hero .sub div { font-size: 12px; color: #A9D2C6; font-weight: 600; display: flex; align-items: center; gap: 7px; }
 .hero .sub b { font-family: "Bricolage Grotesque"; color: #fff; font-size: 15px; }
 
-/* método rows (sin borde lateral, color en el chip del icono) */
+/* método rows */
 .mrow { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 14px; margin-bottom: 9px; box-shadow: var(--shadow); }
 .mic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .mic svg { width: 19px; height: 19px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -285,7 +287,7 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .mcard .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 20px; margin-top: 7px; font-variant-numeric: tabular-nums; }
 .mcard .u { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 1px; }
 
-/* footer (fixed: siempre anclado al fondo de la pantalla, sin importar el alto del contenido) */
+/* footer */
 .foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); background: linear-gradient(0deg,var(--paper) 72%,transparent); z-index: 20; }
 .cta { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 16px; padding: 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(21,42,36,.7); }
 .cta:disabled { opacity: .5; }
