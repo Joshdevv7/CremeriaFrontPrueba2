@@ -37,7 +37,7 @@
 
           <!-- Productos -->
           <div class="sec">¿Qué vende?</div>
-          <div v-for="l in lineasCarga" :key="l.productoId" class="prod">
+          <div v-for="l in lineasCarga" :key="l.productoId" class="prod" :class="{ flash: resaltado===l.productoId }" :ref="(el)=>setRef(l.productoId, el)">
             <div class="top">
               <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
               <div class="info">
@@ -78,7 +78,7 @@
         </template>
       </div>
 
-      <transition name="fadem"><div v-if="scanMsg" class="scanmsg">{{ scanMsg }}</div></transition>
+      <transition name="fadem"><div v-if="scanMsg" class="scanmsg" :class="scanTipo">{{ scanMsg }}</div></transition>
       <BarcodeScanner :show="mostrarScan" continuo @scan="onScan" @close="mostrarScan = false" />
 
       <div class="footer" v-if="!sinCarga && !cargando && !exito">
@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
@@ -118,8 +118,12 @@ const exito = ref(false)
 const exitoDet = ref([])
 const mostrarScan = ref(false)
 const scanMsg = ref('')
-const codMap = ref({})  // codigoBarras -> productoId
-const infoMap = ref({}) // productoId -> { vendePorCaja, piezasPorCaja, precioCaja, precioVenta }
+const scanTipo = ref('') // '' | 'err'
+const resaltado = ref(null)
+const refs = {}
+const codMap = ref({})   // codigoBarras NORMALIZADO -> productoId
+const nombreMap = ref({}) // productoId -> nombre (para mensajes)
+const infoMap = ref({})  // productoId -> { vendePorCaja, piezasPorCaja, precioCaja, precioVenta }
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
 
 const metodos = [
@@ -144,14 +148,29 @@ function precioL(l) { return esCaja(l) ? (info(l.productoId).precioCaja || 0) : 
 function maxUnidad(l) { return esCaja(l) ? Math.floor(l.restante / factorL(l)) : l.restante }
 function setUnidad(l, u) { unidad[l.productoId] = u; cant[l.productoId] = 0 }
 function set(l, val) { cant[l.productoId] = Math.max(0, Math.min(val, maxUnidad(l))) }
-function onScan(code) {
-  const pid = codMap.value[String(code || '').replace(/\s/g, '')]
-  const l = pid ? lineasCarga.value.find((x) => x.productoId === pid) : null
-  if (!l) { scanMsg.value = `Código ${code}: no lo traes en la carga`; setTimeout(() => { scanMsg.value = '' }, 2500); return }
-  if ((cant[l.productoId] || 0) >= l.restante) { scanMsg.value = `${l.productoNombre}: ya alcanzaste lo disponible`; setTimeout(() => { scanMsg.value = '' }, 2500); return }
-  set(l, (cant[l.productoId] || 0) + 1)
-  scanMsg.value = `+1 ${l.productoNombre} (${cant[l.productoId]})`
+function setRef(id, el) { if (el) refs[id] = el }
+
+// Normaliza un código: deja solo dígitos y quita ceros a la izquierda (EAN-13 vs UPC-A)
+function normCod(x) { const d = String(x || '').replace(/\D/g, ''); return d.replace(/^0+/, '') || d }
+
+function aviso(msg, tipo = '') {
+  scanMsg.value = msg; scanTipo.value = tipo
   setTimeout(() => { scanMsg.value = '' }, 2500)
+}
+
+function onScan(code) {
+  const key = normCod(code)
+  const pid = codMap.value[key]
+  if (!pid) { aviso(`Código ${code}: no está en el catálogo`, 'err'); return }
+  const l = lineasCarga.value.find((x) => x.productoId === pid)
+  if (!l) { aviso(`${nombreMap.value[pid] || 'Ese producto'}: no lo traes en la carga`, 'err'); return }
+  if ((cant[l.productoId] || 0) >= maxUnidad(l)) { aviso(`${l.productoNombre}: ya alcanzaste lo disponible`, 'err'); return }
+  set(l, (cant[l.productoId] || 0) + 1)
+  aviso(`+1 ${l.productoNombre} (${cant[l.productoId]})`)
+  // resaltar la tarjeta y hacer scroll a ella
+  resaltado.value = l.productoId
+  setTimeout(() => { if (resaltado.value === l.productoId) resaltado.value = null }, 1200)
+  nextTick(() => { refs[l.productoId]?.scrollIntoView({ behavior: 'smooth', block: 'center' }) })
 }
 async function vender() {
   if (!valido.value) return
@@ -176,12 +195,13 @@ onMounted(async () => {
     clientes.value = cl.data.items
     try {
       const pr = await http.get('/productos', { params: { tamano: 200 } })
-      const m = {}, info = {}
+      const m = {}, info = {}, nom = {}
       pr.data.items.forEach((x) => {
-        if (x.codigoBarras) m[String(x.codigoBarras).replace(/\s/g, '')] = x.id
+        if (x.codigoBarras) m[normCod(x.codigoBarras)] = x.id
         info[x.id] = { vendePorCaja: x.vendePorCaja, piezasPorCaja: x.piezasPorCaja, precioCaja: x.precioCaja, precioVenta: x.precioVenta }
+        nom[x.id] = x.nombre
       })
-      codMap.value = m; infoMap.value = info
+      codMap.value = m; infoMap.value = info; nombreMap.value = nom
     } catch { /* el escaneo por código quedará limitado, no es crítico */ }
   } catch (e) {
     if (e.response?.status === 404) sinCarga.value = true
@@ -219,7 +239,8 @@ onMounted(async () => {
 .av-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--amber-soft); display: grid; place-items: center; color: #B9781F; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; flex: 0 0 auto; }
 .cli-op .nm, .cli-sel .nm { font-weight: 700; font-size: 14.5px; }
 .cli-sel .info { flex: 1; } .cli-sel .sub { font-size: 12px; color: var(--muted); }
-.prod { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 9px; box-shadow: var(--shadow); }
+.prod { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 9px; box-shadow: var(--shadow); transition: background .3s, border-color .3s; }
+.prod.flash { background: var(--pine-tint); border-color: var(--pine); }
 .prod .top { display: flex; align-items: center; gap: 12px; }
 .uni { display: flex; gap: 6px; margin-top: 10px; }
 .uni button { flex: 1; border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 9px; padding: 7px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; cursor: pointer; }
@@ -253,6 +274,7 @@ onMounted(async () => {
 .cta { width: 100%; background: var(--pine); color: #fff; border: none; border-radius: 14px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(14,92,74,.8); }
 .cta:disabled { opacity: .5; }
 .iconbtn.scan svg { width: 21px; height: 21px; }
-.scanmsg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 4500; background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; box-shadow: 0 12px 24px -10px rgba(0,0,0,.5); }
+.scanmsg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 4500; background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; box-shadow: 0 12px 24px -10px rgba(0,0,0,.5); max-width: 86vw; text-align: center; }
+.scanmsg.err { background: var(--clay); }
 .fadem-enter-active, .fadem-leave-active { transition: opacity .2s; } .fadem-enter-from, .fadem-leave-to { opacity: 0; }
 </style>

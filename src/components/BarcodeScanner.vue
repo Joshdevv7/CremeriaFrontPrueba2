@@ -10,19 +10,19 @@
         <div class="cam-wrap">
           <div :id="readerId" class="reader"></div>
           <div v-if="camError" class="cam-msg">
-            <div class="emoji">⌨️</div>
+            <div class="kbd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></div>
             <p>No se pudo abrir la cámara, pero puedes usar tu <b>lector físico</b>: dispáralo y se captura solo.</p>
           </div>
           <div v-else class="hint-cam">Apunta al código de barras</div>
         </div>
 
         <div class="manual">
-          <input v-model="manualCode" placeholder="…o escribe el código" @keyup.enter="emitir(manualCode)">
-          <button class="ok" :disabled="!manualCode.trim()" @click="emitir(manualCode)">Buscar</button>
+          <input v-model="manualCode" placeholder="…o escribe el código" @keyup.enter="emitir(manualCode, true)">
+          <button class="ok" :disabled="!manualCode.trim()" @click="emitir(manualCode, true)">Buscar</button>
         </div>
 
         <transition name="pop">
-          <div v-if="ultimo" class="leido">✓ Leído: <b>{{ ultimo }}</b></div>
+          <div v-if="ultimo" class="leido"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Leído: <b>{{ ultimo }}</b></div>
         </transition>
       </div>
     </div>
@@ -45,6 +45,12 @@ const ultimo = ref('')
 let html5 = null
 let bufferTeclado = ''
 let ultimaTecla = 0
+
+// ---- anti-rebote: evita que el mismo código se dispare muchas veces ----
+let ultimoCode = ''
+let ultimoCodeTime = 0
+const VENTANA_MS = 2500 // mismo código ignorado durante este tiempo
+let limpiarTimer = null
 
 /* ---- Lector físico (USB/Bluetooth): teclea rápido y manda Enter ---- */
 function onKey(e) {
@@ -84,11 +90,20 @@ async function detenerCamara() {
   html5 = null
 }
 
-function emitir(code) {
+// manual = true cuando viene del input escrito (siempre se acepta)
+function emitir(code, manual = false) {
   const c = String(code || '').trim()
   if (!c) return
+  const ahora = Date.now()
+  // anti-rebote: si es el MISMO código leído hace poco, lo ignoramos (salvo manual)
+  if (!manual && c === ultimoCode && (ahora - ultimoCodeTime) < VENTANA_MS) return
+  ultimoCode = c
+  ultimoCodeTime = ahora
+
   ultimo.value = c
-  setTimeout(() => { ultimo.value = '' }, 1500)
+  clearTimeout(limpiarTimer)
+  limpiarTimer = setTimeout(() => { ultimo.value = '' }, 1500)
+
   emit('scan', c)
   manualCode.value = ''
   if (!props.continuo) cerrar()
@@ -98,15 +113,17 @@ function cerrar() { emit('close') }
 watch(() => props.show, async (v) => {
   if (v) {
     bufferTeclado = ''
+    ultimoCode = ''; ultimoCodeTime = 0
     window.addEventListener('keydown', onKey)
     setTimeout(iniciarCamara, 150) // espera a que el div exista
   } else {
     window.removeEventListener('keydown', onKey)
     await detenerCamara()
     manualCode.value = ''
+    clearTimeout(limpiarTimer)
   }
 })
-onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara() })
+onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara(); clearTimeout(limpiarTimer) })
 </script>
 
 <style scoped>
@@ -122,13 +139,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara(
 .reader :deep(video) { border-radius: 16px; }
 .hint-cam { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: #fff; font-size: 12.5px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
 .cam-msg { padding: 30px 22px; text-align: center; color: #CFE0D9; }
-.cam-msg .emoji { font-size: 40px; margin-bottom: 10px; }
+.cam-msg .kbd-ic { display: grid; place-items: center; margin-bottom: 10px; }
+.cam-msg .kbd-ic svg { width: 40px; height: 40px; stroke: #CFE0D9; }
 .cam-msg p { font-size: 13.5px; line-height: 1.5; } .cam-msg b { color: #fff; }
 .manual { display: flex; gap: 8px; margin-top: 12px; }
 .manual input { flex: 1; border: 1px solid var(--line); background: var(--paper); border-radius: 12px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
 .manual .ok { background: var(--pine); color: #fff; border: none; border-radius: 12px; padding: 0 18px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 .manual .ok:disabled { opacity: .5; }
-.leido { margin-top: 12px; background: var(--pine-tint); color: var(--pine-deep); border-radius: 11px; padding: 10px 13px; font-size: 13px; font-weight: 700; text-align: center; }
+.leido { margin-top: 12px; background: var(--pine-tint); color: var(--pine-deep); border-radius: 11px; padding: 10px 13px; font-size: 13px; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.leido svg { width: 15px; height: 15px; stroke: var(--pine-deep); fill: none; }
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; } .fade-enter-from, .fade-leave-to { opacity: 0; }
 .pop-enter-active { transition: transform .2s, opacity .2s; } .pop-enter-from { transform: scale(.9); opacity: 0; }
 </style>

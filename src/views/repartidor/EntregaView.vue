@@ -30,7 +30,7 @@
             <div>
               <div v-for="(l, i) in lineas" :key="l.id" class="line" :class="{ short: l.entregado < l.cantidadPedida }">
                 <div class="line-top">
-                  <div class="emoji">📦</div>
+                  <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
                   <div class="line-info">
                     <div class="nm">{{ l.productoNombre }}</div>
                     <div class="sub">Pedido: <b>{{ fmtQty(l.cantidadPedida) }}</b><span v-if="l.conCarga"> · Traes <b :class="{ falta: l.disponible < l.cantidadPedida }">{{ fmtQty(l.disponible) }}</b></span> · {{ money2(l.precioUnitario) }}</div>
@@ -183,6 +183,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
+import { tomarFotoNativa, obtenerUbicacion, esNativo } from '@/composables/useNativo'
 
 const route = useRoute()
 const router = useRouter()
@@ -278,12 +279,32 @@ watch(sigRef, (cv) => {
   cv.addEventListener('touchend', endDraw)
 })
 
-/* ---- foto ---- */
-function abrirCamara() { fileRef.value?.click() }
+/* ---- foto: cámara nativa en APK, input file en web ---- */
+async function abrirCamara() {
+  error.value = ''
+  if (esNativo()) {
+    try {
+      const file = await tomarFotoNativa()
+      if (!file) return // el usuario canceló
+      fotoFile = file
+      if (fotoPreview.value) URL.revokeObjectURL(fotoPreview.value)
+      fotoPreview.value = URL.createObjectURL(file)
+      fotoTomada.value = true
+    } catch (e) {
+      // Si el usuario cancela la cámara, Capacitor lanza error: lo tratamos como cancelación silenciosa
+      const msg = String(e?.message || '')
+      if (!/cancel/i.test(msg)) error.value = 'No se pudo abrir la cámara. Revisa los permisos.'
+    }
+    return
+  }
+  // Web: input file de siempre
+  fileRef.value?.click()
+}
 function onFoto(e) {
   const f = e.target.files?.[0]
   if (!f) return
   fotoFile = f
+  if (fotoPreview.value) URL.revokeObjectURL(fotoPreview.value)
   fotoPreview.value = URL.createObjectURL(f)
   fotoTomada.value = true
 }
@@ -299,15 +320,15 @@ function canvasABlob() {
   return new Promise((res) => sigRef.value.toBlob((b) => res(b), 'image/png'))
 }
 
-/* ---- gps de entrega (best-effort) ---- */
-function capturarGps() {
-  if (!navigator.geolocation) { gpsEstado.value = 'nd'; return }
+/* ---- gps de entrega: nativo en APK, navigator en web (best-effort) ---- */
+async function capturarGps() {
   gpsEstado.value = 'cargando'
-  navigator.geolocation.getCurrentPosition(
-    (pos) => { latEntrega.value = pos.coords.latitude; lngEntrega.value = pos.coords.longitude; gpsEstado.value = 'ok' },
-    () => { gpsEstado.value = 'nd' },
-    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-  )
+  try {
+    const { lat, lng } = await obtenerUbicacion()
+    latEntrega.value = lat; lngEntrega.value = lng; gpsEstado.value = 'ok'
+  } catch {
+    gpsEstado.value = 'nd'
+  }
 }
 
 /* ---- reprogramar lo pendiente ---- */
@@ -447,7 +468,8 @@ onMounted(async () => {
 .line { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 11px; box-shadow: var(--shadow); transition: border-color .2s; }
 .line.short { border-color: var(--amber); }
 .line-top { display: flex; align-items: center; gap: 12px; }
-.emoji { width: 42px; height: 42px; border-radius: 12px; background: var(--paper-2); display: grid; place-items: center; font-size: 21px; flex: 0 0 auto; }
+.emoji { width: 42px; height: 42px; border-radius: 12px; background: var(--paper-2); display: grid; place-items: center; flex: 0 0 auto; color: var(--ink-soft); }
+.emoji svg { width: 22px; height: 22px; }
 .line-info { flex: 1; min-width: 0; }
 .line-info .nm { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
 .line-info .sub { font-size: 12.5px; color: var(--muted); font-weight: 500; margin-top: 1px; }
