@@ -22,7 +22,11 @@
         </div>
 
         <transition name="pop">
-          <div v-if="ultimo" class="leido"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Leído: <b>{{ ultimo }}</b></div>
+          <div v-if="resultado && resultado.texto" class="leido" :class="{ bad: resultado.tipo === 'err' }">
+            <svg v-if="resultado.tipo !== 'err'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <b>{{ resultado.texto }}</b>
+          </div>
         </transition>
       </div>
     </div>
@@ -34,14 +38,14 @@ import { ref, watch, onUnmounted } from 'vue'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
-  continuo: { type: Boolean, default: false } // si true, no se cierra tras leer (para escanear varios)
+  continuo: { type: Boolean, default: false }, // si true, no se cierra tras leer (para escanear varios)
+  resultado: { type: Object, default: null }   // { texto, tipo } que el padre actualiza tras cada lectura
 })
 const emit = defineEmits(['scan', 'close'])
 
 const readerId = 'reader-' + Math.random().toString(36).slice(2, 8)
 const camError = ref(false)
 const manualCode = ref('')
-const ultimo = ref('')
 let html5 = null
 let bufferTeclado = ''
 let ultimaTecla = 0
@@ -50,7 +54,6 @@ let ultimaTecla = 0
 let ultimoCode = ''
 let ultimoCodeTime = 0
 const VENTANA_MS = 2500 // mismo código ignorado durante este tiempo
-let limpiarTimer = null
 
 /* ---- Lector físico (USB/Bluetooth): teclea rápido y manda Enter ---- */
 function onKey(e) {
@@ -100,10 +103,6 @@ function emitir(code, manual = false) {
   ultimoCode = c
   ultimoCodeTime = ahora
 
-  ultimo.value = c
-  clearTimeout(limpiarTimer)
-  limpiarTimer = setTimeout(() => { ultimo.value = '' }, 1500)
-
   emit('scan', c)
   manualCode.value = ''
   if (!props.continuo) cerrar()
@@ -120,10 +119,9 @@ watch(() => props.show, async (v) => {
     window.removeEventListener('keydown', onKey)
     await detenerCamara()
     manualCode.value = ''
-    clearTimeout(limpiarTimer)
   }
 })
-onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara(); clearTimeout(limpiarTimer) })
+onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara() })
 </script>
 
 <style scoped>
@@ -147,6 +145,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); detenerCamara(
 .manual .ok { background: var(--pine); color: #fff; border: none; border-radius: 12px; padding: 0 18px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 .manual .ok:disabled { opacity: .5; }
 .leido { margin-top: 12px; background: var(--pine-tint); color: var(--pine-deep); border-radius: 11px; padding: 10px 13px; font-size: 13px; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.leido.bad { background: var(--clay-soft); color: var(--clay); }
+.leido.bad svg { stroke: var(--clay); }
 .leido svg { width: 15px; height: 15px; stroke: var(--pine-deep); fill: none; }
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; } .fade-enter-from, .fade-leave-to { opacity: 0; }
 .pop-enter-active { transition: transform .2s, opacity .2s; } .pop-enter-from { transform: scale(.9); opacity: 0; }

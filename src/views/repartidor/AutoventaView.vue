@@ -79,7 +79,7 @@
       </div>
 
       <transition name="fadem"><div v-if="scanMsg" class="scanmsg" :class="scanTipo">{{ scanMsg }}</div></transition>
-      <BarcodeScanner :show="mostrarScan" continuo @scan="onScan" @close="mostrarScan = false" />
+      <BarcodeScanner :show="mostrarScan" continuo :resultado="scanResult" @scan="onScan" @close="mostrarScan = false" />
 
       <div class="footer" v-if="!sinCarga && !cargando && !exito">
         <div class="tot"><span>Total</span><b>{{ money(total) }}</b></div>
@@ -87,7 +87,29 @@
         <button class="cta" :disabled="enviando || !valido" @click="vender()">{{ enviando ? 'Registrando…' : 'Cobrar y registrar venta' }}</button>
       </div>
 
-      <ExitoOverlay :show="exito" titulo="Venta registrada" :subtitulo="cliente?.nombre" :detalle="exitoDet" cta-texto="Listo" @done="$router.replace('/app/inventario')" />
+      <!-- ÉXITO + TICKET -->
+      <div class="done-view" :class="{ show: exito }">
+        <div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+        <h2>Venta registrada</h2>
+        <p>{{ cliente?.nombre }} · {{ ticket ? metodoTxt(ticket.metodoPago) : '' }}</p>
+        <div class="ticket" v-if="ticket">
+          <div class="th"><div class="b">DISTRIBUIDORA</div><small>Venta en ruta · Ticket #{{ ticket.id }} · {{ ticket.fecha }}</small></div>
+          <div class="tr" v-for="t in ticket.lineas" :key="t.nombre"><span>{{ t.nombre }} ({{ t.cant }})</span><span>{{ money2(t.sub) }}</span></div>
+          <div class="tr muted"><span>Cliente</span><span>{{ cliente?.nombre }}</span></div>
+          <div class="tr muted"><span>Atendió</span><span>{{ ticket.repartidor }}</span></div>
+          <div class="tt"><span>TOTAL</span><span>{{ money2(ticket.total) }}</span></div>
+          <div class="credit" v-if="ticket.credito">CRÉDITO · vence {{ ticket.vence }}</div>
+          <div style="height:14px"></div>
+        </div>
+        <div class="done-actions">
+          <button class="da ghost" :disabled="imprimiendo" @click="imprimirTicket()">
+            <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+            {{ imprimiendo ? 'Imprimiendo…' : 'Imprimir ticket' }}
+          </button>
+          <button class="da solid" @click="$router.replace('/app/inventario')">Listo <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -98,7 +120,6 @@ import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
-import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 
 const auth = useAuthStore()
@@ -116,9 +137,16 @@ const enviando = ref(false)
 const error = ref('')
 const exito = ref(false)
 const exitoDet = ref([])
+const ticket = ref(null)
+const imprimiendo = ref(false)
+const printMsg = ref('')
+const METODO_TXT = { 0: 'Efectivo', 1: 'Transferencia', 2: 'Tarjeta', 3: 'Crédito', Efectivo: 'Efectivo', Transferencia: 'Transferencia', Tarjeta: 'Tarjeta', Credito: 'Crédito' }
+function metodoTxt(m) { return METODO_TXT[m] || String(m || '') }
 const mostrarScan = ref(false)
 const scanMsg = ref('')
 const scanTipo = ref('') // '' | 'err'
+const scanResult = ref(null) // { texto, tipo } -> se muestra DENTRO del escáner
+let scanResultTimer = null
 const resaltado = ref(null)
 const refs = {}
 const codMap = ref({})   // codigoBarras NORMALIZADO -> productoId
@@ -133,6 +161,7 @@ const metodos = [
   { k: 3, t: 'Crédito', icon: timeOutline }
 ]
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
+const money2 = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 const clientesFiltrados = computed(() => { const t = buscarCli.value.trim().toLowerCase(); return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value })
@@ -154,8 +183,15 @@ function setRef(id, el) { if (el) refs[id] = el }
 function normCod(x) { const d = String(x || '').replace(/\D/g, ''); return d.replace(/^0+/, '') || d }
 
 function aviso(msg, tipo = '') {
-  scanMsg.value = msg; scanTipo.value = tipo
-  setTimeout(() => { scanMsg.value = '' }, 2500)
+  // Si el escáner está abierto, el mensaje se muestra DENTRO de él; si no, como toast inferior.
+  if (mostrarScan.value) {
+    scanResult.value = { texto: msg, tipo }
+    clearTimeout(scanResultTimer)
+    scanResultTimer = setTimeout(() => { scanResult.value = null }, 2200)
+  } else {
+    scanMsg.value = msg; scanTipo.value = tipo
+    setTimeout(() => { scanMsg.value = '' }, 2500)
+  }
 }
 
 function onScan(code) {
@@ -166,7 +202,7 @@ function onScan(code) {
   if (!l) { aviso(`${nombreMap.value[pid] || 'Ese producto'}: no lo traes en la carga`, 'err'); return }
   if ((cant[l.productoId] || 0) >= maxUnidad(l)) { aviso(`${l.productoNombre}: ya alcanzaste lo disponible`, 'err'); return }
   set(l, (cant[l.productoId] || 0) + 1)
-  aviso(`+1 ${l.productoNombre} (${cant[l.productoId]})`)
+  aviso(`${l.productoNombre} agregado (${cant[l.productoId]})`)
   // resaltar la tarjeta y hacer scroll a ella
   resaltado.value = l.productoId
   setTimeout(() => { if (resaltado.value === l.productoId) resaltado.value = null }, 1200)
@@ -181,12 +217,35 @@ async function vender() {
   if (metodo.value === 2 && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
   try {
-    await http.post('/pedidos/autoventa', body)
-    exitoDet.value = [{ k: 'Total', v: money(total.value) }, { k: 'Pago', v: metodos.find((m) => m.k === metodo.value).t }]
+    const { data } = await http.post('/pedidos/autoventa', body)
+    armarTicket(data)
     exito.value = true
   } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo registrar la venta.' }
   finally { enviando.value = false }
 }
+function armarTicket(d) {
+  ticket.value = {
+    id: d.id,
+    fecha: new Date(d.fecha).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    lineas: (d.lineas || []).filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: fmt(l.cantidadEntregada), sub: l.subtotal })),
+    total: d.total,
+    metodoPago: d.metodoPago,
+    repartidor: d.repartidorNombre,
+    credito: d.metodoPago === 'Credito',
+    vence: fechaLimite.value.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+}
+
+// Placeholder: se conectará a la impresora Bluetooth (MUNBYN, ESC/POS) cuando esté disponible.
+async function imprimirTicket() {
+  imprimiendo.value = true; printMsg.value = ''
+  try {
+    // TODO: integrar impresión Bluetooth ESC/POS aquí (misma lógica que en EntregaView).
+    await new Promise((r) => setTimeout(r, 600))
+    printMsg.value = 'La impresión por Bluetooth se activará al conectar la impresora.'
+  } finally { imprimiendo.value = false }
+}
+
 onMounted(async () => {
   try {
     const cg = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
@@ -277,4 +336,31 @@ onMounted(async () => {
 .scanmsg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 4500; background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; box-shadow: 0 12px 24px -10px rgba(0,0,0,.5); max-width: 86vw; text-align: center; }
 .scanmsg.err { background: var(--clay); }
 .fadem-enter-active, .fadem-leave-active { transition: opacity .2s; } .fadem-enter-from, .fadem-leave-to { opacity: 0; }
+
+/* éxito + ticket (igual que en la entrega) */
+.done-view { position: fixed; inset: 0; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding: 60px 26px 26px; z-index: 50; overflow: auto; }
+.done-view.show { display: flex; animation: fadev .4s ease; }
+@keyframes fadev { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.done-view .check { width: 78px; height: 78px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 18px; position: relative; }
+.done-view .check::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); animation: ring 1.6s ease-out infinite; }
+@keyframes ring { 0% { transform: scale(.85); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } }
+.done-view .check svg { width: 40px; height: 40px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .5s ease .2s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.done-view h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; letter-spacing: -.01em; }
+.done-view p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; text-align: center; }
+.ticket { background: #fff; width: 240px; border-radius: 4px; margin-top: 24px; padding: 18px 18px 8px; font-family: "Hanken Grotesk"; color: #1c1c1c; position: relative; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); }
+.ticket .th { text-align: center; border-bottom: 1.5px dashed #c9c9c9; padding-bottom: 11px; }
+.ticket .th .b { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 17px; letter-spacing: .02em; }
+.ticket .th small { font-size: 10.5px; color: #777; display: block; margin-top: 2px; }
+.ticket .tr { display: flex; justify-content: space-between; font-size: 11.5px; margin: 7px 0; font-variant-numeric: tabular-nums; }
+.ticket .tr.muted { color: #888; }
+.ticket .tt { border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; display: flex; justify-content: space-between; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 14px; }
+.ticket .credit { background: #f0f6f3; border: 1px dashed #9cc5b6; border-radius: 6px; font-size: 10.5px; text-align: center; padding: 7px; margin-top: 10px; color: #0A3F33; font-weight: 600; }
+.done-actions { display: flex; gap: 10px; margin-top: 26px; width: 100%; max-width: 360px; }
+.da { flex: 1; border: none; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.da.ghost { background: rgba(255,255,255,.12); color: #fff; }
+.da.ghost:disabled { opacity: .6; }
+.da.solid { background: var(--amber); color: #3a2607; }
+.da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
 </style>
