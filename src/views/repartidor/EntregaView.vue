@@ -130,6 +130,25 @@
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Ubicacion de entrega</span><span class="r">{{ gpsEstado==='ok' ? 'Capturada' : gpsEstado==='cargando' ? 'Obteniendo...' : 'No disponible' }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Total</span><span class="r">{{ money(total) }}</span></div>
             </div>
+
+            <!-- Actualizar ubicación del cliente (opción C: se captura en sitio) -->
+            <div class="ubicli" :class="{ ok: ubicGuardada }">
+              <div class="ubicli-info">
+                <div class="ubicli-t">Ubicación del cliente</div>
+                <div class="ubicli-s">
+                  <template v-if="ubicGuardada">Guardada con tu posición actual</template>
+                  <template v-else-if="gpsEstado==='ok'">Estás aquí. Puedes guardar esta ubicación para el cliente.</template>
+                  <template v-else>Se usará tu ubicación de entrega (obteniéndola…)</template>
+                </div>
+              </div>
+              <button v-if="!ubicGuardada" class="ubicli-btn" :disabled="gpsEstado!=='ok' || guardandoUbic" @click="guardarUbicacionCliente()">
+                <svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                {{ guardandoUbic ? 'Guardando…' : 'Guardar aquí' }}
+              </button>
+              <div v-else class="ubicli-done"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+            </div>
+            <p v-if="ubicMsg" class="ubicli-msg" :class="ubicTipo">{{ ubicMsg }}</p>
+
             <p v-if="error" class="err">{{ error }}</p>
           </div>
         </div>
@@ -212,6 +231,12 @@ const latEntrega = ref(null)
 const lngEntrega = ref(null)
 const gpsEstado = ref('idle')
 
+// ubicación del cliente (opción C)
+const guardandoUbic = ref(false)
+const ubicGuardada = ref(false)
+const ubicMsg = ref('')
+const ubicTipo = ref('')
+
 const done = ref(false)
 const ticket = ref(null)
 const resultadoEstado = ref('')
@@ -291,13 +316,11 @@ async function abrirCamara() {
       fotoPreview.value = URL.createObjectURL(file)
       fotoTomada.value = true
     } catch (e) {
-      // Si el usuario cancela la cámara, Capacitor lanza error: lo tratamos como cancelación silenciosa
       const msg = String(e?.message || '')
       if (!/cancel/i.test(msg)) error.value = 'No se pudo abrir la cámara. Revisa los permisos.'
     }
     return
   }
-  // Web: input file de siempre
   fileRef.value?.click()
 }
 function onFoto(e) {
@@ -329,6 +352,23 @@ async function capturarGps() {
   } catch {
     gpsEstado.value = 'nd'
   }
+}
+
+/* ---- guardar ubicación del cliente con la posición actual (opción C) ---- */
+async function guardarUbicacionCliente() {
+  if (gpsEstado.value !== 'ok' || latEntrega.value == null) return
+  guardandoUbic.value = true; ubicMsg.value = ''; ubicTipo.value = ''
+  try {
+    await http.put(`/clientes/${pedido.value.clienteId}/ubicacion`, {
+      latitud: latEntrega.value, longitud: lngEntrega.value
+    })
+    ubicGuardada.value = true
+    ubicMsg.value = 'Ubicación del cliente actualizada.'
+    ubicTipo.value = ''
+  } catch (e) {
+    ubicMsg.value = e.response?.data?.mensaje || 'No se pudo guardar la ubicación del cliente.'
+    ubicTipo.value = 'err'
+  } finally { guardandoUbic.value = false }
 }
 
 /* ---- reprogramar lo pendiente ---- */
@@ -536,6 +576,21 @@ onMounted(async () => {
 .vrow .l svg { width: 18px; height: 18px; stroke: var(--pine); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .vrow .r { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
 .vrow .r.cred { color: var(--sky); }
+
+/* ubicación del cliente (opción C) */
+.ubicli { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 12px; box-shadow: var(--shadow); transition: border-color .2s, background .2s; }
+.ubicli.ok { border-color: var(--pine); background: var(--pine-tint); }
+.ubicli-info { flex: 1; min-width: 0; }
+.ubicli-t { font-weight: 700; font-size: 14px; }
+.ubicli-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
+.ubicli-btn { display: flex; align-items: center; gap: 7px; background: var(--pine-tint); color: var(--pine); border: 1px solid #C8E0D6; border-radius: 11px; padding: 10px 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; flex: 0 0 auto; }
+.ubicli-btn:disabled { opacity: .5; cursor: default; }
+.ubicli-btn svg { width: 15px; height: 15px; stroke: var(--pine); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ubicli-done { width: 34px; height: 34px; border-radius: 10px; background: var(--pine); display: grid; place-items: center; flex: 0 0 auto; }
+.ubicli-done svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ubicli-msg { font-size: 12px; font-weight: 600; margin: 8px 4px 0; }
+.ubicli-msg.err { color: var(--clay); }
+.ubicli-msg:not(.err) { color: var(--pine); }
 
 /* footer */
 .foot { flex: 0 0 auto; padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); background: linear-gradient(0deg,var(--paper) 72%,transparent); }

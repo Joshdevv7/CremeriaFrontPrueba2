@@ -5,10 +5,10 @@
       <div class="form" v-show="!exito">
         <div class="col selects">
           <div class="field"><div class="fl">Cliente *</div>
-            <select class="inp sel" v-model="clienteId" @change="autoRepartidor"><option :value="null" disabled>Selecciona un cliente</option><option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.nombre }}</option></select>
+            <BuscadorSelect v-model="clienteId" :opciones="clientes" nombre="cliente" placeholder="Selecciona un cliente" :incluir-todos="false" :limpiable="false" @update:modelValue="autoRepartidor" />
           </div>
           <div class="field"><div class="fl">Repartidor *</div>
-            <select class="inp sel" v-model="repartidorId"><option :value="null" disabled>Selecciona un repartidor</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select>
+            <BuscadorSelect v-model="repartidorId" :opciones="repartidores" nombre="repartidor" placeholder="Selecciona un repartidor" :incluir-todos="false" :limpiable="false" />
           </div>
           <div class="totcard">
             <div class="k">Total del pedido<b>{{ totalLineas }} productos</b></div>
@@ -66,6 +66,7 @@ import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
+import BuscadorSelect from '@/components/BuscadorSelect.vue'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -163,6 +164,10 @@ onMounted(() => { emit('ctx', { titulo: esNuevo.value ? 'Nuevo pedido' : 'Editar
 .scan-b { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--pine-tint); color: var(--pine-deep); border-radius: 10px; padding: 7px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; letter-spacing: 0; text-transform: none; cursor: pointer; }
 .scan-b svg { width: 17px; height: 17px; stroke: var(--pine); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .field { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
+/* El BuscadorSelect ocupa todo el ancho del campo en el editor */
+.field :deep(.ss) { width: 100%; }
+.field :deep(.ss-btn) { width: 100%; min-width: 0; }
+.field :deep(.ss-pop) { width: 100%; }
 .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
 .inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
 .sel { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237C8A82' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }

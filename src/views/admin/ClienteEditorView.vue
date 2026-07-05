@@ -5,7 +5,22 @@
       <div class="col">
         <div class="field"><div class="fl">Nombre del cliente *</div><input class="inp" v-model="form.nombre" placeholder="Ej. Abarrotes La Bendición"></div>
         <div class="field"><div class="fl">Teléfono</div><input class="inp" v-model="form.telefono" placeholder="Ej. 667 123 4567" inputmode="tel" maxlength="15" @input="filtrarTel"></div>
-        <div class="field"><div class="fl">Dirección</div><input class="inp" v-model="form.direccion" placeholder="Calle, número, colonia"></div>
+        <div class="field">
+          <div class="fl">Dirección</div>
+          <input class="inp" v-model="form.direccion" placeholder="Calle, número, colonia" @keyup.enter="geocodificar">
+          <button class="ubicar" type="button" @click="geocodificar" :disabled="geoCargando || !form.direccion.trim()">
+            <svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            {{ geoCargando ? 'Buscando…' : 'Ubicar dirección en el mapa' }}
+          </button>
+          <div v-if="opciones.length" class="opciones">
+            <div class="opt-title">Elige la ubicación correcta:</div>
+            <button v-for="(o, i) in opciones" :key="i" type="button" class="opt" @click="elegirOpcion(o)">
+              <svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>{{ o.display_name }}</span>
+            </button>
+          </div>
+          <p v-if="geoMsg" class="geomsg" :class="geoTipo">{{ geoMsg }}</p>
+        </div>
         <div class="field"><div class="fl">Repartidor asignado</div>
           <select class="inp sel" v-model="form.repartidorId"><option :value="null">Sin asignar</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select>
         </div>
@@ -15,7 +30,7 @@
           <div ref="mapRef" class="map"></div>
           <div class="maptools">
             <button class="gps" @click="usarMiUbicacion" :disabled="gpsCargando"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>{{ gpsCargando ? 'Localizando…' : 'Usar mi ubicación actual' }}</button>
-            <span class="hint">o toca el mapa para colocar el pin</span>
+            <span class="hint">o toca el mapa para colocar el pin · puedes arrastrarlo para ajustar</span>
           </div>
         </div>
         <div class="coords">
@@ -53,6 +68,10 @@ const repartidores = ref([])
 const cargando = ref(true)
 const enviando = ref(false)
 const gpsCargando = ref(false)
+const geoCargando = ref(false)
+const geoMsg = ref('')
+const geoTipo = ref('')  // '' ok | 'err'
+const opciones = ref([])  // resultados de geocodificación para elegir
 const error = ref('')
 const mapRef = ref(null)
 let map = null, marker = null
@@ -82,6 +101,62 @@ function usarMiUbicacion() {
   gpsCargando.value = true; error.value = ''
   navigator.geolocation.getCurrentPosition((pos) => { ponerMarker(pos.coords.latitude, pos.coords.longitude, true); gpsCargando.value = false }, (err) => { error.value = err.code === 1 ? 'Permiso de ubicación denegado.' : 'No se pudo obtener la ubicación.'; gpsCargando.value = false }, { enableHighAccuracy: true, timeout: 10000 })
 }
+
+// Geocodificación con Nominatim (OpenStreetMap, gratis, sin API key).
+// Busca la dirección, muestra varias opciones para elegir, y si no encuentra reintenta sin el número.
+function agregarCiudad(dir) {
+  const yaTieneCiudad = /culiac|sinaloa|m[eé]xico/i.test(dir)
+  return yaTieneCiudad ? dir : `${dir}, Culiacán, Sinaloa, México`
+}
+async function buscarNominatim(consulta) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=mx&q=${encodeURIComponent(consulta)}`
+  const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } })
+  const data = await resp.json()
+  return Array.isArray(data) ? data : []
+}
+async function geocodificar() {
+  const dir = (form.direccion || '').trim()
+  if (!dir) return
+  geoCargando.value = true; geoMsg.value = ''; geoTipo.value = ''; opciones.value = []
+  try {
+    // 1) Intento con la dirección completa
+    let resultados = await buscarNominatim(agregarCiudad(dir))
+
+    // 2) Si no hubo resultados, reintento quitando el número (deja calle + colonia)
+    if (resultados.length === 0) {
+      const sinNumero = dir.replace(/\b\d{1,6}\b/, '').replace(/\s{2,}/g, ' ').trim()
+      if (sinNumero && sinNumero !== dir) {
+        resultados = await buscarNominatim(agregarCiudad(sinNumero))
+        if (resultados.length > 0) {
+          geoMsg.value = 'No se encontró el número exacto. Estas son las coincidencias por calle — elige y arrastra el pin al número correcto.'
+          geoTipo.value = ''
+        }
+      }
+    }
+
+    if (resultados.length === 1) {
+      // Una sola coincidencia: la coloco directo
+      elegirOpcion(resultados[0])
+    } else if (resultados.length > 1) {
+      // Varias: muestro la lista para que el usuario elija
+      opciones.value = resultados
+      if (!geoMsg.value) { geoMsg.value = 'Se encontraron varias coincidencias. Elige la correcta.'; geoTipo.value = '' }
+    } else {
+      geoMsg.value = 'No se encontró la dirección. Revisa la ortografía, o toca el mapa / usa tu ubicación para colocar el pin a mano.'
+      geoTipo.value = 'err'
+    }
+  } catch {
+    geoMsg.value = 'No se pudo buscar la dirección. Coloca el pin tocando el mapa.'
+    geoTipo.value = 'err'
+  } finally { geoCargando.value = false }
+}
+function elegirOpcion(o) {
+  ponerMarker(parseFloat(o.lat), parseFloat(o.lon), true)
+  opciones.value = []
+  geoMsg.value = 'Ubicación colocada. Arrastra el pin si necesitas ajustarlo al punto exacto.'
+  geoTipo.value = ''
+}
+
 function filtrarTel() { form.telefono = (form.telefono || '').replace(/[^\d ]/g, '').slice(0, 15) }
 function salir() { router.replace('/panel/clientes') }
 
@@ -123,6 +198,17 @@ onUnmounted(() => { if (map) { map.remove(); map = null } })
 .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
 .inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
 .sel { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237C8A82' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+.ubicar { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; background: var(--pine-tint); color: var(--pine); border: 1px solid #C8E0D6; border-radius: 11px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.ubicar:disabled { opacity: .5; cursor: default; }
+.ubicar svg { width: 16px; height: 16px; stroke: var(--pine); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.opciones { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.opt-title { font-size: 11.5px; font-weight: 700; color: var(--muted); margin: 2px 2px 2px; }
+.opt { display: flex; align-items: flex-start; gap: 8px; text-align: left; width: 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-family: "Hanken Grotesk"; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; line-height: 1.35; }
+.opt:hover { background: var(--pine-tint); border-color: #C8E0D6; }
+.opt svg { width: 15px; height: 15px; stroke: var(--pine); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; margin-top: 1px; }
+.geomsg { font-size: 12px; font-weight: 600; margin: 9px 2px 0; }
+.geomsg.err { color: var(--clay); }
+.geomsg:not(.err) { color: var(--pine); }
 .mapcard { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
 .map { height: 280px; width: 100%; background: #ECF2EC; }
 .maptools { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
