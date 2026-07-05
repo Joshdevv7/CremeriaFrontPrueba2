@@ -12,6 +12,16 @@
           <div class="head-r"><CampanaNotif /><div class="avatar">{{ iniciales }}</div></div>
         </div>
 
+        <!-- Aviso: sin carga abierta -->
+        <div class="sincarga" v-if="!cargando && !tieneCarga">
+          <div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
+          <div class="sc-tx">
+            <b>No has levantado tu carga</b>
+            <span>Levanta tu carga del día para poder iniciar entregas.</span>
+          </div>
+          <button class="sc-btn" @click="irACargar()">Ir a cargar</button>
+        </div>
+
         <div class="hero">
           <div class="hero-top">
             <span class="t">Ruta de hoy</span>
@@ -59,12 +69,12 @@
                 </div>
               </div>
               <div class="items" v-if="itemsSiguiente.length">
-                <span v-for="(it, i) in itemsSiguiente.slice(0, 2)" :key="i" class="chip">📦 <b>{{ fmtQty(it.cantidadPedida) }}</b> {{ it.productoNombre }}</span>
+                <span v-for="(it, i) in itemsSiguiente.slice(0, 2)" :key="i" class="chip"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg> <b>{{ fmtQty(it.cantidadPedida) }}</b> {{ it.productoNombre }}</span>
                 <span v-if="itemsSiguiente.length > 2" class="chip more">+{{ itemsSiguiente.length - 2 }} más</span>
               </div>
               <div class="acts">
-                <button class="cta" @click="iniciar(siguiente.id)">
-                  Iniciar entrega
+                <button class="cta" :class="{ lock: !tieneCarga }" @click="iniciar(siguiente.id)">
+                  {{ tieneCarga ? 'Iniciar entrega' : 'Levanta tu carga primero' }}
                   <svg class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </button>
                 <button class="navbtn" @click="navegar(siguiente)" :disabled="!mapsUrl(siguiente)" title="Navegar con Google Maps">
@@ -77,7 +87,7 @@
           <div class="list-head" v-if="resto.length">
             <div class="h">Pendientes <span>· {{ resto.length }}</span></div>
           </div>
-          <div v-for="(p, i) in resto" :key="p.id" class="stop" @click="iniciar(p.id)">
+          <div v-for="(p, i) in resto" :key="p.id" class="stop" :class="{ lock: !tieneCarga }" @click="iniciar(p.id)">
             <div class="idx">{{ String(i + 2).padStart(2, '0') }}</div>
             <div class="info">
               <div class="n">{{ p.clienteNombre }}</div>
@@ -94,6 +104,13 @@
         </div>
         <p v-if="cargando" class="muted">Cargando ruta...</p>
         <p v-if="error" class="err">{{ error }}</p>
+      </div>
+
+      <!-- Toast de aviso al tocar sin carga -->
+      <div class="toast" :class="{ show: toast }">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <div class="toast-tx">Primero levanta tu carga del día para poder entregar.</div>
+        <button class="toast-go" @click="irACargar()">Cargar</button>
       </div>
     </ion-content>
   </ion-page>
@@ -116,6 +133,9 @@ const pendientes = ref([])
 const itemsSiguiente = ref([])
 const cargando = ref(true)
 const error = ref('')
+const tieneCarga = ref(true)   // hasta confirmar, no bloqueamos (se corrige al cargar)
+const toast = ref(false)
+let toastTimer = null
 const mapRef = ref(null)
 let map = null
 let capaPines = null
@@ -131,7 +151,17 @@ const resto = computed(() => pendientes.value.slice(1))
 const totalRuta = computed(() => pendientes.value.reduce((s, p) => s + p.total, 0))
 const conCoords = computed(() => pendientes.value.filter((p) => p.latitud != null && p.longitud != null).length)
 
-function iniciar(id) { router.push(`/entrega/${id}`) }
+function iniciar(id) {
+  if (!tieneCarga.value) { mostrarToast(); return }
+  router.push(`/entrega/${id}`)
+}
+function irACargar() { router.push('/app/inventario') }
+function mostrarToast() {
+  toast.value = true
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toast.value = false }, 3500)
+}
+
 function mapsUrl(stop) {
   if (!stop) return null
   if (stop.latitud != null && stop.longitud != null)
@@ -178,9 +208,21 @@ function pintarMapa() {
   setTimeout(() => map && map.invalidateSize(), 200)
 }
 
+// ¿El repartidor tiene carga abierta? Tiene carga si el endpoint devuelve un objeto con id.
+// Si da 404 (no hay carga) o vacío, no tiene.
+async function verificarCarga() {
+  try {
+    const { data } = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
+    tieneCarga.value = !!(data && data.id)
+  } catch {
+    tieneCarga.value = false
+  }
+}
+
 async function cargar() {
   cargando.value = true; error.value = ''
   try {
+    await verificarCarga()
     const { data } = await http.get('/pedidos', { params: { estado: 'Abierto', repartidorId: auth.usuarioId, tamano: 50 } })
     pendientes.value = data.items
     if (pendientes.value.length) {
@@ -198,7 +240,7 @@ async function cargar() {
 async function recargar(ev) { await cargar(); ev.target.complete() }
 
 onIonViewWillEnter(cargar)
-onUnmounted(() => { if (map) { map.remove(); map = null } })
+onUnmounted(() => { if (map) { map.remove(); map = null }; clearTimeout(toastTimer) })
 </script>
 
 <style scoped>
@@ -213,6 +255,15 @@ onUnmounted(() => { if (map) { map.remove(); map = null } })
 .hello { font-size: 13px; color: var(--muted); font-weight: 600; }
 .hello b { display: block; color: var(--ink); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; letter-spacing: -.01em; margin-top: 1px; }
 .avatar { width: 42px; height: 42px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--amber-soft); display: grid; place-items: center; font-weight: 700; color: #B9781F; font-size: 15px; }
+
+/* aviso sin carga */
+.sincarga { display: flex; align-items: center; gap: 12px; background: var(--amber-soft); border: 1px solid #EAD9B8; border-radius: 18px; padding: 14px; margin-bottom: 14px; }
+.sc-ic { width: 42px; height: 42px; border-radius: 12px; background: #fff; display: grid; place-items: center; flex: 0 0 auto; }
+.sc-ic svg { width: 22px; height: 22px; stroke: var(--amber); fill: none; }
+.sc-tx { flex: 1; min-width: 0; }
+.sc-tx b { display: block; font-size: 14px; color: #6E500F; }
+.sc-tx span { font-size: 12.5px; color: #8A6516; font-weight: 500; }
+.sc-btn { flex: 0 0 auto; background: var(--amber); color: #fff; border: none; border-radius: 12px; padding: 11px 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
 
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 4px 6px 10px; }
 
@@ -248,9 +299,11 @@ onUnmounted(() => { if (map) { map.remove(); map = null } })
 .amount .c { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--sky); background: var(--sky-soft); padding: 3px 8px; border-radius: 7px; display: inline-block; margin-top: 4px; }
 .items { display: flex; gap: 7px; flex-wrap: wrap; margin: 14px 0 16px; }
 .chip { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); background: var(--paper-2); border: 1px solid var(--line); padding: 6px 11px; border-radius: 10px; display: flex; align-items: center; gap: 6px; }
+.chip .pkg { width: 15px; height: 15px; stroke: var(--ink-soft); fill: none; flex: 0 0 auto; }
 .chip b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .chip.more { color: var(--muted); background: transparent; }
 .cta { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 15px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(21,42,36,.7); }
+.cta.lock { background: #9AA6A0; box-shadow: none; }
 .acts { display: flex; gap: 10px; }
 .acts .cta { flex: 1; }
 .navbtn { flex: 0 0 auto; width: 54px; border: 1px solid var(--line); background: var(--surface); border-radius: 15px; display: grid; place-items: center; cursor: pointer; }
@@ -263,6 +316,7 @@ onUnmounted(() => { if (map) { map.remove(); map = null } })
 .list-head .h { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
 .list-head .h span { color: var(--muted); font-weight: 600; }
 .stop { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow); cursor: pointer; }
+.stop.lock { opacity: .6; }
 .stop .idx { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; background: var(--paper-2); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 700; color: var(--ink-soft); font-size: 15px; }
 .stop .info { flex: 1; min-width: 0; }
 .stop .info .n { font-weight: 700; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -276,4 +330,11 @@ onUnmounted(() => { if (map) { map.remove(); map = null } })
 .empty .et { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; }
 .empty .es { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
 .head-r { display: flex; align-items: center; gap: 10px; }
+
+/* toast */
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); background: var(--ink); color: #fff; border-radius: 15px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 16px 32px -12px rgba(0,0,0,.5); transform: translateY(140%); transition: transform .32s cubic-bezier(.2,.9,.3,1.2); z-index: 9999; }
+.toast.show { transform: translateY(0); }
+.toast svg { width: 22px; height: 22px; stroke: var(--amber); fill: none; flex: 0 0 auto; }
+.toast-tx { flex: 1; font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.toast-go { flex: 0 0 auto; background: var(--amber); color: #3a2607; border: none; border-radius: 10px; padding: 9px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
 </style>
