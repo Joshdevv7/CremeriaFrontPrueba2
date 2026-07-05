@@ -4,6 +4,7 @@
     <div class="filtros">
       <div class="chips">
         <button v-for="e in estados" :key="e.v || 'todos'" class="chip" :class="{ on: estado === e.v }" @click="setEstado(e.v)">{{ e.t }}</button>
+        <button class="chip vr" :class="{ on: soloVentaRuta }" @click="toggleVentaRuta()">Ventas en ruta</button>
       </div>
       <div class="selects">
         <BuscadorSelect v-model="clienteId" :opciones="clientes" nombre="cliente" placeholder="Cliente" />
@@ -18,7 +19,11 @@
     <div class="grid" v-if="!cargando && items.length">
       <div v-for="p in items" :key="p.id" class="card">
         <div class="info" :class="{ click: p.estado === 'Abierto' }" @click="p.estado === 'Abierto' && editar(p.id)">
-          <div class="top"><span class="cli">{{ p.clienteNombre }}</span><span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span></div>
+          <div class="top">
+            <span class="cli">{{ p.clienteNombre }}</span>
+            <span v-if="p.esVentaLibre" class="badge vr">Venta en ruta</span>
+            <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
+          </div>
           <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor' }} · {{ fecha(p.fecha) }}</div>
         </div>
         <div class="right">
@@ -61,6 +66,7 @@ const error = ref('')
 const estado = ref(null)
 const clienteId = ref(null)
 const repartidorId = ref(null)
+const soloVentaRuta = ref(false)
 const clientes = ref([])
 const repartidores = ref([])
 const estados = [
@@ -92,6 +98,7 @@ const estadoTxt = (e) => ({ Abierto: 'Abierto', EnRuta: 'En ruta', CerradoComple
 const badge = (e) => ({ Abierto: 'amber', EnRuta: 'sky', CerradoCompleto: 'pine', CerradoParcial: 'amber', CerradoNoEntregado: 'clay' }[e] || 'muted')
 
 function setEstado(v) { estado.value = v }
+function toggleVentaRuta() { soloVentaRuta.value = !soloVentaRuta.value }
 function irPagina(n) { if (n < 1 || n > totalPaginas.value) return; pagina.value = n }
 
 function editar(id) { router.push(`/panel/pedido/${id}`) }
@@ -113,6 +120,7 @@ async function cargar() {
     if (estado.value) params.estado = estado.value
     if (clienteId.value) params.clienteId = clienteId.value
     if (repartidorId.value) params.repartidorId = repartidorId.value
+    if (soloVentaRuta.value) params.esVentaLibre = true
     const { data } = await http.get('/pedidos', { params })
     items.value = data.items
     total.value = data.total ?? data.items.length
@@ -132,7 +140,7 @@ async function cargarCatalogos() {
 }
 
 // Al cambiar cualquier filtro: volver a página 1 y recargar
-watch([estado, clienteId, repartidorId], () => {
+watch([estado, clienteId, repartidorId, soloVentaRuta], () => {
   if (pagina.value !== 1) pagina.value = 1
   else cargar()
 })
@@ -155,19 +163,21 @@ onMounted(() => {
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 999px; padding: 8px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: .15s; }
 .chip.on { background: var(--pine); color: #fff; border-color: var(--pine); }
+.chip.vr.on { background: var(--sky); border-color: var(--sky); }
 .selects { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
 .info { flex: 1; min-width: 0; }
 .info.click { cursor: pointer; }
-.top { display: flex; align-items: center; gap: 8px; }
+.top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cli { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
 .right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .total { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
 .badge { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 3px 8px; border-radius: 7px; flex: 0 0 auto; }
 .badge.amber { color: #B9781F; background: var(--amber-soft); } .badge.sky { color: var(--sky); background: var(--sky-soft); } .badge.pine { color: var(--pine); background: var(--pine-tint); } .badge.clay { color: var(--clay); background: var(--clay-soft); } .badge.muted { color: var(--muted); background: var(--paper-2); }
+.badge.vr { color: var(--sky); background: var(--sky-soft); }
 .del { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--clay-soft); background: var(--clay-soft); display: grid; place-items: center; cursor: pointer; }
 .del ion-icon { font-size: 17px; color: var(--clay); }
 
