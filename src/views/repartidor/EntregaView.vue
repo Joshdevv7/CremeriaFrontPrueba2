@@ -103,7 +103,16 @@
             <!-- transferencia -->
             <div v-show="pay==='transferencia'">
               <div class="field"><div class="fl">Comprobante / referencia</div>
-                <input class="inp" type="text" v-model="referencia" placeholder="Folio de la transferencia"></div>
+                <input class="inp" type="text" v-model="referencia" placeholder="Folio de la transferencia" :disabled="pagoPendiente"></div>
+            </div>
+
+            <!-- Pago pendiente: se entrega el producto pero el pago llega después -->
+            <div v-show="pay!=='credito'" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
+              <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+              <div class="pt-tx">
+                <div class="pt-t">Pago pendiente</div>
+                <div class="pt-s">Se entrega el producto ahora; el pago y su folio se registran después.</div>
+              </div>
             </div>
           </div>
 
@@ -125,7 +134,7 @@
             </div>
             <div class="vsum">
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h12"/></svg> Productos entregados</span><span class="r">{{ totalEntregado }} de {{ totalPedido }}</span></div>
-              <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg> Método de pago</span><span class="r" :class="{ cred: pay==='credito' }">{{ payLabel }}</span></div>
+              <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg> Método de pago</span><span class="r" :class="{ cred: pay==='credito' }">{{ payLabel }}<template v-if="pagoPendiente"> · pendiente</template></span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Firma del cliente</span><span class="r">{{ pay==='credito' ? (firmado ? 'Registrada' : 'Pendiente') : 'No requerida' }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Ubicacion de entrega</span><span class="r">{{ gpsEstado==='ok' ? 'Capturada' : gpsEstado==='cargando' ? 'Obteniendo...' : 'No disponible' }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Total</span><span class="r">{{ money(total) }}</span></div>
@@ -217,6 +226,7 @@ const error = ref('')
 const step = ref(1)
 const pay = ref('credito')
 const referencia = ref('')
+const pagoPendiente = ref(false)
 const efectivoRecibido = ref('')
 
 const sigRef = ref(null)
@@ -262,7 +272,7 @@ const botonTexto = computed(() => {
 function maxEnt(l) { return l.conCarga ? Math.min(l.cantidadPedida, l.disponible) : l.cantidadPedida }
 function inc(i) { if (lineas[i].entregado < maxEnt(lineas[i])) lineas[i].entregado++ }
 function dec(i) { if (lineas[i].entregado > 0) lineas[i].entregado-- }
-function selPay(p) { pay.value = p }
+function selPay(p) { pay.value = p; if (p === 'credito') pagoPendiente.value = false }
 
 function back() { if (step.value > 1) step.value-- ; else salir() }
 function salir() { router.replace('/app/entregas') }
@@ -404,7 +414,8 @@ async function confirmar() {
 
     const payload = {
       metodoPago: METODO[pay.value],
-      referenciaPago: (pay.value === 'tarjeta' || pay.value === 'transferencia') ? (referencia.value || null) : null,
+      pagoPendiente: pagoPendiente.value,
+      referenciaPago: (!pagoPendiente.value && (pay.value === 'tarjeta' || pay.value === 'transferencia')) ? (referencia.value || null) : null,
       firmaUrl, fotoEntregaUrl: fotoUrl,
       fechaLimiteCredito: pay.value === 'credito' ? fechaLimite.toISOString() : null,
       latitudEntrega: latEntrega.value, longitudEntrega: lngEntrega.value,
@@ -636,4 +647,13 @@ onMounted(async () => {
 .pend-btn:disabled { opacity: .6; }
 .pend-ok { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--green); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; }
 .pend-ok svg { width: 18px; height: 18px; stroke: var(--green); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.pend-toggle { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 14px; cursor: pointer; transition: .18s; }
+.pend-toggle.on { border-color: var(--amber); background: var(--amber-soft); }
+.pt-check { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; flex: 0 0 auto; transition: .18s; }
+.pend-toggle.on .pt-check { background: var(--amber); border-color: var(--amber); }
+.pt-check svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pt-tx { flex: 1; }
+.pt-t { font-weight: 700; font-size: 14.5px; }
+.pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
 </style>

@@ -91,6 +91,15 @@
             </div>
             <div class="hint">Vence el {{ fechaLimiteTxt }}. Se registrará como cuenta por cobrar.</div>
           </div>
+
+          <!-- Pago pendiente (no aplica a crédito) -->
+          <div v-if="metodo !== 3" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
+            <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+            <div class="pt-tx">
+              <div class="pt-t">Pago pendiente</div>
+              <div class="pt-s">Se entrega ahora; el pago y su folio se registran después.</div>
+            </div>
+          </div>
         </template>
       </div>
 
@@ -131,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
@@ -152,6 +161,8 @@ const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.tr
 const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
+const pagoPendiente = ref(false)
+watch(() => metodo.value, (m) => { if (m === 3) pagoPendiente.value = false })
 const diasCredito = ref(7)
 const enviando = ref(false)
 const error = ref('')
@@ -233,10 +244,10 @@ async function vender() {
   const lineas = lineasCarga.value.filter((l) => (cant[l.productoId] || 0) > 0).map((l) => ({ productoId: l.productoId, cantidad: cant[l.productoId], esCaja: esCaja(l) }))
   if (!lineas.length) { error.value = 'Agrega al menos un producto.'; return }
   enviando.value = true; error.value = ''
-  const body = { metodoPago: metodo.value, lineas }
+  const body = { metodoPago: metodo.value, pagoPendiente: pagoPendiente.value, lineas }
   if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() }
   else { body.clienteId = cliente.value.id }
-  if (metodo.value === 2 && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
+  if (!pagoPendiente.value && metodo.value === 2 && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
   try {
     const { data } = await http.post('/pedidos/autoventa', body)
@@ -390,4 +401,13 @@ onMounted(async () => {
 .modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 9px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: .15s; }
 .modo-cli button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .ocasional-hint { font-size: 12px; color: var(--muted); font-weight: 500; margin: 8px 4px 0; line-height: 1.4; }
+
+.pend-toggle { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 13px; margin-top: 12px; cursor: pointer; transition: .18s; }
+.pend-toggle.on { border-color: var(--amber); background: var(--amber-soft); }
+.pt-check { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; flex: 0 0 auto; transition: .18s; }
+.pend-toggle.on .pt-check { background: var(--amber); border-color: var(--amber); }
+.pt-check svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pt-tx { flex: 1; }
+.pt-t { font-weight: 700; font-size: 14px; }
+.pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
 </style>
