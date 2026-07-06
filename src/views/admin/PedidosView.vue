@@ -20,7 +20,7 @@
       <div v-for="p in items" :key="p.id" class="card">
         <div class="info" :class="{ click: p.estado === 'Abierto' }" @click="p.estado === 'Abierto' && editar(p.id)">
           <div class="top">
-            <span class="cli">{{ p.clienteNombre }}</span>
+            <span class="cli">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
             <span v-if="p.esVentaLibre" class="badge vr">Venta en ruta</span>
             <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
           </div>
@@ -105,7 +105,7 @@ function editar(id) { router.push(`/panel/pedido/${id}`) }
 async function eliminar(p) {
   const ok = await confirmar({
     titulo: 'Eliminar pedido',
-    mensaje: `Se eliminará el pedido de ${p.clienteNombre}. Esta acción no se puede deshacer.`,
+    mensaje: `Se eliminará el pedido de ${p.clienteNombreMostrar || p.clienteNombre}. Esta acción no se puede deshacer.`,
     tipo: 'eliminar'
   })
   if (!ok) return
