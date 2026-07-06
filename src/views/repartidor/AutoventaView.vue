@@ -17,22 +17,38 @@
         <template v-else>
           <!-- Cliente -->
           <div class="sec">Cliente</div>
-          <div v-if="cliente" class="cli-sel" @click="cliente = null">
-            <div class="av-ic">{{ ini(cliente.nombre) }}</div>
-            <div class="info"><div class="nm">{{ cliente.nombre }}</div><div class="sub">Toca para cambiar</div></div>
-            <ion-icon :icon="swapHorizontal" />
+          <div class="modo-cli">
+            <button :class="{ on: !ocasional }" @click="setOcasional(false)">Cliente registrado</button>
+            <button :class="{ on: ocasional }" @click="setOcasional(true)">Cliente ocasional</button>
           </div>
-          <template v-else>
-            <div class="search">
-              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-              <input v-model="buscarCli" placeholder="Buscar cliente…">
+
+          <!-- Modo: cliente registrado -->
+          <template v-if="!ocasional">
+            <div v-if="cliente" class="cli-sel" @click="cliente = null">
+              <div class="av-ic">{{ ini(cliente.nombre) }}</div>
+              <div class="info"><div class="nm">{{ cliente.nombre }}</div><div class="sub">Toca para cambiar</div></div>
+              <ion-icon :icon="swapHorizontal" />
             </div>
-            <div class="cli-lista">
-              <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
-                <div class="av-ic">{{ ini(c.nombre) }}</div><div class="nm">{{ c.nombre }}</div>
+            <template v-else>
+              <div class="search">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+                <input v-model="buscarCli" placeholder="Buscar cliente…">
               </div>
-              <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes. Regístralos primero.</p>
+              <div class="cli-lista">
+                <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
+                  <div class="av-ic">{{ ini(c.nombre) }}</div><div class="nm">{{ c.nombre }}</div>
+                </div>
+                <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes. Regístralos primero.</p>
+              </div>
+            </template>
+          </template>
+
+          <!-- Modo: cliente ocasional (no se registra en la base) -->
+          <template v-else>
+            <div class="field">
+              <input class="inp" v-model="nombreOcasional" placeholder="Nombre y apellido del comprador" maxlength="80">
             </div>
+            <p class="ocasional-hint">Esta persona no se guardará como cliente. Solo queda registrada en esta venta.</p>
           </template>
 
           <!-- Productos -->
@@ -91,11 +107,11 @@
       <div class="done-view" :class="{ show: exito }">
         <div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
         <h2>Venta registrada</h2>
-        <p>{{ cliente?.nombre }} · {{ ticket ? metodoTxt(ticket.metodoPago) : '' }}</p>
+        <p>{{ nombreMostrar }} · {{ ticket ? metodoTxt(ticket.metodoPago) : '' }}</p>
         <div class="ticket" v-if="ticket">
           <div class="th"><div class="b">DISTRIBUIDORA</div><small>Venta en ruta · Ticket #{{ ticket.id }} · {{ ticket.fecha }}</small></div>
           <div class="tr" v-for="t in ticket.lineas" :key="t.nombre"><span>{{ t.nombre }} ({{ t.cant }})</span><span>{{ money2(t.sub) }}</span></div>
-          <div class="tr muted"><span>Cliente</span><span>{{ cliente?.nombre }}</span></div>
+          <div class="tr muted"><span>Cliente</span><span>{{ nombreMostrar }}</span></div>
           <div class="tr muted"><span>Atendió</span><span>{{ ticket.repartidor }}</span></div>
           <div class="tt"><span>TOTAL</span><span>{{ money2(ticket.total) }}</span></div>
           <div class="credit" v-if="ticket.credito">CRÉDITO · vence {{ ticket.vence }}</div>
@@ -129,6 +145,10 @@ const lineasCarga = ref([])
 const clientes = ref([])
 const cliente = ref(null)
 const buscarCli = ref('')
+const ocasional = ref(false)
+const nombreOcasional = ref('')
+function setOcasional(v) { ocasional.value = v; if (v) cliente.value = null; else nombreOcasional.value = '' }
+const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.trim() || 'Cliente ocasional') : (cliente.value?.nombre || ''))
 const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
@@ -166,7 +186,7 @@ const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 const clientesFiltrados = computed(() => { const t = buscarCli.value.trim().toLowerCase(); return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value })
 const total = computed(() => lineasCarga.value.reduce((s, l) => s + (cant[l.productoId] || 0) * precioL(l), 0))
-const valido = computed(() => cliente.value && total.value > 0)
+const valido = computed(() => total.value > 0 && (ocasional.value ? nombreOcasional.value.trim().length > 1 : !!cliente.value))
 const fechaLimite = computed(() => { const d = new Date(); d.setDate(d.getDate() + diasCredito.value); return d })
 const fechaLimiteTxt = computed(() => fechaLimite.value.toLocaleDateString('es-MX', { day: '2-digit', month: 'long' }))
 
@@ -213,7 +233,9 @@ async function vender() {
   const lineas = lineasCarga.value.filter((l) => (cant[l.productoId] || 0) > 0).map((l) => ({ productoId: l.productoId, cantidad: cant[l.productoId], esCaja: esCaja(l) }))
   if (!lineas.length) { error.value = 'Agrega al menos un producto.'; return }
   enviando.value = true; error.value = ''
-  const body = { clienteId: cliente.value.id, metodoPago: metodo.value, lineas }
+  const body = { metodoPago: metodo.value, lineas }
+  if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() }
+  else { body.clienteId = cliente.value.id }
   if (metodo.value === 2 && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
   try {
@@ -363,4 +385,9 @@ onMounted(async () => {
 .da.solid { background: var(--amber); color: #3a2607; }
 .da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
+
+.modo-cli { display: flex; gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
+.modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 9px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: .15s; }
+.modo-cli button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.ocasional-hint { font-size: 12px; color: var(--muted); font-weight: 500; margin: 8px 4px 0; line-height: 1.4; }
 </style>
