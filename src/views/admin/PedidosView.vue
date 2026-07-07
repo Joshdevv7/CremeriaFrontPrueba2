@@ -5,6 +5,7 @@
       <div class="chips">
         <button v-for="e in estados" :key="e.v || 'todos'" class="chip" :class="{ on: estado === e.v }" @click="setEstado(e.v)">{{ e.t }}</button>
         <button class="chip vr" :class="{ on: soloVentaRuta }" @click="toggleVentaRuta()">Ventas en ruta</button>
+        <button class="chip pend" :class="{ on: soloPendiente }" @click="togglePendiente()">Pago pendiente</button>
       </div>
       <div class="selects">
         <BuscadorSelect v-model="clienteId" :opciones="clientes" nombre="cliente" placeholder="Cliente" />
@@ -22,12 +23,16 @@
           <div class="top">
             <span class="cli">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
             <span v-if="p.esVentaLibre" class="badge vr">Venta en ruta</span>
+            <span v-if="p.estadoPago === 'Pendiente'" class="badge pend">Pago pendiente</span>
             <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
           </div>
           <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor' }} · {{ fecha(p.fecha) }}</div>
         </div>
         <div class="right">
           <div class="total">{{ money(p.total) }}</div>
+          <button v-if="p.estadoPago === 'Pendiente'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago">
+            <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </button>
           <button v-if="p.estado === 'Abierto'" class="del" @click.stop="eliminar(p)" title="Eliminar"><ion-icon :icon="trashOutline" /></button>
         </div>
       </div>
@@ -44,6 +49,36 @@
       </button>
     </div>
     <p v-if="!cargando && total" class="cuenta">{{ total }} pedido(s) · página {{ pagina }} de {{ totalPaginas }}</p>
+
+    <!-- Modal: registrar pago pendiente -->
+    <div v-if="pagoModal" class="modal-bg" @click.self="cerrarPago()">
+      <div class="modal">
+        <div class="m-head">
+          <div>
+            <div class="m-title">Registrar pago</div>
+            <div class="m-sub">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }}</div>
+          </div>
+          <button class="m-x" @click="cerrarPago()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="m-body">
+          <div class="m-field">
+            <div class="m-fl">Método de pago</div>
+            <div class="m-metodos">
+              <button v-for="mp in metodosPago" :key="mp.v" class="m-metodo" :class="{ on: pagoMetodo === mp.v }" @click="pagoMetodo = mp.v">{{ mp.t }}</button>
+            </div>
+          </div>
+          <div class="m-field">
+            <div class="m-fl">Folio / referencia de la transferencia</div>
+            <input class="m-inp" v-model="pagoFolio" placeholder="Ej. 004821 · folio del comprobante" maxlength="60">
+          </div>
+          <p v-if="pagoError" class="m-err">{{ pagoError }}</p>
+        </div>
+        <div class="m-foot">
+          <button class="m-cancel" @click="cerrarPago()">Cancelar</button>
+          <button class="m-ok" :disabled="pagoGuardando" @click="guardarPago()">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -67,6 +102,18 @@ const estado = ref(null)
 const clienteId = ref(null)
 const repartidorId = ref(null)
 const soloVentaRuta = ref(false)
+const soloPendiente = ref(false)
+// modal de pago
+const pagoModal = ref(null)
+const pagoFolio = ref('')
+const pagoMetodo = ref('Transferencia')
+const pagoGuardando = ref(false)
+const pagoError = ref('')
+const metodosPago = [
+  { v: 'Transferencia', t: 'Transferencia' },
+  { v: 'Efectivo', t: 'Efectivo' },
+  { v: 'Tarjeta', t: 'Tarjeta' }
+]
 const clientes = ref([])
 const repartidores = ref([])
 const estados = [
@@ -99,6 +146,29 @@ const badge = (e) => ({ Abierto: 'amber', EnRuta: 'sky', CerradoCompleto: 'pine'
 
 function setEstado(v) { estado.value = v }
 function toggleVentaRuta() { soloVentaRuta.value = !soloVentaRuta.value }
+function togglePendiente() { soloPendiente.value = !soloPendiente.value }
+
+function abrirPago(p) {
+  pagoModal.value = p
+  pagoFolio.value = ''
+  pagoMetodo.value = p.metodoPago || 'Transferencia'
+  pagoError.value = ''
+}
+function cerrarPago() { pagoModal.value = null }
+async function guardarPago() {
+  pagoGuardando.value = true; pagoError.value = ''
+  const METODO_NUM = { Efectivo: 0, Transferencia: 1, Tarjeta: 2, Credito: 3 }
+  try {
+    await http.put(`/pedidos/${pagoModal.value.id}/registrar-pago`, {
+      referenciaPago: pagoFolio.value.trim() || null,
+      metodoPago: METODO_NUM[pagoMetodo.value]
+    })
+    cerrarPago()
+    await cargar()
+  } catch (e) {
+    pagoError.value = e.response?.data?.mensaje || 'No se pudo registrar el pago.'
+  } finally { pagoGuardando.value = false }
+}
 function irPagina(n) { if (n < 1 || n > totalPaginas.value) return; pagina.value = n }
 
 function editar(id) { router.push(`/panel/pedido/${id}`) }
@@ -121,6 +191,7 @@ async function cargar() {
     if (clienteId.value) params.clienteId = clienteId.value
     if (repartidorId.value) params.repartidorId = repartidorId.value
     if (soloVentaRuta.value) params.esVentaLibre = true
+    if (soloPendiente.value) params.estadoPago = 'Pendiente' 
     const { data } = await http.get('/pedidos', { params })
     items.value = data.items
     total.value = data.total ?? data.items.length
@@ -140,7 +211,7 @@ async function cargarCatalogos() {
 }
 
 // Al cambiar cualquier filtro: volver a página 1 y recargar
-watch([estado, clienteId, repartidorId, soloVentaRuta], () => {
+watch([estado, clienteId, repartidorId, soloVentaRuta, soloPendiente], () => {
   if (pagina.value !== 1) pagina.value = 1
   else cargar()
 })
@@ -188,4 +259,30 @@ onMounted(() => {
 .pg:disabled { opacity: .4; cursor: default; }
 .pg.num.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .cuenta { text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; margin-top: 10px; }
+
+.chip.pend.on { background: var(--amber); border-color: var(--amber); color: #3a2607; }
+.badge.pend { color: #B9781F; background: var(--amber-soft); }
+.pay { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--amber-soft); background: var(--amber-soft); display: grid; place-items: center; cursor: pointer; }
+.pay svg { width: 17px; height: 17px; stroke: #B9781F; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* modal */
+.modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
+.modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 420px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; }
+.m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
+.m-title { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; }
+.m-sub { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+.m-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
+.m-x svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.m-body { padding: 18px 20px; }
+.m-field { margin-bottom: 16px; }
+.m-fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
+.m-metodos { display: flex; gap: 7px; }
+.m-metodo { flex: 1; border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 10px; padding: 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.m-metodo.on { background: var(--pine); color: #fff; border-color: var(--pine); }
+.m-inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
+.m-err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
+.m-foot { display: flex; gap: 10px; padding: 4px 20px 20px; }
+.m-cancel { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
+.m-ok { flex: 1.4; border: none; background: var(--pine); color: #fff; border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
+.m-ok:disabled { opacity: .5; }
 </style>
