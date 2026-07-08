@@ -80,6 +80,7 @@ const ICN = {
   reps: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 7.5a3 3 0 0 1 0 5.5M18 20c0-2.2-1-3.7-2.5-4.6"/></svg>',
   cred: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>',
   gastos: '<svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  transferencias: '<svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M8 5l-4 4 4 4M16 11l4 4-4 4"/></svg>',
   compras: '<svg viewBox="0 0 24 24"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>',
   proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'
 }
@@ -104,6 +105,7 @@ const grupos = [
   ] },
   { titulo: 'Finanzas', items: [
     { path: '/panel/gastos', label: 'Gastos', icon: ICN.gastos, match: ['/panel/gastos', '/panel/gasto'] },
+    { path: '/panel/transferencias', label: 'Transferencias', icon: ICN.transferencias, match: ['/panel/transferencias'] },
     { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'] }
   ] }
 ]
