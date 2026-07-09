@@ -8,7 +8,8 @@
           <template v-for="g in grupos" :key="g.titulo">
             <div class="navlbl">{{ g.titulo }}</div>
             <a v-for="n in g.items" :key="n.path" class="nav-a" :class="{ on: activo(n) }" @click="ir(n.path)">
-              <span v-html="n.icon"></span><span>{{ n.label }}</span>
+              <span v-html="n.icon"></span><span class="nav-txt">{{ n.label }}</span>
+              <span v-if="n.badge === 'cargasPendientes' && cargasPendientes > 0" class="nav-badge">{{ cargasPendientes }}</span>
             </a>
           </template>
           <div class="spacer"></div>
@@ -58,16 +59,24 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import { useAuthStore } from '@/stores/auth'
 import CampanaNotif from '@/components/CampanaNotif.vue'
+import http from '@/api/http'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const navAbierto = ref(false)
+const cargasPendientes = ref(0)
+async function contarCargasPendientes() {
+  try {
+    const { data } = await http.get('/cargas', { params: { estado: 'PendienteAutorizacion', tamano: 1 } })
+    cargasPendientes.value = data.total ?? (data.items?.length || 0)
+  } catch { cargasPendientes.value = 0 }
+}
 
 const ICN = {
   resumen: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
@@ -81,6 +90,7 @@ const ICN = {
   cred: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>',
   gastos: '<svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   transferencias: '<svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M8 5l-4 4 4 4M16 11l4 4-4 4"/></svg>',
+  cargas: '<svg viewBox="0 0 24 24"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg>',
   compras: '<svg viewBox="0 0 24 24"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>',
   proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'
 }
@@ -100,6 +110,7 @@ const grupos = [
     { path: '/panel/mermas', label: 'Mermas', icon: ICN.merma, match: ['/panel/mermas'] }
   ] },
   { titulo: 'Equipo y ruta', items: [
+    { path: '/panel/cargas', label: 'Cargas por autorizar', icon: ICN.cargas, match: ['/panel/cargas'], badge: 'cargasPendientes' },
     { path: '/panel/repartidores', label: 'Repartidores', icon: ICN.reps, match: ['/panel/repartidores', '/panel/repartidor'] },
     { path: '/panel/historial', label: 'Recorridos', icon: ICN.mapa, match: ['/panel/historial'] }
   ] },
@@ -122,6 +133,7 @@ function setCtx(c) { ctx.titulo = c.titulo ?? ''; ctx.sub = c.sub ?? ''; ctx.bac
 const iniciales = computed(() => (auth.usuario?.nombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase())
 function activo(n) { return n.match.some((m) => route.path.startsWith(m)) }
 function ir(path) { navAbierto.value = false; if (route.path !== path) router.push(path) }
+onMounted(contarCargasPendientes)
 function salir() { if (confirm('¿Cerrar sesión?')) { auth.logout(); router.replace('/login') } }
 </script>
 
@@ -186,4 +198,8 @@ function salir() { if (confirm('¿Cerrar sesión?')) { auth.logout(); router.rep
   .side.open .nav-a { justify-content: flex-start; padding: 11px 12px; }
   .scrim.show { display: block; }
 }
+.nav-a { position: relative; }
+.nav-txt { flex: 1; }
+.nav-badge { background: var(--clay); color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11px; min-width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; padding: 0 6px; flex: 0 0 auto; }
+.nav-a.on .nav-badge { background: #fff; color: var(--pine); }
 </style>

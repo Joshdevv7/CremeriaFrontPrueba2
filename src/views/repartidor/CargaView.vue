@@ -5,18 +5,49 @@
         <div class="ttl"><div class="s">En ruta</div><div class="n">Inventario</div></div>
         <button class="merma-btn" @click="$router.push('/merma')"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>Reportar merma</button>
       </div>
-
       <div class="tabs">
         <button class="tab" :class="{ on: tab===1 }" @click="setTab(1)">Mi carga</button>
         <button class="tab" :class="{ on: tab===2 }" @click="setTab(2)">Catálogo</button>
       </div>
-
       <div class="body" ref="bodyRef">
         <!-- MI CARGA -->
         <div class="view" :class="{ show: tab===1 }">
           <p v-if="cargaCargando" class="muted">Cargando carga…</p>
 
-          <!-- Con carga abierta -->
+          <!-- PENDIENTE DE AUTORIZACIÓN -->
+          <template v-else-if="pendiente">
+            <div class="estado-card pend">
+              <div class="ec-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+              <div class="ec-t">Carga enviada a autorizar</div>
+              <div class="ec-s">El administrador está revisando lo que cargaste. En cuanto la autorice, podrás salir a ruta.</div>
+              <div class="ec-resumen">
+                <div class="ecr" v-for="l in pendiente.lineas" :key="l.id">
+                  <span class="ecr-nm">{{ l.productoNombre }}</span>
+                  <span class="ecr-q">{{ fmtQty(l.cantidadCargada) }}</span>
+                </div>
+              </div>
+              <div class="ec-val">Valor: <b>{{ money(pendiente.valorCargado) }}</b></div>
+            </div>
+          </template>
+
+          <!-- RECHAZADA -->
+          <template v-else-if="rechazada && !creando">
+            <div class="estado-card rech">
+              <div class="ec-ic rech"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
+              <div class="ec-t">Carga rechazada</div>
+              <div class="ec-s" v-if="rechazada.motivoRechazo">Motivo: <b>{{ rechazada.motivoRechazo }}</b></div>
+              <div class="ec-s" v-else>El administrador rechazó la carga. Corrígela y vuelve a enviarla.</div>
+              <div class="ec-resumen">
+                <div class="ecr" v-for="l in rechazada.lineas" :key="l.id">
+                  <span class="ecr-nm">{{ l.productoNombre }}</span>
+                  <span class="ecr-q">{{ fmtQty(l.cantidadCargada) }}</span>
+                </div>
+              </div>
+              <button class="primary" @click="corregirRechazada">Corregir y reenviar</button>
+            </div>
+          </template>
+
+          <!-- Con carga ABIERTA -->
           <template v-else-if="carga">
             <div class="hero">
               <div class="top"><span class="t">Valor en camioneta</span><span class="tag">{{ horaCarga }}</span></div>
@@ -31,7 +62,6 @@
                 <span>Cargué <b>{{ money(carga.valorCargado) }}</b> − Vendí <b>{{ money(carga.valorVendido) }}</b> = debe quedar <b>{{ money(carga.valorRestante) }} MXN</b></span>
               </div>
             </div>
-
             <div class="eyebrow">Productos en ruta <span class="cnt">{{ carga.lineas.length }}</span></div>
             <div>
               <div v-for="l in carga.lineas" :key="l.id" class="item">
@@ -55,7 +85,6 @@
                 </div>
               </div>
             </div>
-
             <div class="acc-row">
               <button class="venta" @click="$router.push('/autoventa')">
                 <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>Venta en ruta
@@ -69,9 +98,13 @@
             </button>
           </template>
 
-          <!-- Creando carga -->
+          <!-- Creando/corrigiendo carga -->
           <template v-else-if="creando">
-            <div class="eyebrow">Selecciona lo que cargas</div>
+            <div v-if="rechazada" class="corrigiendo">
+              <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+              Corrige las cantidades y reenvía a autorizar.
+            </div>
+            <div class="eyebrow">{{ rechazada ? 'Corrige tu carga' : 'Selecciona lo que cargas' }}</div>
             <div v-for="p in productos" :key="p.id" class="cat col">
               <div class="crow">
                 <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
@@ -89,9 +122,9 @@
             </div>
             <p v-if="error" class="err">{{ error }}</p>
             <div class="dual">
-              <button class="ghost" @click="creando=false">Cancelar</button>
-              <button class="primary" :disabled="enviando || totalNueva===0" @click="abrirCarga">
-                {{ enviando ? 'Abriendo…' : `Abrir carga (${totalNueva})` }}
+              <button class="ghost" @click="cancelarCreacion">Cancelar</button>
+              <button class="primary" :disabled="enviando || totalNueva===0" @click="enviarCarga">
+                {{ enviando ? 'Enviando…' : (rechazada ? `Reenviar (${totalNueva})` : `Enviar a autorizar (${totalNueva})`) }}
               </button>
             </div>
           </template>
@@ -100,13 +133,12 @@
           <template v-else>
             <div class="empty">
               <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></div>
-              <div class="et">Sin carga abierta</div>
-              <div class="es">Carga producto del almacén para salir a ruta.</div>
-              <button class="primary" @click="iniciarCreacion">Abrir carga del día</button>
+              <div class="et">Sin carga</div>
+              <div class="es">Arma tu carga y mándala a autorizar para salir a ruta.</div>
+              <button class="primary" @click="iniciarCreacion">Armar carga del día</button>
             </div>
           </template>
         </div>
-
         <!-- CATÁLOGO -->
         <div class="view" :class="{ show: tab===2 }">
           <div class="search">
@@ -133,16 +165,16 @@
     </ion-content>
   </ion-page>
 </template>
-
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
-
 const auth = useAuthStore()
 const tab = ref(1)
 const carga = ref(null)
+const pendiente = ref(null)
+const rechazada = ref(null)
 const cargaCargando = ref(true)
 const productos = ref([])
 const creando = ref(false)
@@ -155,10 +187,8 @@ const busqueda = ref('')
 const enviando = ref(false)
 const error = ref('')
 const bodyRef = ref(null)
-
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmtQty = (n) => Number(n || 0).toLocaleString('es-MX')
-
 const horaCarga = computed(() => carga.value
   ? 'Cargado ' + new Date(carga.value.fecha).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })
   : '')
@@ -167,13 +197,11 @@ const pctVendido = computed(() => {
   return c && c.valorCargado > 0 ? Math.round(c.valorVendido / c.valorCargado * 100) : 0
 })
 function pctLinea(l) { return l.cantidadCargada > 0 ? Math.round(l.cantidadVendida / l.cantidadCargada * 100) : 0 }
-
 const catalogoFiltrado = computed(() => {
   const t = busqueda.value.trim().toLowerCase()
   return t ? productos.value.filter((p) => p.nombre.toLowerCase().includes(t)) : productos.value
 })
 const totalNueva = computed(() => Object.values(nueva).reduce((s, n) => s + (n || 0), 0))
-
 function setTab(n) { tab.value = n; bodyRef.value?.scrollTo({ top: 0 }) }
 function incNueva(id) { const p = productos.value.find((x) => x.id === id); if (p && (nueva[id] || 0) < maxNueva(p)) nueva[id] = (nueva[id] || 0) + 1 }
 function decNueva(id) { if (nueva[id] > 0) nueva[id]-- }
@@ -185,15 +213,37 @@ function setNueva(id, val) {
   nueva[id] = n
 }
 function iniciarCreacion() { creando.value = true; tab.value = 1 }
-
+function cancelarCreacion() {
+  creando.value = false
+  Object.keys(nueva).forEach((k) => delete nueva[k])
+}
+// Precarga las cantidades de la carga rechazada para corregir
+function corregirRechazada() {
+  Object.keys(nueva).forEach((k) => delete nueva[k])
+  rechazada.value.lineas.forEach((l) => { nueva[l.productoId] = l.cantidadCargada })
+  creando.value = true; tab.value = 1
+}
 async function cargarCarga() {
   cargaCargando.value = true; error.value = ''
+  carga.value = null; pendiente.value = null; rechazada.value = null
   try {
-    const { data } = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
-    carga.value = data
+    // 1) ¿Tiene carga abierta?
+    try {
+      const { data } = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
+      carga.value = data
+      cargaCargando.value = false
+      return
+    } catch (e) {
+      if (e.response?.status !== 404) throw e
+    }
+    // 2) Buscar pendiente o rechazada en el listado del repartidor
+    const { data } = await http.get('/cargas', { params: { repartidorId: auth.usuarioId, tamano: 10 } })
+    const activa = (data.items || []).find((c) => c.estado === 'PendienteAutorizacion')
+    const rech = (data.items || []).find((c) => c.estado === 'Rechazada')
+    if (activa) pendiente.value = activa
+    else if (rech) rechazada.value = rech
   } catch (e) {
-    if (e.response?.status === 404) carga.value = null
-    else error.value = e.response?.data?.mensaje || 'No se pudo cargar.'
+    error.value = e.response?.data?.mensaje || 'No se pudo cargar.'
   } finally { cargaCargando.value = false }
 }
 async function cargarProductos() {
@@ -202,22 +252,30 @@ async function cargarProductos() {
     productos.value = data.items
   } catch { /* noop */ }
 }
-async function abrirCarga() {
-  error.value = ''
-  const lineas = Object.entries(nueva).filter(([, q]) => q > 0).map(([productoId, cantidad]) => {
+function construirLineas() {
+  return Object.entries(nueva).filter(([, q]) => q > 0).map(([productoId, cantidad]) => {
     const prod = productos.value.find((x) => x.id === Number(productoId))
     const factor = (unidadNueva[productoId] === 'caja') ? factorP(prod) : 1
     return { productoId: Number(productoId), cantidad: cantidad * factor }
   })
+}
+// Enviar a autorizar (carga nueva) o reenviar (carga rechazada corregida)
+async function enviarCarga() {
+  error.value = ''
+  const lineas = construirLineas()
   if (!lineas.length) return
   enviando.value = true
   try {
-    await http.post('/cargas', { repartidorId: auth.usuarioId, lineas })
+    if (rechazada.value) {
+      await http.put(`/cargas/${rechazada.value.id}/reenviar`, { repartidorId: auth.usuarioId, lineas })
+    } else {
+      await http.post('/cargas', { repartidorId: auth.usuarioId, lineas })
+    }
     Object.keys(nueva).forEach((k) => delete nueva[k])
     creando.value = false
     await cargarCarga()
   } catch (e) {
-    error.value = e.response?.data?.mensaje || 'No se pudo abrir la carga.'
+    error.value = e.response?.data?.mensaje || 'No se pudo enviar la carga.'
   } finally { enviando.value = false }
 }
 async function cerrarCarga() {
@@ -229,32 +287,47 @@ async function cerrarCarga() {
     error.value = e.response?.data?.mensaje || 'No se pudo cerrar la carga.'
   } finally { enviando.value = false }
 }
-
 onMounted(async () => { await Promise.all([cargarCarga(), cargarProductos()]) })
 onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 </script>
-
 <style scoped>
 .cg { --background: var(--paper); --padding-top: 0; --padding-bottom: 0; }
 .muted { color: var(--muted); text-align: center; margin-top: 30px; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 10px 4px; text-align: center; }
-
 .bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; }
 .bar .ttl { flex: 1; }
 .bar .ttl .s { font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--pine); }
 .bar .ttl .n { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; letter-spacing: -.01em; margin-top: 1px; }
-
 .tabs { display: flex; gap: 6px; margin: 2px 18px 12px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px; padding: 4px; }
 .tab { flex: 1; text-align: center; padding: 9px; border-radius: 10px; font-weight: 700; font-size: 13.5px; color: var(--muted); cursor: pointer; transition: .2s; border: none; background: transparent; font-family: "Hanken Grotesk"; }
 .tab.on { background: var(--surface); color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,.08); }
-
 .body { padding: 2px 18px calc(86px + env(safe-area-inset-bottom)); }
 .view { display: none; animation: fade .32s ease; }
 .view.show { display: block; }
 @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 18px 4px 11px; display: flex; align-items: center; justify-content: space-between; }
 .eyebrow .cnt { color: var(--pine); }
-
+/* estado card (pendiente / rechazada) */
+.estado-card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px 20px; text-align: center; box-shadow: var(--shadow); margin-top: 12px; }
+.estado-card.pend { border-color: #F0D9AE; }
+.estado-card.rech { border-color: var(--clay-soft); }
+.ec-ic { width: 62px; height: 62px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; background: var(--amber-soft); }
+.ec-ic svg { width: 30px; height: 30px; stroke: var(--amber); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ec-ic.rech { background: var(--clay-soft); }
+.ec-ic.rech svg { stroke: var(--clay); }
+.ec-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 20px; letter-spacing: -.01em; }
+.ec-s { font-size: 13.5px; color: var(--muted); font-weight: 500; margin-top: 8px; line-height: 1.5; }
+.ec-s b { color: var(--ink-soft); }
+.ec-resumen { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 6px 14px; margin: 18px 0 14px; text-align: left; }
+.ecr { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.ecr:last-child { border-bottom: none; }
+.ecr-nm { font-size: 13.5px; font-weight: 600; }
+.ecr-q { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ec-val { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.ec-val b { font-family: "Bricolage Grotesque"; color: var(--ink); font-size: 16px; }
+.estado-card .primary { margin-top: 18px; width: 100%; }
+.corrigiendo { display: flex; align-items: center; gap: 9px; background: var(--clay-soft); border: 1px solid #EAC9BC; border-radius: 13px; padding: 11px 13px; margin: 8px 0 4px; font-size: 12.5px; font-weight: 600; color: #8A3D28; }
+.corrigiendo svg { width: 17px; height: 17px; stroke: var(--clay); fill: none; stroke-width: 2.2; flex: 0 0 auto; }
 /* hero */
 .hero { background: linear-gradient(155deg,var(--pine),var(--pine-deep)); border-radius: 24px; padding: 20px; color: #fff; position: relative; overflow: hidden; box-shadow: 0 20px 40px -22px rgba(10,63,51,.9); }
 .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(140px 140px at 90% 8%,rgba(232,151,46,.28),transparent 70%); }
@@ -273,7 +346,6 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .reconc { display: flex; align-items: center; gap: 9px; background: var(--amber-soft); border: 1px solid #F0D9AE; border-radius: 13px; padding: 11px 13px; margin-top: 13px; font-size: 12.5px; font-weight: 600; color: #7A4E14; }
 .reconc svg { width: 17px; height: 17px; stroke: var(--amber); fill: none; stroke-width: 2.2; flex: 0 0 auto; }
 .reconc b { font-family: "Bricolage Grotesque"; }
-
 /* cargo item */
 .item { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 11px; box-shadow: var(--shadow); }
 .item .row { display: flex; align-items: center; gap: 12px; }
@@ -295,7 +367,6 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .legend2 .c { color: var(--pine); }
 .mermatag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--clay); background: var(--clay-soft); padding: 3px 8px; border-radius: 7px; margin-top: 9px; }
 .mermatag svg { width: 12px; height: 12px; stroke: var(--clay); fill: none; stroke-width: 2.4; }
-
 /* catálogo */
 .search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 4px 0; box-shadow: var(--shadow); }
 .search svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
@@ -311,22 +382,16 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .cat .price .p { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
 .cat .price .u { font-size: 10.5px; color: var(--muted); font-weight: 600; }
 .lock { width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; vertical-align: -2px; margin-left: 4px; opacity: .7; }
-
-/* item de abrir carga en columna (para el selector pza/caja) */
 .cat.col { flex-direction: column; align-items: stretch; gap: 0; }
 .cat.col .crow { display: flex; align-items: center; gap: 13px; }
 .uni { display: flex; gap: 6px; margin-top: 10px; }
 .uni button { flex: 1; border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 9px; padding: 7px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; cursor: pointer; }
 .uni button.on { background: var(--pine); color: #fff; border-color: var(--pine); }
-
-/* stepper (creación) */
 .stepper { display: flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex: 0 0 auto; }
 .stepper button { width: 32px; height: 34px; border: none; background: transparent; font-size: 19px; color: var(--pine); cursor: pointer; font-weight: 600; display: grid; place-items: center; }
 .stepper button:disabled { color: #C7CFC9; }
 .stepper .q { width: 48px; height: 34px; min-width: 48px; text-align: center; border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; color: var(--ink); -moz-appearance: textfield; }
 .stepper .q::-webkit-outer-spin-button, .stepper .q::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* botones */
 .acc-row { display: flex; gap: 10px; margin: 4px 0 10px; }
 .acc-row button { flex: 1; }
 .venta { border: none; background: var(--pine); color: #fff; border-radius: 15px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 12px 22px -12px rgba(14,92,74,.8); }
@@ -339,7 +404,6 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .dual .ghost { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; cursor: pointer; }
 .primary { flex: 1; border: none; background: var(--pine); color: #fff; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; }
 .primary:disabled { opacity: .5; }
-
 .empty { text-align: center; padding: 50px 20px; }
 .empty .ico { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--pine-tint); }
 .empty .ico svg { width: 30px; height: 30px; stroke: var(--pine); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
