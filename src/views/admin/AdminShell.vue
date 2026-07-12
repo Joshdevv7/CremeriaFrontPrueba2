@@ -73,8 +73,13 @@ const navAbierto = ref(false)
 const cargasPendientes = ref(0)
 async function contarCargasPendientes() {
   try {
-    const { data } = await http.get('/cargas', { params: { estado: 'PendienteAutorizacion', tamano: 1 } })
-    cargasPendientes.value = data.total ?? (data.items?.length || 0)
+    const [cargas, reabs] = await Promise.all([
+      http.get('/cargas', { params: { estado: 'PendienteAutorizacion', tamano: 1 } }),
+      http.get('/cargas/reabastecimientos', { params: { estado: 'Pendiente', tamano: 1 } })
+    ])
+    const a = cargas.data.total ?? (cargas.data.items?.length || 0)
+    const b = reabs.data.total ?? (reabs.data.items?.length || 0)
+    cargasPendientes.value = a + b
   } catch { cargasPendientes.value = 0 }
 }
 

@@ -4,18 +4,34 @@
       <div class="bar">
         <div class="iconbtn" @click="$router.replace('/app/inventario')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
         <div class="ttl"><div class="s">En ruta</div><div class="n">Agregar a mi carga</div></div>
-        <button class="iconbtn scan" @click="mostrarScan = true" title="Escanear"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg></button>
+        <button class="iconbtn scan" v-if="!sinCarga && !pendiente" @click="mostrarScan = true" title="Escanear"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg></button>
       </div>
-
       <div class="body" v-show="!exito">
         <p v-if="cargando" class="muted">Cargando…</p>
+
+        <!-- Ya hay una solicitud esperando autorización -->
+        <div v-else-if="pendiente" class="pend-card">
+          <div class="pc-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <div class="pc-t">Solicitud enviada a autorizar</div>
+          <div class="pc-s">El administrador la está revisando. Mientras tanto, <b>puedes seguir vendiendo</b> con lo que ya traes.</div>
+          <div class="pc-lineas">
+            <div class="pcl" v-for="l in pendiente.lineas" :key="l.id">
+              <span class="pcl-nm">{{ l.productoNombre }}</span>
+              <span class="pcl-q">{{ fmt(l.cantidad) }}</span>
+            </div>
+          </div>
+          <div class="pc-val">Valor solicitado: <b>{{ money(pendiente.valorSolicitado) }}</b></div>
+          <button class="cta-line" @click="$router.replace('/app/inventario')">Volver al inventario</button>
+        </div>
+
         <div v-else-if="sinCarga" class="vacio">
           <div class="emoji-big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
           <p>No tienes una carga abierta.<br>Abre tu carga del día para poder reabastecer.</p>
           <button class="cta-line" @click="$router.replace('/app/inventario')">Ir a inventario</button>
         </div>
+
         <template v-else>
-          <p class="intro">Pasa por la bodega y agrega lo que vas a llevar de más. Se descuenta del almacén y se suma a tu carga actual, sin cerrar tu jornada.</p>
+          <p class="intro">Selecciona lo que vas a llevar de más. El administrador debe autorizarlo; mientras tanto puedes seguir vendiendo con lo que traes.</p>
           <div class="search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
             <input v-model="buscar" placeholder="Buscar producto…">
@@ -40,21 +56,17 @@
           </div>
         </template>
       </div>
-
       <transition name="fade"><div v-if="scanMsg" class="scanmsg">{{ scanMsg }}</div></transition>
       <BarcodeScanner :show="mostrarScan" continuo @scan="onScan" @close="mostrarScan = false" />
-
-      <div class="footer" v-if="!sinCarga && !cargando && !exito">
-        <div class="resumen"><b>{{ totalItems }}</b> producto(s) a agregar</div>
+      <div class="footer" v-if="!sinCarga && !cargando && !exito && !pendiente">
+        <div class="resumen"><b>{{ totalItems }}</b> producto(s) a solicitar</div>
         <p v-if="error" class="err">{{ error }}</p>
-        <button class="cta" :disabled="enviando || totalItems === 0" @click="agregar()">{{ enviando ? 'Agregando…' : 'Agregar a mi carga' }}</button>
+        <button class="cta" :disabled="enviando || totalItems === 0" @click="agregar()">{{ enviando ? 'Enviando…' : 'Enviar a autorizar' }}</button>
       </div>
-
-      <ExitoOverlay :show="exito" titulo="Carga reabastecida" subtitulo="Tu carga se actualizó" :detalle="exitoDet" cta-texto="Volver al inventario" @done="$router.replace('/app/inventario')" />
+      <ExitoOverlay :show="exito" titulo="Solicitud enviada" subtitulo="El admin debe autorizarla" :detalle="exitoDet" cta-texto="Volver al inventario" @done="$router.replace('/app/inventario')" />
     </ion-content>
   </ion-page>
 </template>
-
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IonPage, IonContent } from '@ionic/vue'
@@ -62,12 +74,12 @@ import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
-
 const auth = useAuthStore()
 const productos = ref([])
 const cargaLineas = ref([])
 const cargando = ref(true)
 const sinCarga = ref(false)
+const pendiente = ref(null)     // solicitud de reabastecimiento esperando autorización
 const buscar = ref('')
 const cant = reactive({})
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
@@ -77,11 +89,10 @@ const exito = ref(false)
 const exitoDet = ref([])
 const mostrarScan = ref(false)
 const scanMsg = ref('')
-
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
+const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const filtrados = computed(() => { const t = buscar.value.trim().toLowerCase(); return t ? productos.value.filter((p) => p.nombre.toLowerCase().includes(t)) : productos.value })
 const totalItems = computed(() => Object.values(cant).filter((q) => q > 0).length)
-function enCarga(pid) { const l = cargaLineas.value.find((x) => x.productoId === pid); return l ? l.cantidadCargada : 0 }
 function factorP(p) { return p && p.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
 function maxUnidad(p) { return unidad[p.id] === 'caja' ? Math.floor(p.stockAlmacen / factorP(p)) : p.stockAlmacen }
 function setUnidad(pid, u) { unidad[pid] = u; cant[pid] = 0 }
@@ -111,13 +122,18 @@ async function agregar() {
     await http.post('/cargas/reabastecer', { lineas })
     exitoDet.value = [{ k: 'Productos', v: String(lineas.length) }, { k: 'Piezas', v: fmt(lineas.reduce((s, l) => s + l.cantidad, 0)) }]
     exito.value = true
-  } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo agregar a la carga.' }
+  } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo enviar la solicitud.' }
   finally { enviando.value = false }
 }
 onMounted(async () => {
   try {
     const cg = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
     cargaLineas.value = cg.data.lineas || []
+    // ¿ya tiene una solicitud de reabastecimiento pendiente?
+    try {
+      const rs = await http.get('/cargas/reabastecimientos', { params: { repartidorId: auth.usuarioId, estado: 'Pendiente', tamano: 1 } })
+      if (rs.data.items && rs.data.items.length) pendiente.value = rs.data.items[0]
+    } catch { /* si falla, seguimos normal */ }
     const pr = await http.get('/productos', { params: { tamano: 100 } })
     productos.value = pr.data.items
   } catch (e) {
@@ -126,7 +142,6 @@ onMounted(async () => {
   } finally { cargando.value = false }
 })
 </script>
-
 <style scoped>
 .ac { --background: var(--paper); }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 8px 2px; }
@@ -144,6 +159,20 @@ onMounted(async () => {
 .emoji-big svg { width: 52px; height: 52px; }
 .vacio p { color: var(--muted); font-weight: 500; line-height: 1.5; margin-bottom: 18px; }
 .cta-line { background: var(--pine); color: #fff; border: none; border-radius: 13px; padding: 13px 22px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
+/* solicitud pendiente */
+.pend-card { background: var(--surface); border: 1px solid #F0D9AE; border-radius: 22px; padding: 26px 20px; text-align: center; box-shadow: var(--shadow); margin-top: 14px; }
+.pc-ic { width: 62px; height: 62px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; background: var(--amber-soft); }
+.pc-ic svg { width: 30px; height: 30px; stroke: var(--amber); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pc-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 20px; letter-spacing: -.01em; }
+.pc-s { font-size: 13.5px; color: var(--muted); font-weight: 500; margin-top: 8px; line-height: 1.5; }
+.pc-s b { color: var(--pine); }
+.pc-lineas { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 6px 14px; margin: 18px 0 14px; text-align: left; }
+.pcl { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.pcl:last-child { border-bottom: none; }
+.pcl-nm { font-size: 13.5px; font-weight: 600; }
+.pcl-q { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pc-val { font-size: 13.5px; color: var(--muted); font-weight: 600; margin-bottom: 18px; }
+.pc-val b { font-family: "Bricolage Grotesque"; color: var(--ink); font-size: 16px; }
 .intro { font-size: 13px; color: var(--muted); font-weight: 500; line-height: 1.5; margin-bottom: 14px; }
 .search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; box-shadow: var(--shadow); }
 .search svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
