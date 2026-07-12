@@ -1,9 +1,7 @@
 <template>
   <div class="resumen">
-
     <p v-if="cargando" class="loading">Cargando panel…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
-
     <template v-else-if="d">
       <div class="kpis">
         <div class="kpi v1">
@@ -32,12 +30,10 @@
           <div class="foot"><span class="vs">{{ mermaPct }}% de ventas</span></div>
         </div>
       </div>
-
       <div class="row a">
         <!-- PUNTO DE EQUILIBRIO -->
         <div class="card equilibrio" :class="estadoEq.clase">
           <div class="ch"><h3>¿Ya cubriste tus gastos?</h3><span class="meta">{{ rangoTexto }}</span></div>
-
           <div class="eq-msg">
             <span class="eq-ic">
               <svg v-if="estadoEq.clase === 'ok'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
@@ -49,7 +45,6 @@
               <div class="eq-sub">{{ estadoEq.sub }}</div>
             </div>
           </div>
-
           <div class="eq-bar">
             <div class="eq-fill" :style="{ width: progresoEq + '%' }"></div>
             <div class="eq-meta-line" v-if="d.puntoEquilibrio > 0" :style="{ left: 'min(100%, ' + metaPos + '%)' }"></div>
@@ -59,7 +54,6 @@
             <span v-if="d.puntoEquilibrio > 0">meta: <b>{{ money(d.puntoEquilibrio) }}</b></span>
             <span v-else>sin gastos registrados</span>
           </div>
-
           <!-- mini-indicadores -->
           <div class="mini">
             <div class="mi"><div class="ml">Ventas</div><div class="mv">{{ money(d.ventasTotal) }}</div></div>
@@ -67,7 +61,6 @@
             <div class="mi"><div class="ml">Margen</div><div class="mv">{{ Math.round(d.margenBrutoPorcentaje) }}%</div></div>
           </div>
         </div>
-
         <div class="card">
           <div class="ch"><h3>Por método</h3><span class="meta">{{ rangoTexto }}</span></div>
           <div class="donut-wrap">
@@ -76,7 +69,6 @@
           </div>
         </div>
       </div>
-
       <div class="row b">
         <div class="card">
           <div class="ch"><h3>Productos más rentables</h3><span class="meta">Por utilidad</span></div>
@@ -94,14 +86,18 @@
           <div style="margin-top:12px">
             <div class="alert" v-for="a in d.alertasStock" :key="a.productoId">
               <div class="em"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
-              <div class="info"><div class="n">{{ a.nombre }}</div><div class="s">Quedan <b>{{ fmt(a.stock) }}</b> · mín <b>{{ fmt(a.minimo) }}</b> · pedir <b>{{ fmt(a.sugerido) }}</b></div></div>
-              <button class="wa" @click="whatsapp(a)"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>WhatsApp</button>
+              <div class="info">
+                <div class="n">{{ a.nombre }}</div>
+                <div class="s">Quedan <b>{{ fmt(a.stock) }}</b> · mín <b>{{ fmt(a.minimo) }}</b> · pedir <b>{{ fmt(a.sugerido) }}</b></div>
+                <div class="prov" v-if="a.proveedorNombre">{{ a.proveedorNombre }}</div>
+              </div>
+              <button v-if="a.proveedorWhatsapp" class="wa" @click="whatsapp(a)"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>WhatsApp</button>
+              <span v-else class="sin-prov">{{ a.proveedorNombre ? 'Sin WhatsApp' : 'Sin proveedor' }}</span>
             </div>
             <p v-if="!d.alertasStock.length" class="vacio">Todo el inventario está por encima del mínimo.</p>
           </div>
         </div>
       </div>
-
       <div class="row c">
         <div class="card cred">
           <div class="ch"><h3>Créditos</h3><span class="meta link" @click="$router.push('/panel/creditos')">Ver todos →</span></div>
@@ -114,12 +110,10 @@
     </template>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
-
 const emit = defineEmits(['ctx'])
 const auth = useAuthStore()
 const d = ref(null)
@@ -127,14 +121,12 @@ const cargando = ref(true)
 const error = ref('')
 const rango = ref('mes')
 const cred = ref({ activosMonto: 0, activosCuentas: 0, vencidoMonto: 0, liquidados: 0 })
-
 const rangos = [{ k: 'hoy', t: 'Hoy' }, { k: 'semana', t: 'Semana' }, { k: 'mes', t: 'Mes' }, { k: 'anio', t: 'Año' }]
 const rangoTexto = computed(() => ({ hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes', anio: 'Este año' }[rango.value]))
 const money = (n) => '$' + Math.round(Number(n || 0)).toLocaleString('es-MX')
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const margenFrac = computed(() => d.value ? (d.value.margenBrutoPorcentaje || 0) / 100 : 0)
 const mermaPct = computed(() => d.value && d.value.ventasTotal > 0 ? (d.value.costoMerma / d.value.ventasTotal * 100).toFixed(1) : '0.0')
-
 // ----- Punto de equilibrio -----
 const progresoEq = computed(() => {
   if (!d.value || d.value.puntoEquilibrio <= 0) return d.value && d.value.ventasTotal > 0 ? 100 : 0
@@ -152,7 +144,6 @@ const estadoEq = computed(() => {
   }
   return { clase: 'falta', titulo: `Te faltan ${money(faltante.value)} para cubrir gastos`, sub: `Necesitas vender ${money(d.value.puntoEquilibrio)} en el periodo para no perder. Llevas ${progresoEq.value}%.` }
 })
-
 function emitCtx() {
   emit('ctx', {
     titulo: 'Resumen',
@@ -164,7 +155,6 @@ function emitCtx() {
     }
   })
 }
-
 function spark(factor) {
   const dias = d.value?.ventasPorDia || []
   if (!dias.length) return ''
@@ -172,7 +162,6 @@ function spark(factor) {
   const n = dias.length
   return dias.map((x, i) => `${(n === 1 ? 32 : 64 * i / (n - 1)).toFixed(1)},${(28 - 24 * (x.total * factor / max)).toFixed(1)}`).join(' ')
 }
-
 const COLORES = { Efectivo: '#0E5C4A', Transferencia: '#2E6F8E', Tarjeta: '#E8972E', Credito: '#C0573B' }
 const NOMBRES = { Efectivo: 'Efectivo', Transferencia: 'Transferencia', Tarjeta: 'Tarjeta', Credito: 'Crédito' }
 const metodos = computed(() => {
@@ -190,8 +179,12 @@ const donutBg = computed(() => {
 const totalCorto = computed(() => { const t = d.value?.ventasTotal || 0; return t >= 1000 ? '$' + Math.round(t / 1000) + 'K' : money(t) })
 const maxUtil = computed(() => Math.max(...(d.value?.topProductos || []).map((p) => p.utilidad), 1))
 function barra(u) { return Math.max(4, Math.round(u / maxUtil.value * 100)) }
-function whatsapp(a) { window.open(`https://wa.me/?text=${encodeURIComponent(a.whatsappTexto || `Hola, necesito surtir ${a.sugerido} de ${a.nombre}.`)}`, '_blank') }
-
+// wa.me SIN número abre el selector de contactos. Con número abre el chat del proveedor.
+function whatsapp(a) {
+  if (!a.proveedorWhatsapp) return
+  const texto = a.whatsappTexto || `Hola, necesito surtir ${a.sugerido} de ${a.nombre}.`
+  window.open(`https://wa.me/${a.proveedorWhatsapp}?text=${encodeURIComponent(texto)}`, '_blank')
+}
 function fechasDeRango(k) {
   const hoy = new Date(); const iso = (dt) => dt.toISOString().slice(0, 10)
   if (k === 'hoy') return { desde: iso(hoy), hasta: iso(hoy) }
@@ -200,7 +193,6 @@ function fechasDeRango(k) {
   return { desde: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`, hasta: iso(hoy) }
 }
 function setRango(k) { rango.value = k; emitCtx(); cargar() }
-
 async function cargar() {
   cargando.value = true; error.value = ''
   try {
@@ -227,7 +219,6 @@ async function cargarCreditos() {
 }
 onMounted(() => { emitCtx(); cargar() })
 </script>
-
 <style scoped>
 .loading, .error, .vacio { color: var(--muted); font-weight: 600; padding: 24px 4px; }
 .error { color: var(--clay); }
@@ -237,7 +228,6 @@ onMounted(() => { emitCtx(); cargar() })
 .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,.08); }
 .btn-primary { display: flex; align-items: center; gap: 8px; background: var(--ink); color: #fff; border: none; border-radius: 12px; padding: 11px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 10px 20px -12px rgba(21,42,36,.7); }
 .btn-primary svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; }
-
 .kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 18px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 17px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
 .kpi .k { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
@@ -259,7 +249,6 @@ onMounted(() => { emitCtx(); cargar() })
 .row.a { grid-template-columns: 1.9fr 1fr; }
 .row.b { grid-template-columns: 1.35fr 1fr; }
 .row.c { grid-template-columns: 1fr; }
-
 /* Punto de equilibrio */
 .equilibrio { display: flex; flex-direction: column; }
 .eq-msg { display: flex; align-items: flex-start; gap: 13px; margin: 14px 0 16px; }
@@ -284,7 +273,6 @@ onMounted(() => { emitCtx(); cargar() })
 .mi .ml { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .mi .mv { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 21px; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .mi .mv.neg { color: var(--clay); }
-
 .cred .ch .link { color: var(--pine); cursor: pointer; font-weight: 700; }
 .cred-row { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
 .cred-box { flex: 1; min-width: 180px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
@@ -325,6 +313,8 @@ onMounted(() => { emitCtx(); cargar() })
 .alert .info { flex: 1; min-width: 0; }
 .alert .info .n { font-weight: 700; font-size: 14px; }
 .alert .info .s { font-size: 12px; color: #9A4730; font-weight: 600; margin-top: 1px; }
+.alert .info .prov { font-size: 11.5px; color: var(--muted); font-weight: 700; margin-top: 3px; }
+.sin-prov { font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--paper-2); border: 1px dashed var(--line); border-radius: 10px; padding: 9px 12px; white-space: nowrap; flex: 0 0 auto; }
 .wa { display: flex; align-items: center; gap: 7px; background: #1AA75A; color: #fff; border: none; border-radius: 11px; padding: 10px 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; white-space: nowrap; box-shadow: 0 8px 16px -8px rgba(26,167,90,.7); }
 .wa svg { width: 16px; height: 16px; fill: #fff; }
 @media (max-width: 1180px) { .row.a, .row.b { grid-template-columns: 1fr; } }
