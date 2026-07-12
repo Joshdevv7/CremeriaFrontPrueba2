@@ -162,6 +162,16 @@
           </div>
         </div>
       </div>
+
+      <!-- Recordatorio: al cerrar la carga toca hacer el corte -->
+      <div v-if="recordarCorte" class="corte-bg">
+        <div class="corte-modal">
+          <div class="cm-ic"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg></div>
+          <div class="cm-t">Carga cerrada</div>
+          <div class="cm-s">Ya devolviste la mercancía sobrante. Ahora <b>haz tu corte de caja</b> para entregar el efectivo. No podrás armar otra carga hasta hacerlo.</div>
+          <button class="cm-ok" @click="irACorte()">Hacer mi corte</button>
+        </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -169,8 +179,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
+const router = useRouter()
 const tab = ref(1)
 const carga = ref(null)
 const pendiente = ref(null)
@@ -187,6 +199,7 @@ const busqueda = ref('')
 const enviando = ref(false)
 const error = ref('')
 const bodyRef = ref(null)
+const recordarCorte = ref(false)
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmtQty = (n) => Number(n || 0).toLocaleString('es-MX')
 const horaCarga = computed(() => carga.value
@@ -283,10 +296,13 @@ async function cerrarCarga() {
   try {
     await http.post(`/cargas/${carga.value.id}/cerrar`)
     await cargarCarga()
+    // Cerrar la carga obliga a hacer el corte: se lo recordamos para que no se le olvide.
+    recordarCorte.value = true
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo cerrar la carga.'
   } finally { enviando.value = false }
 }
+function irACorte() { recordarCorte.value = false; router.push('/app/corte') }
 onMounted(async () => { await Promise.all([cargarCarga(), cargarProductos()]) })
 onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 </script>
@@ -413,4 +429,13 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .merma-btn { display: flex; align-items: center; gap: 7px; background: var(--clay-soft); color: var(--clay); border: 1px solid #EAC9BC; border-radius: 12px; padding: 9px 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
 .merma-btn svg { width: 16px; height: 16px; stroke: var(--clay); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .bar { display: flex; align-items: center; justify-content: space-between; }
+
+.corte-bg { position: fixed; inset: 0; background: rgba(21,42,36,.5); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 4000; padding: 24px; }
+.corte-modal { background: var(--surface); border-radius: 24px; padding: 28px 22px 22px; text-align: center; max-width: 360px; width: 100%; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); }
+.cm-ic { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; background: var(--pine-tint); }
+.cm-ic svg { width: 30px; height: 30px; stroke: var(--pine); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cm-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 21px; letter-spacing: -.01em; }
+.cm-s { font-size: 13.5px; color: var(--muted); font-weight: 500; margin-top: 9px; line-height: 1.5; }
+.cm-s b { color: var(--pine); }
+.cm-ok { width: 100%; margin-top: 20px; border: none; background: var(--pine); color: #fff; border-radius: 14px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; }
 </style>
