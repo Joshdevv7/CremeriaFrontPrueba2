@@ -17,12 +17,10 @@
     <div v-else class="grid">
       <div v-for="c in visibles" :key="c.id" class="card" :class="claseEstado(c.estado)">
         <div class="c-top">
-          <div class="c-rep">
-            <div class="av" :class="claseEstado(c.estado)">{{ ini(c.repartidorNombre) }}</div>
-            <div>
-              <div class="nm">{{ c.repartidorNombre }}</div>
-              <div class="meta">Corte #{{ c.id }}<span v-if="c.cargaId"> · Carga #{{ c.cargaId }}</span> · {{ fecha(c.fecha) }}</div>
-            </div>
+          <div class="av" :class="claseEstado(c.estado)">{{ ini(c.repartidorNombre) }}</div>
+          <div class="c-info">
+            <div class="nm">{{ c.repartidorNombre }}</div>
+            <div class="meta">Corte #{{ c.id }}<span v-if="c.cargaId"> · Carga #{{ c.cargaId }}</span> · {{ fecha(c.fecha) }}</div>
           </div>
           <span class="badge" :class="claseEstado(c.estado)">{{ etiqueta(c.estado) }}</span>
         </div>
@@ -31,7 +29,7 @@
           <div class="n"><span class="k">Diferencia</span><span class="v" :class="{ neg: c.diferencia < 0, pos: c.diferencia > 0 }">{{ signo(c.diferencia) }}{{ money(Math.abs(c.diferencia)) }}</span></div>
           <div class="n" v-if="c.faltantePorJustificar > 0"><span class="k">Por justificar</span><span class="v neg">{{ money(c.faltantePorJustificar) }}</span></div>
         </div>
-        <button v-if="c.faltantePorJustificar > 0" class="just" @click="abrir(c)">Justificar faltante</button>
+        <button v-if="c.faltantePorJustificar > 0" class="btn-just" @click="abrir(c)">Justificar faltante</button>
       </div>
     </div>
 
@@ -128,7 +126,7 @@ const signo = (n) => n < 0 ? '−' : n > 0 ? '+' : ''
 const fecha = (f) => new Date(f).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
-const claseEstado = (e) => e === 'Completo' ? 'ok' : e === 'Justificado' ? 'just' : 'inc'
+const claseEstado = (e) => e === 'Completo' ? 'e-ok' : e === 'Justificado' ? 'e-just' : 'e-inc'
 const etiqueta = (e) => e === 'Completo' ? 'Cuadra' : e === 'Justificado' ? 'Justificado' : 'Incompleto'
 const etiquetaTipo = (t) => t === 'GastoFijo' ? 'Gasto fijo' : t === 'GastoVariable' ? 'Gasto variable' : 'Deuda'
 
@@ -202,26 +200,26 @@ onMounted(() => {
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 13px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 15px; box-shadow: var(--shadow); }
-.card.inc { border-color: var(--clay-soft); }
-.card.just { border-color: #C7DDE7; }
-.c-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.c-rep { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.c-rep .av { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: 0 0 auto; background: var(--pine-tint); color: var(--pine); }
-.c-rep .av.inc { background: var(--clay-soft); color: var(--clay); }
-.c-rep .av.just { background: var(--sky-soft); color: #1F5269; }
-.c-rep .nm { font-weight: 700; font-size: 14.5px; }
-.c-rep .meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.card.e-inc { border-color: var(--clay-soft); background: linear-gradient(0deg, var(--clay-soft) 0%, var(--surface) 55%); }
+.card.e-just { border-color: #C7DDE7; }
+.c-top { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+.av { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: 0 0 auto; background: var(--pine-tint); color: var(--pine); }
+.c-info { flex: 1; min-width: 0; }
+.av.e-inc { background: var(--clay-soft); color: var(--clay); }
+.av.e-just { background: var(--sky-soft); color: #1F5269; }
+.nm { font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badge { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 4px 8px; border-radius: 7px; flex: 0 0 auto; }
-.badge.ok { color: var(--pine); background: var(--pine-tint); }
-.badge.inc { color: var(--clay); background: var(--clay-soft); }
-.badge.just { color: #1F5269; background: var(--sky-soft); }
+.badge.e-ok { color: var(--pine); background: var(--pine-tint); }
+.badge.e-inc { color: var(--clay); background: var(--clay-soft); }
+.badge.e-just { color: #1F5269; background: var(--sky-soft); }
 .c-nums { display: flex; gap: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; flex-wrap: wrap; }
 .c-nums .n { display: flex; flex-direction: column; gap: 2px; }
 .c-nums .k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .c-nums .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
 .c-nums .v.neg { color: var(--clay); }
 .c-nums .v.pos { color: var(--amber); }
-.just { width: 100%; margin-top: 11px; background: var(--clay); color: #fff; border: none; border-radius: 12px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.btn-just { width: 100%; margin-top: 11px; background: var(--clay); color: #fff; border: none; border-radius: 12px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 
 .modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
 .modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 460px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
