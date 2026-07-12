@@ -37,6 +37,8 @@ import CompraEditorView from '@/views/admin/CompraEditorView.vue'
 import ProyeccionesView from '@/views/admin/ProyeccionesView.vue'
 import TransferenciasView from '@/views/admin/TransferenciasView.vue'
 import CargasAutorizarView from '@/views/admin/CargasAutorizarView.vue'
+import CortesView from '@/views/admin/CortesView.vue'
+import DeudasView from '@/views/admin/DeudasView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -70,6 +72,8 @@ const routes = [
       { path: 'gastos', component: GastosView },
       { path: 'gasto/:id', component: GastoEditorView },
       { path: 'transferencias', component: TransferenciasView },
+      { path: 'cortes', component: CortesView },
+      { path: 'deudas', component: DeudasView },
       { path: 'compras', component: ComprasView },
       { path: 'compra/:id', component: CompraEditorView },
       { path: 'proyecciones', component: ProyeccionesView },

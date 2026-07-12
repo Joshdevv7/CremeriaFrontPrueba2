@@ -96,6 +96,8 @@ const ICN = {
   gastos: '<svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   transferencias: '<svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M8 5l-4 4 4 4M16 11l4 4-4 4"/></svg>',
   cargas: '<svg viewBox="0 0 24 24"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg>',
+  cortes: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>',
+  deudas: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><path d="M17 3l4 2-4 2"/></svg>',
   compras: '<svg viewBox="0 0 24 24"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>',
   proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'
 }
@@ -120,6 +122,8 @@ const grupos = [
     { path: '/panel/historial', label: 'Recorridos', icon: ICN.mapa, match: ['/panel/historial'] }
   ] },
   { titulo: 'Finanzas', items: [
+    { path: '/panel/cortes', label: 'Cortes de caja', icon: ICN.cortes, match: ['/panel/cortes'] },
+    { path: '/panel/deudas', label: 'Deudas repartidores', icon: ICN.deudas, match: ['/panel/deudas'] },
     { path: '/panel/gastos', label: 'Gastos', icon: ICN.gastos, match: ['/panel/gastos', '/panel/gasto'] },
     { path: '/panel/transferencias', label: 'Transferencias', icon: ICN.transferencias, match: ['/panel/transferencias'] },
     { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'] }
