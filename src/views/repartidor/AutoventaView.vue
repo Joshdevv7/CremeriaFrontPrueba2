@@ -83,7 +83,14 @@
               <ion-icon :icon="m.icon" />{{ m.t }}
             </button>
           </div>
-          <div v-if="metodo === 2" class="field"><input class="inp" v-model="referencia" placeholder="Referencia de la terminal (opcional)"></div>
+          <div v-if="metodo === 1" class="field">
+            <div class="fl">Folio de la transferencia</div>
+            <input class="inp" v-model="referencia" placeholder="Número de la transferencia" :disabled="pagoPendiente">
+          </div>
+          <div v-if="metodo === 2" class="field">
+            <div class="fl">Referencia de la terminal</div>
+            <input class="inp" v-model="referencia" placeholder="Referencia (opcional)" :disabled="pagoPendiente">
+          </div>
           <div v-if="metodo === 3" class="field credito">
             <div class="fl">Días para pagar</div>
             <div class="dias">
@@ -162,7 +169,7 @@ const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
 const pagoPendiente = ref(false)
-watch(() => metodo.value, (m) => { if (m === 3) pagoPendiente.value = false })
+watch(() => metodo.value, (m) => { if (m === 3) pagoPendiente.value = false; referencia.value = '' })
 const diasCredito = ref(7)
 const enviando = ref(false)
 const error = ref('')
@@ -247,7 +254,7 @@ async function vender() {
   const body = { metodoPago: metodo.value, pagoPendiente: pagoPendiente.value, lineas }
   if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() }
   else { body.clienteId = cliente.value.id }
-  if (!pagoPendiente.value && metodo.value === 2 && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
+  if (!pagoPendiente.value && (metodo.value === 1 || metodo.value === 2) && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
   try {
     const { data } = await http.post('/pedidos/autoventa', body)
@@ -410,4 +417,5 @@ onMounted(async () => {
 .pt-tx { flex: 1; }
 .pt-t { font-weight: 700; font-size: 14px; }
 .pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
+.field .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
 </style>
