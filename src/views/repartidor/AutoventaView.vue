@@ -153,6 +153,7 @@ import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHoriz
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
+import { imprimirTicketVenta } from '@/services/printer'
 
 const auth = useAuthStore()
 const cargando = ref(true)
@@ -260,12 +261,14 @@ async function vender() {
     const { data } = await http.post('/pedidos/autoventa', body)
     armarTicket(data)
     exito.value = true
+    imprimirAuto()
   } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo registrar la venta.' }
   finally { enviando.value = false }
 }
 function armarTicket(d) {
   ticket.value = {
     id: d.id,
+    fechaIso: d.fecha,
     fecha: new Date(d.fecha).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     lineas: (d.lineas || []).filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: fmt(l.cantidadEntregada), sub: l.subtotal })),
     total: d.total,
@@ -276,14 +279,45 @@ function armarTicket(d) {
   }
 }
 
-// Placeholder: se conectará a la impresora Bluetooth (MUNBYN, ESC/POS) cuando esté disponible.
+// Construye el objeto que espera el servicio de impresión a partir del ticket ya armado.
+function datosParaImprimir() {
+  return {
+    fecha: ticket.value?.fechaIso || Date.now(),
+    folio: referencia.value.trim() || null,
+    cliente: nombreMostrar.value,
+    metodo: metodoTxt(ticket.value?.metodoPago),
+    pagoPendiente: pagoPendiente.value,
+    total: ticket.value?.total || total.value,
+    items: (ticket.value?.lineas || []).map((t) => {
+      const cantidad = Number(String(t.cant).replace(/[^\d.]/g, '')) || 1
+      return {
+        nombre: t.nombre,
+        cantidad,
+        precio: cantidad > 0 ? t.sub / cantidad : t.sub
+      }
+    })
+  }
+}
+
+// Impresión manual (botón "Imprimir ticket" / reimprimir).
 async function imprimirTicket() {
   imprimiendo.value = true; printMsg.value = ''
   try {
-    // TODO: integrar impresión Bluetooth ESC/POS aquí (misma lógica que en EntregaView).
-    await new Promise((r) => setTimeout(r, 600))
-    printMsg.value = 'La impresión por Bluetooth se activará al conectar la impresora.'
+    await imprimirTicketVenta(datosParaImprimir())
+    printMsg.value = 'Ticket impreso.'
+  } catch (e) {
+    printMsg.value = e?.message || 'No se pudo imprimir. Revisa la impresora e intenta con Reimprimir.'
   } finally { imprimiendo.value = false }
+}
+
+// Impresión automática tras registrar la venta. NUNCA tumba la venta: si falla, solo avisa.
+async function imprimirAuto() {
+  try {
+    await imprimirTicketVenta(datosParaImprimir())
+    printMsg.value = 'Ticket impreso.'
+  } catch (e) {
+    printMsg.value = 'La venta se guardó, pero no se pudo imprimir. Usa "Reimprimir".'
+  }
 }
 
 onMounted(async () => {
