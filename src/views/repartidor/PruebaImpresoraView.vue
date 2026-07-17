@@ -41,6 +41,9 @@
           </button>
         </div>
 
+        <!-- Diagnóstico de métodos -->
+        <button class="btn diag" @click="verMetodos()">Ver métodos disponibles</button>
+
         <!-- Botón imprimir prueba -->
         <button class="btn imprimir" :disabled="!conectada || imprimiendo" @click="imprimirPrueba()">
           <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
@@ -110,29 +113,49 @@ async function conectar(dev) {
 async function imprimirPrueba() {
   imprimiendo.value = true; aviso('')
   try {
+    // Solo métodos básicos que existen en todas las versiones del plugin.
+    // Sin cutPaper ni feed (no existen en 0.2.4 y la impresora se corta a mano).
     await CapacitorThermalPrinter.begin()
       .align('center')
-      .bold().doubleWidth().doubleHeight()
+      .bold()
       .text('DISTRIBUIDORA\n')
       .clearFormatting()
       .text('Prueba de impresora\n')
       .text('--------------------------------\n')
       .align('left')
       .text('Si lees esto, la conexion\n')
-      .text('con la MUNBYN funciona.\n')
+      .text('con la impresora funciona.\n')
       .text('\n')
       .text('Ancho: 58mm\n')
       .text('Fecha: ' + new Date().toLocaleString('es-MX') + '\n')
       .align('center')
       .text('--------------------------------\n')
       .text('Todo listo!\n')
-      .feed(3)
-      .cutPaper()
+      .text('\n\n\n')
       .write()
     aviso('Ticket enviado. ¿Salió impreso?', 'ok')
   } catch (e) {
     aviso('Error al imprimir: ' + (e?.message || ''), 'error')
   } finally { imprimiendo.value = false }
+}
+
+// Diagnóstico: lista los métodos disponibles en esta versión del plugin.
+function verMetodos() {
+  try {
+    const b = CapacitorThermalPrinter.begin()
+    const metodos = []
+    let obj = b
+    while (obj) {
+      Object.getOwnPropertyNames(obj).forEach((m) => {
+        if (typeof b[m] === 'function' && !metodos.includes(m) && m !== 'constructor') metodos.push(m)
+      })
+      obj = Object.getPrototypeOf(obj)
+      if (obj === Object.prototype) break
+    }
+    aviso('Métodos: ' + metodos.sort().join(', '), 'info')
+  } catch (e) {
+    aviso('No se pudo listar: ' + (e?.message || ''), 'error')
+  }
 }
 </script>
 <style scoped>
@@ -163,6 +186,7 @@ async function imprimirPrueba() {
 .btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn.buscar { background: var(--surface); border: 1.5px solid var(--pine); color: var(--pine); }
 .btn.imprimir { background: var(--pine); color: #fff; }
+.btn.diag { background: var(--surface); border: 1.5px solid var(--line); color: var(--ink-soft); font-size: 13.5px; }
 .btn:disabled { opacity: .5; }
 .lista { margin: 4px 0 14px; }
 .l-t { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
