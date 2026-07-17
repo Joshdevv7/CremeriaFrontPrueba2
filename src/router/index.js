@@ -93,7 +93,8 @@ const routes = [
       { path: 'entregas', component: EntregasView },
       { path: 'inventario', component: CargaView },
       { path: 'corte', component: CorteView },
-      { path: 'perfil', component: PerfilView }
+      { path: 'perfil', component: PerfilView },
+      { path: 'prueba-impresora', component: () => import('@/views/repartidor/PruebaImpresoraView.vue') }
     ]
   }
 ]
