@@ -94,7 +94,7 @@ const routes = [
       { path: 'inventario', component: CargaView },
       { path: 'corte', component: CorteView },
       { path: 'perfil', component: PerfilView },
-      { path: 'prueba-impresora', component: () => import('@/views/repartidor/PruebaImpresoraView.vue') }
+      { path: 'impresora', component: () => import('@/views/repartidor/ImpresoraView.vue') }
     ]
   }
 ]

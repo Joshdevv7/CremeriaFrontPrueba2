@@ -11,11 +11,10 @@
           <div class="r">{{ auth.usuario?.rol }}</div>
         </div>
 
-        <!-- TEMPORAL: prueba de impresora (quitar cuando esté validada) -->
-        <button class="btn-prueba" @click="$router.push('/app/prueba-impresora')">
-          <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
-          Probar impresora
-        </button>
+      <button class="btn-prueba" @click="$router.push('/app/impresora')">
+      <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+      Impresora
+    </button>
 
         <button class="btn" @click="salir">Cerrar sesión</button>
       </div>

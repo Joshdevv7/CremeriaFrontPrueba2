@@ -3,51 +3,50 @@
     <ion-content :fullscreen="true" class="pi">
       <div class="bar">
         <div class="iconbtn" @click="$router.back()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
-        <div class="ttl"><div class="s">Diagnóstico</div><div class="n">Prueba de impresora</div></div>
+        <div class="ttl"><div class="s">Ajustes</div><div class="n">Impresora</div></div>
       </div>
 
       <div class="body">
-        <!-- Estado de conexión -->
-        <div class="estado" :class="conectada ? 'on' : 'off'">
-          <div class="e-ic">
-            <svg v-if="conectada" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-            <svg v-else viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
-          </div>
+        <!-- Impresora guardada -->
+        <div v-if="guardada" class="estado on">
+          <div class="e-ic"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg></div>
           <div class="e-tx">
-            <div class="e-t">{{ conectada ? 'Impresora conectada' : 'Sin conectar' }}</div>
-            <div class="e-s">{{ conectada ? nombreConectada : 'Busca y elige tu impresora' }}</div>
+            <div class="e-t">Impresora configurada</div>
+            <div class="e-s">{{ guardada.nombre }}</div>
+          </div>
+          <button class="e-x" @click="olvidar()" title="Quitar"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div v-else class="estado off">
+          <div class="e-ic"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg></div>
+          <div class="e-tx">
+            <div class="e-t">Sin impresora</div>
+            <div class="e-s">Busca y elige tu impresora de tickets</div>
           </div>
         </div>
 
         <p v-if="mensaje" class="msg" :class="tipoMsg">{{ mensaje }}</p>
 
-        <!-- Botón buscar -->
         <button class="btn buscar" :disabled="buscando" @click="buscar()">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
           {{ buscando ? 'Buscando…' : 'Buscar impresoras' }}
         </button>
 
-        <!-- Lista de dispositivos encontrados -->
         <div v-if="dispositivos.length" class="lista">
-          <div class="l-t">Toca tu impresora para conectar</div>
+          <div class="l-t">Toca tu impresora para guardarla</div>
           <button v-for="dev in dispositivos" :key="dev.address" class="dev"
-                  :class="{ sel: dev.address === direccionConectada }" @click="conectar(dev)">
+                  :class="{ sel: dev.address === (guardada && guardada.direccion) }" @click="elegir(dev)">
             <div class="d-ic"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg></div>
             <div class="d-tx">
               <div class="d-n">{{ dev.name || 'Sin nombre' }}</div>
               <div class="d-a">{{ dev.address }}</div>
             </div>
-            <div v-if="dev.address === direccionConectada" class="d-ok"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+            <div v-if="dev.address === (guardada && guardada.direccion)" class="d-ok"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
           </button>
         </div>
 
-        <!-- Diagnóstico de métodos -->
-        <button class="btn diag" @click="verMetodos()">Ver métodos disponibles</button>
-
-        <!-- Botón imprimir prueba -->
-        <button class="btn imprimir" :disabled="!conectada || imprimiendo" @click="imprimirPrueba()">
+        <button class="btn imprimir" :disabled="!guardada || probando" @click="probar()">
           <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
-          {{ imprimiendo ? 'Imprimiendo…' : 'Imprimir ticket de prueba' }}
+          {{ probando ? 'Imprimiendo…' : 'Imprimir prueba' }}
         </button>
       </div>
     </ion-content>
@@ -57,34 +56,28 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { IonPage, IonContent } from '@ionic/vue'
 import { CapacitorThermalPrinter } from 'capacitor-thermal-printer'
+import { impresoraGuardada, guardarImpresora, olvidarImpresora, asegurarConexion } from '@/services/printer'
 
 const dispositivos = ref([])
 const buscando = ref(false)
-const imprimiendo = ref(false)
-const conectada = ref(false)
-const nombreConectada = ref('')
-const direccionConectada = ref('')
+const probando = ref(false)
+const guardada = ref(impresoraGuardada())
 const mensaje = ref('')
 const tipoMsg = ref('info')
-
-function aviso(txt, tipo = 'info') { mensaje.value = txt; tipoMsg.value = tipo }
+function aviso(t, tipo = 'info') { mensaje.value = t; tipoMsg.value = tipo }
 
 let listener = null
 onMounted(() => {
-  // Cada vez que el plugin descubre dispositivos, actualizamos la lista.
   listener = CapacitorThermalPrinter.addListener('discoverDevices', (data) => {
-    // data.devices: [{ name, address }]
     dispositivos.value = data.devices || []
   })
 })
 onBeforeUnmount(() => { if (listener) listener.remove() })
 
 async function buscar() {
-  buscando.value = true; aviso('')
-  dispositivos.value = []
+  buscando.value = true; aviso(''); dispositivos.value = []
   try {
     await CapacitorThermalPrinter.startScan()
-    // Damos unos segundos a que aparezcan y detenemos el escaneo.
     setTimeout(async () => {
       try { await CapacitorThermalPrinter.stopScan() } catch { /* noop */ }
       buscando.value = false
@@ -96,66 +89,41 @@ async function buscar() {
   }
 }
 
-async function conectar(dev) {
+async function elegir(dev) {
   aviso('Conectando…')
   try {
     const res = await CapacitorThermalPrinter.connect({ address: dev.address })
     if (res === null) { aviso('No se pudo conectar a esa impresora.', 'error'); return }
-    conectada.value = true
-    nombreConectada.value = dev.name || dev.address
-    direccionConectada.value = dev.address
-    aviso('¡Conectada! Ya puedes imprimir la prueba.', 'ok')
+    guardarImpresora(dev.address, dev.name || dev.address)
+    guardada.value = impresoraGuardada()
+    aviso('¡Impresora guardada! Ya no tendrás que elegirla de nuevo.', 'ok')
   } catch (e) {
     aviso('Error al conectar: ' + (e?.message || ''), 'error')
   }
 }
 
-async function imprimirPrueba() {
-  imprimiendo.value = true; aviso('')
+function olvidar() {
+  olvidarImpresora()
+  guardada.value = null
+  aviso('Impresora quitada.', 'info')
+}
+
+async function probar() {
+  probando.value = true; aviso('')
   try {
-    // Solo métodos básicos que existen en todas las versiones del plugin.
-    // Sin cutPaper ni feed (no existen en 0.2.4 y la impresora se corta a mano).
+    await asegurarConexion()
     await CapacitorThermalPrinter.begin()
-      .align('center')
-      .bold()
-      .text('DISTRIBUIDORA\n')
-      .clearFormatting()
+      .align('center').bold().text('DISTRIBUIDORA\n').clearFormatting()
       .text('Prueba de impresora\n')
       .text('--------------------------------\n')
-      .align('left')
-      .text('Si lees esto, la conexion\n')
-      .text('con la impresora funciona.\n')
-      .text('\n')
-      .text('Ancho: 58mm\n')
+      .align('left').text('Todo funciona correctamente.\n')
       .text('Fecha: ' + new Date().toLocaleString('es-MX') + '\n')
-      .align('center')
-      .text('--------------------------------\n')
-      .text('Todo listo!\n')
-      .text('\n\n\n')
+      .align('center').text('\n\n\n')
       .write()
     aviso('Ticket enviado. ¿Salió impreso?', 'ok')
   } catch (e) {
-    aviso('Error al imprimir: ' + (e?.message || ''), 'error')
-  } finally { imprimiendo.value = false }
-}
-
-// Diagnóstico: lista los métodos disponibles en esta versión del plugin.
-function verMetodos() {
-  try {
-    const b = CapacitorThermalPrinter.begin()
-    const metodos = []
-    let obj = b
-    while (obj) {
-      Object.getOwnPropertyNames(obj).forEach((m) => {
-        if (typeof b[m] === 'function' && !metodos.includes(m) && m !== 'constructor') metodos.push(m)
-      })
-      obj = Object.getPrototypeOf(obj)
-      if (obj === Object.prototype) break
-    }
-    aviso('Métodos: ' + metodos.sort().join(', '), 'info')
-  } catch (e) {
-    aviso('No se pudo listar: ' + (e?.message || ''), 'error')
-  }
+    aviso('Error: ' + (e?.message || ''), 'error')
+  } finally { probando.value = false }
 }
 </script>
 <style scoped>
@@ -170,13 +138,14 @@ function verMetodos() {
 .estado.on { background: var(--pine-tint); border: 1px solid #BDE0C9; }
 .estado.off { background: var(--surface); border: 1px solid var(--line); }
 .e-ic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; }
-.estado.on .e-ic { background: var(--pine); }
-.estado.off .e-ic { background: var(--paper-2); }
+.estado.on .e-ic { background: var(--pine); } .estado.off .e-ic { background: var(--paper-2); }
 .e-ic svg { width: 22px; height: 22px; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.estado.on .e-ic svg { stroke: #fff; }
-.estado.off .e-ic svg { stroke: var(--muted); }
+.estado.on .e-ic svg { stroke: #fff; } .estado.off .e-ic svg { stroke: var(--muted); }
+.e-tx { flex: 1; min-width: 0; }
 .e-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; }
 .e-s { font-size: 12.5px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+.e-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
+.e-x svg { width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2.4; stroke-linecap: round; }
 .msg { font-size: 13px; font-weight: 600; padding: 11px 14px; border-radius: 11px; margin-bottom: 14px; }
 .msg.info { background: var(--paper-2); color: var(--ink-soft); }
 .msg.ok { background: var(--pine-tint); color: var(--pine-deep); }
@@ -186,7 +155,6 @@ function verMetodos() {
 .btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn.buscar { background: var(--surface); border: 1.5px solid var(--pine); color: var(--pine); }
 .btn.imprimir { background: var(--pine); color: #fff; }
-.btn.diag { background: var(--surface); border: 1.5px solid var(--line); color: var(--ink-soft); font-size: 13.5px; }
 .btn:disabled { opacity: .5; }
 .lista { margin: 4px 0 14px; }
 .l-t { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
@@ -197,6 +165,5 @@ function verMetodos() {
 .d-tx { flex: 1; min-width: 0; }
 .d-n { font-weight: 700; font-size: 14.5px; }
 .d-a { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-.d-ok { flex: 0 0 auto; }
 .d-ok svg { width: 20px; height: 20px; stroke: var(--pine); fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 </style>
