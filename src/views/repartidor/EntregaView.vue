@@ -197,9 +197,10 @@
           <div v-else class="pend-ok"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Pendiente reprogramado</div>
         </div>
         <div class="done-actions">
-          <button class="da ghost"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Reimprimir</button>
+          <button class="da ghost" :disabled="imprimiendo" @click="imprimirTicket()"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> {{ imprimiendo ? 'Imprimiendo...' : 'Reimprimir' }}</button>
           <button class="da solid" @click="salir()">Siguiente parada <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
         </div>
+        <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
       </div>
     </ion-content>
   </ion-page>
@@ -212,6 +213,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
 import { tomarFotoNativa, obtenerUbicacion, esNativo } from '@/composables/useNativo'
+import { imprimirTicketEntrega } from '@/services/printer'
 
 const route = useRoute()
 const router = useRouter()
@@ -250,6 +252,8 @@ const ubicTipo = ref('')
 const done = ref(false)
 const ticket = ref(null)
 const resultadoEstado = ref('')
+const imprimiendo = ref(false)
+const printMsg = ref('')
 
 const METODO = { efectivo: 0, transferencia: 1, tarjeta: 2, credito: 3 }
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
@@ -430,6 +434,7 @@ async function confirmar() {
     const { data } = await http.post(`/pedidos/${pedido.value.id}/confirmar`, payload)
     armarTicket(data)
     done.value = true
+    imprimirAuto()
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo confirmar la entrega.'
   } finally {
@@ -443,11 +448,56 @@ function armarTicket(d) {
   hayPendiente.value = d.estado === 'CerradoParcial' || d.estado === 'CerradoNoEntregado'
   ticket.value = {
     id: d.id,
+    fechaIso: d.fecha,
+    metodoPago: d.metodoPago,
     fecha: new Date(d.fecha).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     lineas: d.lineas.filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: fmtQty(l.cantidadEntregada), sub: l.subtotal })),
     total: d.total,
     credito: d.metodoPago === 'Credito',
     vence: fechaLimite.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+}
+
+
+// Datos para la impresora: se toman de las líneas reales de la entrega.
+function datosParaImprimir() {
+  return {
+    pedidoId: pedido.value?.id,
+    fecha: ticket.value?.fechaIso || Date.now(),
+    cliente: pedido.value?.clienteNombre,
+    repartidor: auth.usuario?.nombre,
+    folio: (pay.value === 'tarjeta' || pay.value === 'transferencia') ? (referencia.value || null) : null,
+    metodo: payLabel.value,
+    pagoPendiente: pagoPendiente.value,
+    credito: pay.value === 'credito',
+    vence: ticket.value?.vence,
+    total: ticket.value?.total ?? total.value,
+    items: lineas.filter((l) => l.entregado > 0).map((l) => ({
+      nombre: l.productoNombre,
+      cantidad: l.entregado,
+      precio: l.precioUnitario
+    }))
+  }
+}
+
+// Reimprimir (botón).
+async function imprimirTicket() {
+  imprimiendo.value = true; printMsg.value = ''
+  try {
+    await imprimirTicketEntrega(datosParaImprimir())
+    printMsg.value = 'Ticket impreso.'
+  } catch (e) {
+    printMsg.value = e?.message || 'No se pudo imprimir.'
+  } finally { imprimiendo.value = false }
+}
+
+// Automática al confirmar. NUNCA tumba la entrega: si falla, solo avisa.
+async function imprimirAuto() {
+  try {
+    await imprimirTicketEntrega(datosParaImprimir())
+    printMsg.value = 'Ticket impreso.'
+  } catch (e) {
+    printMsg.value = 'La entrega se guardó, pero no se pudo imprimir. Usa "Reimprimir".'
   }
 }
 
@@ -656,4 +706,5 @@ onMounted(async () => {
 .pt-tx { flex: 1; }
 .pt-t { font-weight: 700; font-size: 14.5px; }
 .pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
+.print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
 </style>
