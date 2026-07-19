@@ -293,7 +293,11 @@ function datosParaImprimir() {
       return {
         nombre: t.nombre,
         cantidad,
-        precio: cantidad > 0 ? t.sub / cantidad : t.sub
+        precio: cantidad > 0 ? t.sub / cantidad : t.sub,
+        ticketId: ticket.value?.id,
+        repartidor: ticket.value?.repartidor,
+        credito: ticket.value?.credito,
+        vence: ticket.value?.vence,
       }
     })
   }
