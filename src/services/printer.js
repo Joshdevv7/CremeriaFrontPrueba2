@@ -27,16 +27,56 @@ export function olvidarImpresora() {
 }
 
 // ── Conexión ─────────────────────────────────────────────────────
-// Se asegura de estar conectado a la impresora guardada. Lanza error claro si no hay ninguna.
+// Espera a que el escaneo descubra dispositivos (o a que se acabe el tiempo).
+function escanearUnMomento(ms = 5000) {
+  return new Promise((resolve) => {
+    let listener = null
+    let terminado = false
+    const terminar = async () => {
+      if (terminado) return
+      terminado = true
+      try { await CapacitorThermalPrinter.stopScan() } catch { /* noop */ }
+      if (listener) { try { listener.remove() } catch { /* noop */ } }
+      resolve()
+    }
+    CapacitorThermalPrinter.addListener('discoverDevices', () => { /* solo despierta el adaptador */ })
+      .then((l) => { listener = l })
+      .catch(() => { /* noop */ })
+    CapacitorThermalPrinter.startScan().catch(() => { /* noop */ })
+    setTimeout(terminar, ms)
+  })
+}
+
+// Intenta conectar a una dirección. Devuelve true/false, sin lanzar.
+async function intentarConectar(direccion) {
+  try {
+    const res = await CapacitorThermalPrinter.connect({ address: direccion })
+    return res !== null
+  } catch {
+    return false
+  }
+}
+
+// Se asegura de estar conectado a la impresora guardada.
+// Si el primer intento falla, hace un escaneo corto (necesario en frío) y reintenta.
 export async function asegurarConexion() {
   const g = impresoraGuardada()
-  if (!g) throw new Error('No hay impresora configurada. Elige una en Perfil → Impresora.')
-  if (conectadaDir === g.direccion) return g // ya conectada en esta sesión
-  const res = await CapacitorThermalPrinter.connect({ address: g.direccion })
-  if (res === null) throw new Error('No se pudo conectar con la impresora. Revisa que esté encendida y cerca.')
-  conectadaDir = g.direccion
-  return g
+  if (!g) throw new Error('No hay impresora configurada. Ve a Perfil → Impresora y elígela.')
+  if (conectadaDir === g.direccion) return g
+
+  // 1er intento: conexión directa
+  if (await intentarConectar(g.direccion)) { conectadaDir = g.direccion; return g }
+
+  // 2do intento: escanear primero (despierta el Bluetooth) y reconectar
+  await escanearUnMomento(5000)
+  if (await intentarConectar(g.direccion)) { conectadaDir = g.direccion; return g }
+
+  conectadaDir = null
+  throw new Error('No se pudo conectar con la impresora. Revisa que esté encendida, con papel y cerca del teléfono.')
 }
+
+// Marca la conexión como perdida (para forzar reconexión en el próximo intento).
+export function reiniciarConexion() { conectadaDir = null }
 
 // ── Helpers de formato (58mm) ────────────────────────────────────
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -85,7 +125,7 @@ export async function imprimirTicketVenta(v) {
   b = b.text(linea())
     .align('center').text('Gracias por su compra\n')
     .text('\n\n\n')
-  await b.write()
+  try { await b.write() } catch (e) { conectadaDir = null; throw new Error('Se perdió la conexión al imprimir. Intenta de nuevo.') }
 }
 
 // Entrega de pedido
@@ -111,7 +151,7 @@ export async function imprimirTicketEntrega(e) {
   b = b.text(linea())
     .align('center').text('Gracias\n')
     .text('\n\n\n')
-  await b.write()
+  try { await b.write() } catch (e) { conectadaDir = null; throw new Error('Se perdió la conexión al imprimir. Intenta de nuevo.') }
 }
 
 // Corte de caja (por carga)
@@ -141,5 +181,5 @@ export async function imprimirCorte(c) {
     .text(fila('Merma', money(c.valorMerma)))
     .text(linea())
     .align('center').text('\n\n\n')
-  await b.write()
+  try { await b.write() } catch (e) { conectadaDir = null; throw new Error('Se perdió la conexión al imprimir. Intenta de nuevo.') }
 }
