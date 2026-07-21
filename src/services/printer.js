@@ -101,8 +101,8 @@ function filaProducto(nombre, cantidad, precio, importe) {
 
 // Datos del negocio (editables aquí hasta que llegue el SAT).
 const NEGOCIO = {
-  nombre: 'DISTRIBUIDORA',
-  contacto: '' // ej. 'Tel. 667 000 0000'
+  nombre: 'PRODUCTOS OSUNA',
+  contacto: '6673 31 83 90' 
 }
 
 // ── Tickets ──────────────────────────────────────────────────────
