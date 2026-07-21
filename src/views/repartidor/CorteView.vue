@@ -108,9 +108,10 @@
           <div style="height:12px"></div>
         </div>
         <div class="acts">
-          <button class="da ghost"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Imprimir</button>
+          <button class="da ghost" :disabled="imprimiendo" @click="imprimirTicket()"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> {{ imprimiendo ? 'Imprimiendo...' : 'Imprimir' }}</button>
           <button class="da solid" @click="salir()">Listo <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
         </div>
+        <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
       </div>
     </ion-content>
   </ion-page>
@@ -121,6 +122,9 @@ import { useRouter } from 'vue-router'
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import { imprimirCorte } from '@/services/printer'
+
+
 const router = useRouter()
 const auth = useAuthStore()
 const resumen = ref(null)
@@ -131,6 +135,9 @@ const observacion = ref('')
 const enviando = ref(false)
 const done = ref(false)
 const corte = ref(null)
+const imprimiendo = ref(false)
+const printMsg = ref('')
+
 const money = (n) => '$' + Math.abs(Number(n || 0)).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const money2 = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const signo = (n) => n < 0 ? '−' : n > 0 ? '+' : ''
@@ -191,10 +198,56 @@ async function cerrar() {
     })
     corte.value = data
     done.value = true
+    imprimirAuto()
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo cerrar el corte.'
   } finally { enviando.value = false }
 }
+
+
+// Datos para la impresora: del corte cerrado + lo que solo vive en el resumen.
+function datosParaImprimir() {
+  const c = corte.value || {}
+  const r = resumen.value || {}
+  return {
+    repartidor: c.repartidorNombre || auth.usuario?.nombre,
+    cargaId: c.cargaId ?? r.cargaId,
+    fecha: c.fecha || Date.now(),
+    totalEfectivo: c.totalEfectivo,
+    totalTransferencia: c.totalTransferencia,
+    totalTarjeta: c.totalTarjeta,
+    totalCredito: c.totalCredito,
+    totalVentas: c.totalVentas,
+    efectivoEsperado: c.efectivoEsperado ?? r.efectivoEsperado,
+    efectivoEntregado: c.efectivoEntregado,
+    diferencia: c.diferencia,
+    valorDevuelto: c.valorDevuelto ?? r.valorDevuelto,
+    valorMerma: c.valorMerma ?? r.valorMerma
+  }
+}
+
+// Reimprimir (botón).
+async function imprimirTicket() {
+  imprimiendo.value = true; printMsg.value = ''
+  try {
+    await imprimirCorte(datosParaImprimir())
+    printMsg.value = 'Corte impreso.'
+  } catch (e) {
+    printMsg.value = e?.message || 'No se pudo imprimir.'
+  } finally { imprimiendo.value = false }
+}
+
+// Automática al cerrar. NUNCA tumba el corte: si falla, solo avisa.
+async function imprimirAuto() {
+  try {
+    await imprimirCorte(datosParaImprimir())
+    printMsg.value = 'Corte impreso.'
+  } catch (e) {
+    printMsg.value = 'El corte se guardó, pero no se pudo imprimir. Usa "Imprimir".'
+  }
+}
+
+
 onMounted(cargar)
 onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 </script>
@@ -298,4 +351,5 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .da { flex: 1; border: none; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .da.ghost { background: rgba(255,255,255,.12); color: #fff; } .da.solid { background: var(--amber); color: #3a2607; }
 .da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
 </style>
