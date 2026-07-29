@@ -2,14 +2,11 @@
 // Recuerda la impresora elegida en localStorage y se reconecta sola antes de imprimir.
 // IMPORTANTE: imprimir NUNCA debe tumbar una venta. Si falla, se avisa pero la operación ya quedó guardada.
 import { CapacitorThermalPrinter } from 'capacitor-thermal-printer'
-
 const LS_DIR = 'impresora_direccion'
 const LS_NOM = 'impresora_nombre'
 // Ancho real medido en la MUNBYN 58mm: con 32 se desbordaban 3 caracteres por línea.
 const ANCHO = 29
-
 let conectadaDir = null // dirección actualmente conectada en esta sesión
-
 // ── Impresora guardada ───────────────────────────────────────────
 export function impresoraGuardada() {
   const direccion = localStorage.getItem(LS_DIR)
@@ -27,7 +24,6 @@ export function olvidarImpresora() {
   conectadaDir = null
 }
 export function reiniciarConexion() { conectadaDir = null }
-
 // ── Conexión ─────────────────────────────────────────────────────
 // Un escaneo corto "despierta" el Bluetooth. Sin esto, conectar en frío suele fallar.
 function escanearUnMomento(ms = 5000) {
@@ -48,7 +44,6 @@ function escanearUnMomento(ms = 5000) {
     setTimeout(terminar, ms)
   })
 }
-
 async function intentarConectar(direccion) {
   try {
     const res = await CapacitorThermalPrinter.connect({ address: direccion })
@@ -57,7 +52,6 @@ async function intentarConectar(direccion) {
     return false
   }
 }
-
 export async function asegurarConexion() {
   const g = impresoraGuardada()
   if (!g) throw new Error('No hay impresora configurada. Ve a Perfil y elige la impresora.')
@@ -68,24 +62,25 @@ export async function asegurarConexion() {
   conectadaDir = null
   throw new Error('No se pudo conectar con la impresora. Revisa que esté encendida, con papel y cerca.')
 }
-
 // ── Helpers de formato (58mm) ────────────────────────────────────
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const linea = (c = '-') => c.repeat(ANCHO) + '\n'
-
 // Recorta para que nunca desborde la línea.
 function corta(txt, max = ANCHO) {
   txt = String(txt == null ? '' : txt)
   return txt.length > max ? txt.slice(0, max - 1) + '.' : txt
 }
-
+// Cantidad sin decimales sobrantes: 3 en vez de 3.00, pero 2.5 se respeta.
+function cantTxt(n) {
+  const x = Number(n || 0)
+  return Number.isInteger(x) ? String(x) : String(x)
+}
 // Fecha corta: 18/07/26 18:37
 function fechaCorta(f) {
   const d = new Date(f || Date.now())
   const p = (n) => String(n).padStart(2, '0')
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-
 // "Etiqueta            $123.00" — recorta la izquierda si hace falta.
 function fila(izq, der) {
   der = String(der == null ? '' : der)
@@ -93,18 +88,15 @@ function fila(izq, der) {
   const espacio = ANCHO - izq.length - der.length
   return izq + ' '.repeat(Math.max(1, espacio)) + der + '\n'
 }
-
 // Producto: nombre en su línea, luego cantidad x precio ... importe
 function filaProducto(nombre, cantidad, precio, importe) {
   return corta(nombre, ANCHO) + '\n' + fila(`  ${Number(cantidad || 0)} x ${money(precio)}`, money(importe))
 }
-
 // Datos del negocio (editables aquí hasta que llegue el SAT).
 const NEGOCIO = {
   nombre: 'PRODUCTOS OSUNA',
-  contacto: '6673 31 83 90' 
+  contacto: '6673 31 83 90'
 }
-
 // ── Tickets ──────────────────────────────────────────────────────
 function encabezado(subtitulo) {
   let b = CapacitorThermalPrinter.begin()
@@ -112,14 +104,12 @@ function encabezado(subtitulo) {
   if (NEGOCIO.contacto) b = b.text(corta(NEGOCIO.contacto) + '\n')
   return b.text(subtitulo + '\n').align('left').text(linea())
 }
-
 async function enviar(b) {
   try { await b.write() } catch (e) {
     conectadaDir = null
     throw new Error('Se perdió la conexión al imprimir. Intenta de nuevo.')
   }
 }
-
 // Venta en ruta / autoventa
 export async function imprimirTicketVenta(v) {
   await asegurarConexion()
@@ -141,7 +131,6 @@ export async function imprimirTicketVenta(v) {
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
   await enviar(b)
 }
-
 // Entrega de pedido
 export async function imprimirTicketEntrega(e) {
   await asegurarConexion()
@@ -163,7 +152,6 @@ export async function imprimirTicketEntrega(e) {
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
   await enviar(b)
 }
-
 // Corte de caja (por carga)
 export async function imprimirCorte(c) {
   await asegurarConexion()
@@ -188,7 +176,16 @@ export async function imprimirCorte(c) {
   b = b.text(linea())
     .text(fila('Devuelto', money(c.valorDevuelto)))
     .text(fila('Merma', money(c.valorMerma)))
-    .text(linea())
+  // Desglose de productos devueltos al almacén (si los hay).
+  const devueltos = c.devueltos || []
+  if (devueltos.length) {
+    b = b.text(linea())
+      .bold().text('PRODUCTO DEVUELTO\n').clearFormatting()
+    for (const d of devueltos) {
+      b = b.text(fila(corta(d.nombre || d.productoNombre, 23), cantTxt(d.cantidad)))
+    }
+  }
+  b = b.text(linea())
     .align('center').text('Firma: ____________________\n').text('\n\n\n')
   await enviar(b)
 }

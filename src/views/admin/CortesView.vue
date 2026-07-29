@@ -9,11 +9,9 @@
       <button class="chip" :class="{ on: filtro === 'Justificado' }" @click="setFiltro('Justificado')">Justificados</button>
       <button class="chip" :class="{ on: filtro === 'Completo' }" @click="setFiltro('Completo')">Completos</button>
     </div>
-
     <p v-if="cargando" class="muted">Cargando cortes…</p>
     <p v-else-if="error" class="err">{{ error }}</p>
     <p v-else-if="!visibles.length" class="muted">No hay cortes en este filtro.</p>
-
     <div v-else class="grid">
       <div v-for="c in visibles" :key="c.id" class="card" :class="claseEstado(c.estado)">
         <div class="c-top">
@@ -29,10 +27,64 @@
           <div class="n"><span class="k">Diferencia</span><span class="v" :class="{ neg: c.diferencia < 0, pos: c.diferencia > 0 }">{{ signo(c.diferencia) }}{{ money(Math.abs(c.diferencia)) }}</span></div>
           <div class="n" v-if="c.faltantePorJustificar > 0"><span class="k">Por justificar</span><span class="v neg">{{ money(c.faltantePorJustificar) }}</span></div>
         </div>
-        <button v-if="c.faltantePorJustificar > 0" class="btn-just" @click="abrir(c)">Justificar faltante</button>
+        <div class="c-actions">
+          <button class="btn-det" @click="verDetalle(c)">Ver detalle</button>
+          <button v-if="c.faltantePorJustificar > 0" class="btn-just" @click="abrir(c)">Justificar faltante</button>
+        </div>
       </div>
     </div>
-
+    <!-- Modal de DETALLE (siempre disponible) -->
+    <div v-if="detModal" class="modal-bg" @click.self="cerrarDet()">
+      <div class="modal">
+        <div class="m-head">
+          <div>
+            <div class="m-title">Detalle del corte</div>
+            <div class="m-sub">{{ detModal.repartidorNombre }} · Corte #{{ detModal.id }}<span v-if="detModal.cargaId"> · Carga #{{ detModal.cargaId }}</span></div>
+          </div>
+          <button class="m-x" @click="cerrarDet()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="m-body">
+          <p v-if="detCargando" class="muted2">Cargando…</p>
+          <template v-else-if="det">
+            <!-- Resumen de dinero -->
+            <div class="d-nums">
+              <div class="dn"><span class="k">Ventas</span><span class="v">{{ money(det.totalVentas) }}</span></div>
+              <div class="dn"><span class="k">Efectivo esperado</span><span class="v">{{ money(det.efectivoEsperado) }}</span></div>
+              <div class="dn"><span class="k">Efectivo entregado</span><span class="v">{{ money(det.efectivoEntregado) }}</span></div>
+              <div class="dn"><span class="k">Diferencia</span><span class="v" :class="{ neg: det.diferencia < 0, pos: det.diferencia > 0 }">{{ signo(det.diferencia) }}{{ money(Math.abs(det.diferencia)) }}</span></div>
+            </div>
+            <!-- Mercancía -->
+            <div class="d-merc">
+              <div class="dm"><span class="k">Devuelto</span><span class="v">{{ money(det.valorDevuelto) }}</span></div>
+              <div class="dm"><span class="k">Merma</span><span class="v">{{ money(det.valorMerma) }}</span></div>
+            </div>
+            <!-- Productos devueltos -->
+            <div v-if="det.devueltos && det.devueltos.length" class="dev-list">
+              <div class="dev-t">Producto devuelto al almacén</div>
+              <div class="dev-row" v-for="d in det.devueltos" :key="d.productoNombre">
+                <span class="dr-nom">{{ d.productoNombre }}</span>
+                <span class="dr-cant">{{ fmtCant(d.cantidad) }}</span>
+              </div>
+            </div>
+            <p v-else class="sin-dev">Este corte no tuvo producto devuelto.</p>
+            <!-- Justificaciones ya registradas -->
+            <div v-if="det.justificaciones && det.justificaciones.length" class="ya">
+              <div class="ya-t">Faltante justificado</div>
+              <div class="ya-row" v-for="j in det.justificaciones" :key="j.id">
+                <span class="yr-tipo" :class="j.tipo">{{ etiquetaTipo(j.tipo) }}</span>
+                <span class="yr-con">{{ j.concepto }}</span>
+                <span class="yr-mon">{{ money(j.monto) }}</span>
+              </div>
+            </div>
+            <p v-if="det.observacion" class="obs"><b>Observación:</b> {{ det.observacion }}</p>
+          </template>
+        </div>
+        <div class="m-foot">
+          <button class="m-cancel" @click="cerrarDet()">Cerrar</button>
+          <button v-if="det && det.faltantePorJustificar > 0" class="m-ok" @click="pasarAJustificar()">Justificar faltante</button>
+        </div>
+      </div>
+    </div>
     <!-- Modal de justificación -->
     <div v-if="modal" class="modal-bg" @click.self="cerrar()">
       <div class="modal">
@@ -48,7 +100,6 @@
             <span class="fl">Falta por justificar</span>
             <span class="fv">{{ money(porJustificar) }}</span>
           </div>
-
           <!-- Justificaciones ya registradas -->
           <div v-if="detalle && detalle.justificaciones.length" class="ya">
             <div class="ya-t">Ya justificado</div>
@@ -58,7 +109,6 @@
               <span class="yr-mon">{{ money(j.monto) }}</span>
             </div>
           </div>
-
           <template v-if="porJustificar > 0">
             <div class="fl2">¿En qué se fue?</div>
             <div class="tipos">
@@ -102,17 +152,14 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import http from '@/api/http'
-
 const emit = defineEmits(['ctx'])
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
 const filtro = ref('todos')
-
 const modal = ref(null)
 const detalle = ref(null)
 const tipo = ref('GastoVariable')
@@ -120,20 +167,21 @@ const concepto = ref('')
 const monto = ref(null)
 const modalError = ref('')
 const procesando = ref(false)
-
+// Modal de detalle (siempre disponible)
+const detModal = ref(null)
+const det = ref(null)
+const detCargando = ref(false)
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const signo = (n) => n < 0 ? '−' : n > 0 ? '+' : ''
+const fmtCant = (n) => Number(n || 0).toLocaleString('es-MX')
 const fecha = (f) => new Date(f).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
-
 const claseEstado = (e) => e === 'Completo' ? 'e-ok' : e === 'Justificado' ? 'e-just' : 'e-inc'
 const etiqueta = (e) => e === 'Completo' ? 'Cuadra' : e === 'Justificado' ? 'Justificado' : 'Incompleto'
 const etiquetaTipo = (t) => t === 'GastoFijo' ? 'Gasto fijo' : t === 'GastoVariable' ? 'Gasto variable' : 'Deuda'
-
 const visibles = computed(() =>
   filtro.value === 'todos' ? items.value : items.value.filter((c) => c.estado === filtro.value))
 const conteoIncompletos = computed(() => items.value.filter((c) => c.estado === 'Incompleto').length)
-
 const porJustificar = computed(() => detalle.value?.faltantePorJustificar ?? modal.value?.faltantePorJustificar ?? 0)
 const puedeGuardar = computed(() =>
   concepto.value.trim() !== '' && Number(monto.value) > 0 && Number(monto.value) <= porJustificar.value)
@@ -141,9 +189,7 @@ const placeholderConcepto = computed(() =>
   tipo.value === 'GastoVariable' ? 'Ej. Gasolina, comida, maniobra'
     : tipo.value === 'GastoFijo' ? 'Ej. Renta, sueldo, seguro'
       : 'Ej. Faltante no justificado')
-
 function setFiltro(f) { filtro.value = f }
-
 async function cargar() {
   cargando.value = true; error.value = ''
   try {
@@ -153,7 +199,25 @@ async function cargar() {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los cortes.'
   } finally { cargando.value = false }
 }
-
+// ── Detalle (cualquier corte) ──
+async function verDetalle(c) {
+  detModal.value = c
+  det.value = null
+  detCargando.value = true
+  try {
+    const { data } = await http.get(`/cortes/${c.id}`)
+    det.value = data
+  } catch (e) {
+    det.value = null
+  } finally { detCargando.value = false }
+}
+function cerrarDet() { detModal.value = null; det.value = null }
+function pasarAJustificar() {
+  const c = detModal.value
+  cerrarDet()
+  abrir(c)
+}
+// ── Justificación ──
 async function abrir(c) {
   modal.value = c
   detalle.value = null
@@ -165,7 +229,6 @@ async function abrir(c) {
   } catch { /* si falla, usamos lo del listado */ }
 }
 function cerrar() { modal.value = null; detalle.value = null }
-
 async function guardar() {
   procesando.value = true; modalError.value = ''
   try {
@@ -182,22 +245,20 @@ async function guardar() {
     modalError.value = e.response?.data?.mensaje || 'No se pudo registrar.'
   } finally { procesando.value = false }
 }
-
 onMounted(() => {
   emit('ctx', { titulo: 'Cortes de caja', sub: 'Cuadre de efectivo por carga', back: null })
   cargar()
 })
 </script>
-
 <style scoped>
 .muted { color: var(--muted); margin-top: 24px; }
+.muted2 { color: var(--muted); padding: 10px 0; }
 .err { color: var(--clay); font-weight: 600; margin-top: 24px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
 .chip { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 9px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 7px; }
 .chip.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .ch-badge { background: var(--clay); color: #fff; border-radius: 999px; min-width: 18px; height: 18px; font-size: 10.5px; display: grid; place-items: center; padding: 0 5px; }
 .chip.on .ch-badge { background: #fff; color: var(--pine); }
-
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 13px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 15px; box-shadow: var(--shadow); }
 .card.e-inc { border-color: var(--clay-soft); background: linear-gradient(0deg, var(--clay-soft) 0%, var(--surface) 55%); }
@@ -219,8 +280,9 @@ onMounted(() => {
 .c-nums .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
 .c-nums .v.neg { color: var(--clay); }
 .c-nums .v.pos { color: var(--amber); }
-.btn-just { width: 100%; margin-top: 11px; background: var(--clay); color: #fff; border: none; border-radius: 12px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
-
+.c-actions { display: flex; gap: 9px; margin-top: 11px; }
+.btn-det { flex: 1; background: var(--surface); border: 1.5px solid var(--line); color: var(--ink-soft); border-radius: 12px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
+.btn-just { flex: 1.4; background: var(--clay); color: #fff; border: none; border-radius: 12px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 .modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
 .modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 460px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
 .m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
@@ -229,6 +291,25 @@ onMounted(() => {
 .m-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
 .m-x svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2.4; stroke-linecap: round; }
 .m-body { padding: 16px 20px; overflow: auto; }
+/* detalle */
+.d-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.dn { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; }
+.dn .k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.dn .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.dn .v.neg { color: var(--clay); } .dn .v.pos { color: var(--amber); }
+.d-merc { display: flex; gap: 10px; margin-bottom: 16px; }
+.dm { flex: 1; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; }
+.dm .k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.dm .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.dev-list { margin-bottom: 16px; }
+.dev-t { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.dev-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.dev-row:last-child { border-bottom: none; }
+.dr-nom { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.dr-cant { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.sin-dev { color: var(--muted); font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+.obs { font-size: 13px; color: var(--ink-soft); margin-top: 6px; background: var(--paper); border-radius: 10px; padding: 11px; }
+.obs b { color: var(--ink); }
 .falta { display: flex; align-items: center; justify-content: space-between; background: var(--clay-soft); border: 1px solid #EAC9BC; border-radius: 14px; padding: 14px; margin-bottom: 16px; }
 .falta .fl { font-size: 12.5px; font-weight: 700; color: #8A3D28; }
 .falta .fv { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 22px; color: var(--clay); font-variant-numeric: tabular-nums; }

@@ -105,6 +105,10 @@
           <div class="r b"><span>VENTAS</span><span>{{ money2(corte.totalVentas) }}</span></div>
           <div class="r" style="margin-top:9px"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
           <div class="r"><span>Diferencia</span><span :class="{ ok: corte.diferencia===0 }">{{ signo(corte.diferencia) }}{{ money2(Math.abs(corte.diferencia)) }}</span></div>
+          <template v-if="devueltosCorte.length">
+            <div class="r sec"><span>DEVUELTO AL ALMACÉN</span><span></span></div>
+            <div class="r dev" v-for="d in devueltosCorte" :key="d.productoNombre"><span>{{ d.productoNombre }}</span><span>{{ fmtCant(d.cantidad) }}</span></div>
+          </template>
           <div style="height:12px"></div>
         </div>
         <div class="acts">
@@ -144,9 +148,19 @@ const signo = (n) => n < 0 ? '−' : n > 0 ? '+' : ''
 const fechaTag = computed(() => resumen.value
   ? new Date(resumen.value.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
   : '')
+  
 const fechaCorte = computed(() => corte.value
   ? new Date(corte.value.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
   : '')
+
+// Productos devueltos: del corte cerrado, o del resumen como respaldo.
+const devueltosCorte = computed(() => {
+  const c = corte.value?.devueltos
+  const r = resumen.value?.devueltos
+  return (c && c.length ? c : r) || []
+})
+const fmtCant = (n) => Number(n || 0).toLocaleString('es-MX')
+
 function conteo(metodo) {
   const m = resumen.value?.metodos?.find((x) => x.metodo === metodo)
   return m ? m.conteo : 0
@@ -222,7 +236,9 @@ function datosParaImprimir() {
     efectivoEntregado: c.efectivoEntregado,
     diferencia: c.diferencia,
     valorDevuelto: c.valorDevuelto ?? r.valorDevuelto,
-    valorMerma: c.valorMerma ?? r.valorMerma
+    valorMerma: c.valorMerma ?? r.valorMerma,
+    devueltos: (c.devueltos && c.devueltos.length ? c.devueltos : r.devueltos) || []
+    
   }
 }
 
@@ -352,4 +368,6 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .da.ghost { background: rgba(255,255,255,.12); color: #fff; } .da.solid { background: var(--amber); color: #3a2607; }
 .da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
+.slip .r.sec { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 10px; letter-spacing: .04em; color: #555; border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; }
+.slip .r.dev { color: #444; }
 </style>
