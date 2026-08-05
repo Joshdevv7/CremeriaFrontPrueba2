@@ -4,7 +4,6 @@
       <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span v-if="notif.noLeidas > 0" class="badge">{{ notif.noLeidas > 9 ? '9+' : notif.noLeidas }}</span>
     </button>
-
     <transition name="drop">
       <div v-if="abierto" class="panel">
         <div class="phead">
@@ -13,10 +12,11 @@
         </div>
         <div class="plist">
           <p v-if="!notif.items.length" class="vacio">Sin notificaciones por ahora.</p>
-          <div v-for="n in notif.items" :key="n.id" class="item" :class="{ noleida: !n.leida }" @click="notif.marcarLeida(n)">
+          <div v-for="n in notif.items" :key="n.id" class="item" :class="{ noleida: !n.leida, link: tieneRuta(n) }" @click="abrir(n)">
             <div class="ic" v-html="icono(n.tipo)"></div>
             <div class="txt"><div class="t">{{ n.titulo }}</div><div class="m">{{ n.mensaje }}</div><div class="f">{{ rel(n.fecha) }}</div></div>
-            <span v-if="!n.leida" class="dot"></span>
+            <span v-if="tieneRuta(n)" class="chev"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span>
+            <span v-else-if="!n.leida" class="dot"></span>
           </div>
         </div>
         <div class="pfoot" v-if="notif.items.length">
@@ -27,16 +27,49 @@
     </transition>
   </div>
 </template>
-
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNotifStore } from '@/stores/notificaciones'
 import { confirmar } from '@/composables/useConfirm'
-
 const notif = useNotifStore()
+const router = useRouter()
 const abierto = ref(false)
 const root = ref(null)
-
+// A dónde lleva cada tipo de notificación. Si trae referenciaId y el tipo apunta a un
+// detalle, se arma la ruta con el id; si no, va a la vista general (lista).
+// Devuelve null cuando el tipo no tiene una vista sensata a la que ir.
+function rutaDe(n) {
+  const id = n.referenciaId
+  switch (n.tipo) {
+    case 'PedidoCreado':
+    case 'EntregaTerminada':
+    case 'VentaLibre':
+      return id ? `/panel/pedido/${id}` : '/panel/pedidos'
+    case 'StockBajo':
+      return id ? `/panel/producto/${id}` : '/panel/productos'
+    case 'MermaReportada':
+      return '/panel/mermas'
+    case 'CorteCerrado':
+      return '/panel/cortes'
+    case 'CargaAbierta':
+      return '/panel/cargas'
+    case 'CreditoPorVencer':
+      return '/panel/creditos'
+    default:
+      return null
+  }
+}
+function tieneRuta(n) { return rutaDe(n) !== null }
+// Clic en una notificación: marcar leída + navegar (si hay a dónde) + cerrar el panel.
+async function abrir(n) {
+  const ruta = rutaDe(n)
+  notif.marcarLeida(n)          // no bloquea la navegación aunque falle
+  if (ruta) {
+    abierto.value = false
+    if (router.currentRoute.value.fullPath !== ruta) router.push(ruta)
+  }
+}
 const ICONOS = {
   StockBajo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg>',
   EntregaTerminada: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>',
@@ -49,7 +82,6 @@ const ICONOS = {
 }
 const ICONO_DEFAULT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9z"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>'
 function icono(t) { return ICONOS[t] || ICONO_DEFAULT }
-
 function rel(f) {
   const s = Math.floor((Date.now() - new Date(f)) / 1000)
   if (s < 60) return 'hace un momento'
@@ -70,7 +102,6 @@ function fuera(e) { if (root.value && !root.value.contains(e.target)) abierto.va
 onMounted(() => document.addEventListener('click', fuera))
 onUnmounted(() => document.removeEventListener('click', fuera))
 </script>
-
 <style scoped>
 .campana { position: relative; }
 .bell { position: relative; width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; }
@@ -88,6 +119,7 @@ onUnmounted(() => document.removeEventListener('click', fuera))
 .item:hover { background: var(--paper); }
 .item.noleida { background: var(--pine-tint); }
 .item.noleida:hover { background: #DDEBE4; }
+.item.link:hover { background: var(--pine-tint); }
 .ic { flex: 0 0 auto; display: grid; place-items: center; color: var(--ink-soft); margin-top: 1px; }
 .ic svg { width: 20px; height: 20px; }
 .txt { flex: 1; min-width: 0; }
@@ -95,6 +127,8 @@ onUnmounted(() => document.removeEventListener('click', fuera))
 .txt .m { font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; line-height: 1.35; }
 .txt .f { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--clay); flex: 0 0 auto; margin-top: 5px; }
+.chev { flex: 0 0 auto; display: grid; place-items: center; margin-top: 2px; }
+.chev svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pfoot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--paper); }
 .lim { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-family: "Hanken Grotesk"; font-weight: 700; font-size: 12px; padding: 8px; border-radius: 9px; cursor: pointer; }
 .lim.danger { color: var(--clay); border-color: #E7C4B8; background: var(--clay-soft); }
