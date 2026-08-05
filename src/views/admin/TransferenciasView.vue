@@ -177,12 +177,14 @@ function abrir(t) {
   modalError.value = ''
 }
 function cerrar() { modal.value = null }
+// El backend espera el método como NÚMERO (no hay JsonStringEnumConverter).
+const METODO_NUM = { Efectivo: 0, Transferencia: 1, Tarjeta: 2, Credito: 3 }
 async function guardar() {
   procesando.value = true; modalError.value = ''
   try {
     const body = {
       referenciaPago: metodo.value === 'Efectivo' ? null : folio.value.trim(),
-      metodoPago: metodo.value
+      metodoPago: METODO_NUM[metodo.value]
     }
     await http.put(`/pedidos/${modal.value.id}/registrar-pago`, body)
     cerrar()
