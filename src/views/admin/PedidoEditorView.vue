@@ -148,7 +148,16 @@ async function cargar() {
   try {
     const [cl, rp, pr] = await Promise.all([http.get('/clientes', { params: { tamano: 100 } }), http.get('/usuarios/repartidores'), http.get('/productos', { params: { tamano: 100 } })])
     clientes.value = cl.data.items; repartidores.value = rp.data; productos.value = pr.data.items
-    if (!esNuevo.value) { const { data } = await http.get(`/pedidos/${route.params.id}`); clienteId.value = data.clienteId; repartidorId.value = data.repartidorId; data.lineas.forEach((l) => { cant[l.productoId] = l.cantidadPedida }) }
+    if (!esNuevo.value) {
+      const { data } = await http.get(`/pedidos/${route.params.id}`)
+      clienteId.value = data.clienteId; repartidorId.value = data.repartidorId
+      // Si la línea se vendió por caja, se vuelve a mostrar en cajas (no en las piezas
+      // sueltas en las que vive guardada), igual que como se capturó originalmente.
+      data.lineas.forEach((l) => {
+        if (l.esCaja && l.piezasPorCaja > 0) { unidad[l.productoId] = 'caja'; cant[l.productoId] = l.cantidadPedida / l.piezasPorCaja }
+        else cant[l.productoId] = l.cantidadPedida
+      })
+    }
   } catch (e) { error.value = 'No se pudieron cargar los datos.' }
   finally { cargando.value = false }
 }

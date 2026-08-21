@@ -110,9 +110,12 @@ async function onScan(code) {
 async function registrar() {
   if (!puede.value) return
   enviando.value = true; error.value = ''
+  // Se manda tal cual se capturó (piezas o cajas) más la bandera esCaja; el backend
+  // hace la conversión a piezas y recuerda cómo se capturó, para poder volver a
+  // mostrar "N caja(s)" en el comprobante y el historial (mismo patrón que Ventas).
   const lineas = lineasActivas.value.map((id) => {
-    const p = pmap.value[id]; const caja = unidad[id] === 'caja'; const factor = caja ? (p?.piezasPorCaja || 1) : 1
-    return { productoId: id, cantidad: (cant[id] || 0) * factor, costoUnitario: (Number(costo[id]) || 0) / factor }
+    const esCaja = unidad[id] === 'caja'
+    return { productoId: id, cantidad: cant[id] || 0, costoUnitario: Number(costo[id]) || 0, esCaja }
   })
   try {
     await http.post('/compras', { proveedorId: proveedorId.value, referencia: referencia.value.trim() || null, lineas })

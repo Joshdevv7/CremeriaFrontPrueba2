@@ -442,6 +442,13 @@ async function confirmar() {
   }
 }
 
+// La línea vive en piezas (así funciona el inventario); si se vendió por caja, mostramos
+// "N caja(s)" en el ticket en vez de las piezas sueltas (que confunden: precio raro, cantidad grande).
+function cantTicket(l) {
+  return l.esCaja && l.piezasPorCaja > 0
+    ? (l.cantidadEntregada / l.piezasPorCaja === 1 ? '1 caja' : `${fmtQty(l.cantidadEntregada / l.piezasPorCaja)} cajas`)
+    : fmtQty(l.cantidadEntregada)
+}
 function armarTicket(d) {
   const estados = { CerradoCompleto: 'Entrega completa', CerradoParcial: 'Entrega parcial', CerradoNoEntregado: 'No entregado' }
   resultadoEstado.value = estados[d.estado] || 'Cerrada'
@@ -451,7 +458,7 @@ function armarTicket(d) {
     fechaIso: d.fecha,
     metodoPago: d.metodoPago,
     fecha: new Date(d.fecha).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    lineas: d.lineas.filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: fmtQty(l.cantidadEntregada), sub: l.subtotal })),
+    lineas: d.lineas.filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: cantTicket(l), sub: l.subtotal })),
     total: d.total,
     credito: d.metodoPago === 'Credito',
     vence: fechaLimite.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -472,11 +479,14 @@ function datosParaImprimir() {
     credito: pay.value === 'credito',
     vence: ticket.value?.vence,
     total: ticket.value?.total ?? total.value,
-    items: lineas.filter((l) => l.entregado > 0).map((l) => ({
-      nombre: l.productoNombre,
-      cantidad: l.entregado,
-      precio: l.precioUnitario
-    }))
+    items: lineas.filter((l) => l.entregado > 0).map((l) => {
+      const esCaja = l.esCaja && l.piezasPorCaja > 0
+      return {
+        nombre: l.productoNombre,
+        cantidad: esCaja ? l.entregado / l.piezasPorCaja : l.entregado,
+        precio: esCaja ? l.precioUnitario * l.piezasPorCaja : l.precioUnitario
+      }
+    })
   }
 }
 
@@ -520,6 +530,7 @@ onMounted(async () => {
       lineas.push({
         id: l.id, productoId: l.productoId, productoNombre: l.productoNombre,
         cantidadPedida: l.cantidadPedida, precioUnitario: l.precioUnitario,
+        esCaja: l.esCaja, piezasPorCaja: l.piezasPorCaja,
         disponible, conCarga, entregado: max, fate: 'dev'
       })
     })

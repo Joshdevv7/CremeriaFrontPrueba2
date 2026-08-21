@@ -25,7 +25,7 @@
             <template v-if="editando !== v.id">
               <div class="linea" v-for="l in detalle.lineas" :key="l.id">
                 <span class="ln">{{ l.productoNombre }}</span>
-                <span class="lc">{{ fmt(l.cantidadEntregada) }} × {{ money(l.precioUnitario) }}</span>
+                <span class="lc">{{ cantMostrar(l) }} × {{ precioMostrar(l) }}</span>
                 <span class="ls">{{ money(l.subtotal) }}</span>
               </div>
               <div class="acciones">
@@ -46,9 +46,10 @@
             <template v-else>
               <p class="hint-nc">Ajusta la cantidad de cada producto a lo que en realidad se llevó el cliente.</p>
               <div class="linea edit" v-for="l in detalle.lineas" :key="l.id">
-                <span class="ln">{{ l.productoNombre }}</span>
-                <input class="qty" type="number" min="0" step="0.001" v-model.number="cantEdit[l.id]">
-                <span class="ls">{{ money((cantEdit[l.id] || 0) * l.precioUnitario) }}</span>
+                <span class="ln">{{ l.productoNombre }}<small v-if="esCajaLinea(l)"> (caja de {{ l.piezasPorCaja }})</small></span>
+                <input class="qty" type="number" min="0" :step="esCajaLinea(l) ? 1 : 0.001" v-model.number="cantEdit[l.id]">
+                <span class="unit" v-if="esCajaLinea(l)">caja(s)</span>
+                <span class="ls">{{ money(piezasDe(l) * l.precioUnitario) }}</span>
               </div>
               <div class="tot-edit">Nuevo total: <b>{{ money(totalEdit) }}</b></div>
               <p v-if="errorEdit" class="err">{{ errorEdit }}</p>
@@ -89,6 +90,14 @@ const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFract
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
+// La línea vive en piezas (así funciona el inventario); estas funciones la vuelven a
+// mostrar como "N caja(s)" cuando así se capturó, en vez de piezas sueltas confusas.
+function esCajaLinea(l) { return !!l.esCaja && l.piezasPorCaja > 0 }
+function cantMostrar(l) { return esCajaLinea(l) ? `${fmt(l.cantidadEntregada / l.piezasPorCaja)} caja(s)` : fmt(l.cantidadEntregada) }
+function precioMostrar(l) { return esCajaLinea(l) ? money(l.precioUnitario * l.piezasPorCaja) : money(l.precioUnitario) }
+// Convierte lo capturado en el input de edición (cajas o piezas, según la línea) a piezas.
+function piezasDe(l) { const cant = Number(cantEdit[l.id]) || 0; return esCajaLinea(l) ? cant * l.piezasPorCaja : cant }
+
 // Misma regla que valida el backend: solo la venta más reciente, y solo mientras
 // no tenga corte de caja, se puede corregir.
 function esLaMasReciente(v) { return items.value[0]?.id === v.id }
@@ -112,17 +121,19 @@ function iniciarEdicion(v) {
   editando.value = v.id
   errorEdit.value = ''
   Object.keys(cantEdit).forEach((k) => delete cantEdit[k])
-  detalle.value.lineas.forEach((l) => { cantEdit[l.id] = l.cantidadEntregada })
+  // El input se llena en la MISMA unidad en la que se vendió (cajas o piezas), no siempre en piezas.
+  detalle.value.lineas.forEach((l) => { cantEdit[l.id] = esCajaLinea(l) ? l.cantidadEntregada / l.piezasPorCaja : l.cantidadEntregada })
 }
 function cancelarEdicion() { editando.value = null; errorEdit.value = '' }
-const totalEdit = computed(() => detalle.value ? detalle.value.lineas.reduce((s, l) => s + (cantEdit[l.id] || 0) * l.precioUnitario, 0) : 0)
+const totalEdit = computed(() => detalle.value ? detalle.value.lineas.reduce((s, l) => s + piezasDe(l) * l.precioUnitario, 0) : 0)
 
 async function guardarEdicion(v) {
   guardando.value = true; errorEdit.value = ''
   try {
     const lineas = detalle.value.lineas
-      .filter((l) => Number(cantEdit[l.id]) !== l.cantidadEntregada)
-      .map((l) => ({ pedidoLineaId: l.id, nuevaCantidad: Number(cantEdit[l.id]) || 0 }))
+      .map((l) => ({ pedidoLineaId: l.id, nuevaCantidad: piezasDe(l), original: l.cantidadEntregada }))
+      .filter((l) => l.nuevaCantidad !== l.original)
+      .map(({ pedidoLineaId, nuevaCantidad }) => ({ pedidoLineaId, nuevaCantidad }))
     if (!lineas.length) { errorEdit.value = 'No hay cambios que guardar.'; guardando.value = false; return }
     const { data } = await http.put(`/pedidos/${v.id}/editar-venta`, { lineas })
     detalle.value = data
@@ -177,6 +188,8 @@ onMounted(() => { emit('ctx', { titulo: 'Mis ventas', sub: 'Historial de tus ven
 .linea .lc { color: var(--muted); flex: 0 0 auto; }
 .linea .ls { font-weight: 700; flex: 0 0 auto; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 .linea.edit .qty { width: 70px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 7px; font-weight: 700; text-align: center; }
+.linea.edit .ln small { color: var(--muted); font-weight: 500; }
+.linea .unit { color: var(--muted); font-size: 11px; font-weight: 600; flex: 0 0 auto; }
 .acciones { display: flex; gap: 8px; margin-top: 10px; }
 .pdf-b, .edit-b, .cancel-b, .save-b { display: flex; align-items: center; gap: 8px; flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft); border-radius: 11px; padding: 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; justify-content: center; }
 .pdf-b ion-icon { font-size: 16px; color: var(--sky); }

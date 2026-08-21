@@ -22,7 +22,7 @@
         <div class="detalle" v-if="abierta === c.id">
           <div class="linea" v-for="l in c.lineas" :key="l.id">
             <span class="ln">{{ l.productoNombre }}</span>
-            <span class="lc">{{ fmt(l.cantidad) }} × {{ money(l.costoUnitario) }}</span>
+            <span class="lc">{{ cantMostrar(l) }} × {{ costoMostrar(l) }}</span>
             <span class="ls">{{ money(l.subtotal) }}</span>
           </div>
           <button class="pdf-b" :disabled="descargando === c.id" @click="descargarPdf(c)">
@@ -49,6 +49,10 @@ const descargando = ref(null)
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+
+function esCajaLinea(l) { return !!l.esCaja && l.piezasPorCaja > 0 }
+function cantMostrar(l) { return esCajaLinea(l) ? `${fmt(l.cantidad / l.piezasPorCaja)} caja(s)` : fmt(l.cantidad) }
+function costoMostrar(l) { return esCajaLinea(l) ? money(l.costoUnitario * l.piezasPorCaja) : money(l.costoUnitario) }
 
 function toggle(id) { abierta.value = abierta.value === id ? null : id }
 
