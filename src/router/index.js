@@ -29,6 +29,8 @@ import RepartidorEditorView from '@/views/admin/RepartidorEditorView.vue'
 import VendedoresView from '@/views/admin/VendedoresView.vue'
 import VendedorEditorView from '@/views/admin/VendedorEditorView.vue'
 import VentasView from '@/views/admin/VentasView.vue'
+import MisVentasView from '@/views/admin/MisVentasView.vue'
+import MiCorteView from '@/views/admin/MiCorteView.vue'
 import CreditosView from '@/views/admin/CreditosView.vue'
 import ProductoEditorView from '@/views/admin/ProductoEditorView.vue'
 import ProveedoresView from '@/views/admin/ProveedoresView.vue'
@@ -63,6 +65,8 @@ const routes = [
       { path: '', redirect: '/panel/resumen' },
       { path: 'resumen', component: ResumenView, meta: { rol: 'Admin' } },
       { path: 'ventas', component: VentasView }, // Admin y Vendedor
+      { path: 'mis-ventas', component: MisVentasView, meta: { rol: 'Vendedor' } },
+      { path: 'mi-corte', component: MiCorteView, meta: { rol: 'Vendedor' } },
       { path: 'pedidos', component: PedidosView, meta: { rol: 'Admin' } },
       { path: 'pedido/:id', component: PedidoEditorView, meta: { rol: 'Admin' } },
       { path: 'productos', component: ProductosView, meta: { rol: 'Admin' } },

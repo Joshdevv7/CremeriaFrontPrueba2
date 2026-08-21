@@ -101,7 +101,9 @@ const ICN = {
   deudas: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><path d="M17 3l4 2-4 2"/></svg>',
   compras: '<svg viewBox="0 0 24 24"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>',
   proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
-  ventas: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>'
+  ventas: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>',
+  misVentas: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+  miCorte: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>'
 }
 // Cada item puede traer `rol` (lista de roles que lo ven); sin `rol` = visible para todos
 // los que entran al shell (hoy Admin y Vendedor).
@@ -111,6 +113,8 @@ const grupos = [
   ] },
   { titulo: 'Ventas', items: [
     { path: '/panel/ventas', label: 'Ventas', icon: ICN.ventas, match: ['/panel/ventas'] },
+    { path: '/panel/mis-ventas', label: 'Mis ventas', icon: ICN.misVentas, match: ['/panel/mis-ventas'], rol: ['Vendedor'] },
+    { path: '/panel/mi-corte', label: 'Mi corte', icon: ICN.miCorte, match: ['/panel/mi-corte'], rol: ['Vendedor'] },
     { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'], rol: ['Admin'] },
     { path: '/panel/clientes', label: 'Clientes', icon: ICN.clientes, match: ['/panel/clientes', '/panel/cliente'] },
     { path: '/panel/creditos', label: 'Créditos', icon: ICN.cred, match: ['/panel/creditos'] }
@@ -143,7 +147,7 @@ const gruposVisibles = computed(() =>
 const itemsPlanos = grupos.flatMap((g) => g.items)
 const navMovil = computed(() => {
   const base = auth.esVendedor
-    ? ['/panel/ventas', '/panel/compras', '/panel/proveedores', '/panel/clientes']
+    ? ['/panel/ventas', '/panel/mis-ventas', '/panel/mi-corte', '/panel/compras']
     : ['/panel/resumen', '/panel/pedidos', '/panel/productos', '/panel/creditos']
   return base.map((p) => itemsPlanos.find((i) => i.path === p)).filter(Boolean)
 })

@@ -34,6 +34,14 @@
             <div class="pagos">
               <button v-for="m in metodos" :key="m.k" :class="{ on: metodo === m.k }" @click="metodo = m.k">{{ m.t }}</button>
             </div>
+            <div v-if="metodo === 0" class="sub-field">
+              <div class="fl2">¿Con cuánto paga? (opcional)</div>
+              <input class="inp" type="number" min="0" step="0.01" v-model.number="pagaCon" placeholder="Ej. 200">
+              <div v-if="pagaCon > 0" class="feria" :class="{ falta: pagaCon < total }">
+                <template v-if="pagaCon >= total">Feria a entregar: <b>{{ money(pagaCon - total) }}</b></template>
+                <template v-else>Faltan {{ money(total - pagaCon) }} para cubrir el total.</template>
+              </div>
+            </div>
             <div v-if="metodo === 1 || metodo === 2" class="sub-field">
               <div class="fl2">Folio / referencia (opcional)</div>
               <input class="inp" v-model="referencia" placeholder="Ej. Folio de transferencia" :disabled="pagoPendiente">
@@ -139,6 +147,7 @@ const metodos = [
 ]
 const metodo = ref(0)
 const referencia = ref('')
+const pagaCon = ref(null) // efectivo: con cuánto paga el cliente, para calcular la feria
 const pagoPendiente = ref(false)
 const diasCredito = ref(7)
 const fechaLimite = computed(() => { const d = new Date(); d.setDate(d.getDate() + diasCredito.value); return d })
@@ -165,6 +174,10 @@ async function vender() {
       { k: 'Método de pago', v: metodos.find((m) => m.k === metodo.value)?.t || '' },
       { k: 'Estado de pago', v: body.pagoPendiente ? 'Pago pendiente' : (metodo.value === 3 ? 'A crédito' : 'Pagado') }
     ]
+    if (metodo.value === 0 && pagaCon.value > 0) {
+      exitoDet.value.push({ k: 'Pagó con', v: money(pagaCon.value) })
+      if (pagaCon.value >= data.total) exitoDet.value.push({ k: 'Feria entregada', v: money(pagaCon.value - data.total) })
+    }
     exito.value = true
   } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo registrar la venta.' }
   finally { enviando.value = false }
@@ -175,7 +188,7 @@ function nuevaVenta() {
   Object.keys(cant).forEach((k) => delete cant[k])
   Object.keys(unidad).forEach((k) => delete unidad[k])
   cliente.value = null; nombreOcasional.value = ''; ocasional.value = false
-  metodo.value = 0; referencia.value = ''; pagoPendiente.value = false; diasCredito.value = 7
+  metodo.value = 0; referencia.value = ''; pagaCon.value = null; pagoPendiente.value = false; diasCredito.value = 7
   cargarProductos()
 }
 
@@ -221,6 +234,9 @@ onMounted(async () => {
 .pagos button { border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); border-radius: 11px; padding: 10px 4px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; cursor: pointer; }
 .pagos button.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .sub-field { margin-top: 11px; }
+.feria { margin-top: 9px; font-size: 13.5px; font-weight: 700; color: var(--pine); }
+.feria b { font-variant-numeric: tabular-nums; }
+.feria.falta { color: var(--clay); font-weight: 600; }
 .sub-field.credito { background: var(--amber-soft); border: 1px solid #EAD9B8; border-radius: 12px; padding: 12px; }
 .dias { display: flex; gap: 7px; }
 .dias button { flex: 1; border: 1px solid #EAD9B8; background: var(--surface); color: var(--ink-soft); border-radius: 9px; padding: 8px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
