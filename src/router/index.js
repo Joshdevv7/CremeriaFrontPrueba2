@@ -44,6 +44,7 @@ import TransferenciasView from '@/views/admin/TransferenciasView.vue'
 import CargasAutorizarView from '@/views/admin/CargasAutorizarView.vue'
 import CortesView from '@/views/admin/CortesView.vue'
 import DeudasView from '@/views/admin/DeudasView.vue'
+import DeudasClientesView from '@/views/admin/DeudasClientesView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -78,6 +79,7 @@ const routes = [
       { path: 'historial', component: HistorialView, meta: { rol: 'Admin' } },
       { path: 'mermas', component: MermasView, meta: { rol: 'Admin' } },
       { path: 'creditos', component: CreditosView }, // Admin y Vendedor
+      { path: 'deudas-clientes', component: DeudasClientesView }, // Admin y Vendedor
       { path: 'gastos', component: GastosView, meta: { rol: 'Admin' } },
       { path: 'gasto/:id', component: GastoEditorView, meta: { rol: 'Admin' } },
       { path: 'transferencias', component: TransferenciasView, meta: { rol: 'Admin' } },
