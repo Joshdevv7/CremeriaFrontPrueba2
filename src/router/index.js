@@ -26,6 +26,9 @@ import HistorialView from '@/views/admin/HistorialView.vue'
 import MermasView from '@/views/admin/MermasView.vue'
 import RepartidoresView from '@/views/admin/RepartidoresView.vue'
 import RepartidorEditorView from '@/views/admin/RepartidorEditorView.vue'
+import VendedoresView from '@/views/admin/VendedoresView.vue'
+import VendedorEditorView from '@/views/admin/VendedorEditorView.vue'
+import VentasView from '@/views/admin/VentasView.vue'
 import CreditosView from '@/views/admin/CreditosView.vue'
 import ProductoEditorView from '@/views/admin/ProductoEditorView.vue'
 import ProveedoresView from '@/views/admin/ProveedoresView.vue'
@@ -50,36 +53,40 @@ const routes = [
   { path: '/reabastecer', component: AgregarCargaView, meta: { requiresAuth: true } },
   { path: '/autoventa', component: AutoventaView, meta: { requiresAuth: true } },
 
-  // Admin: todo bajo el shell con sidebar
+  // Admin: todo bajo el shell con sidebar. El vendedor entra al mismo shell pero con un
+  // menú y rutas restringidas (mostrador: ventas, clientes, proveedores, compras).
   {
     path: '/panel',
     component: AdminShell,
-    meta: { requiresAuth: true, rol: 'Admin' },
+    meta: { requiresAuth: true, rol: ['Admin', 'Vendedor'] },
     children: [
       { path: '', redirect: '/panel/resumen' },
-      { path: 'resumen', component: ResumenView },
-      { path: 'pedidos', component: PedidosView },
-      { path: 'pedido/:id', component: PedidoEditorView },
-      { path: 'productos', component: ProductosView },
-      { path: 'producto/:id', component: ProductoEditorView },
-      { path: 'proveedores', component: ProveedoresView },
-      { path: 'proveedor/:id', component: ProveedorEditorView },
-      { path: 'clientes', component: ClientesView },
-      { path: 'cliente/:id', component: ClienteEditorView },
-      { path: 'historial', component: HistorialView },
-      { path: 'mermas', component: MermasView },
-      { path: 'creditos', component: CreditosView },
-      { path: 'gastos', component: GastosView },
-      { path: 'gasto/:id', component: GastoEditorView },
-      { path: 'transferencias', component: TransferenciasView },
-      { path: 'cortes', component: CortesView },
-      { path: 'deudas', component: DeudasView },
-      { path: 'compras', component: ComprasView },
-      { path: 'compra/:id', component: CompraEditorView },
-      { path: 'proyecciones', component: ProyeccionesView },
-      { path: 'cargas', component: CargasAutorizarView },
-      { path: 'repartidores', component: RepartidoresView },
-      { path: 'repartidor/:id', component: RepartidorEditorView }
+      { path: 'resumen', component: ResumenView, meta: { rol: 'Admin' } },
+      { path: 'ventas', component: VentasView }, // Admin y Vendedor
+      { path: 'pedidos', component: PedidosView, meta: { rol: 'Admin' } },
+      { path: 'pedido/:id', component: PedidoEditorView, meta: { rol: 'Admin' } },
+      { path: 'productos', component: ProductosView, meta: { rol: 'Admin' } },
+      { path: 'producto/:id', component: ProductoEditorView, meta: { rol: 'Admin' } },
+      { path: 'proveedores', component: ProveedoresView }, // Admin y Vendedor
+      { path: 'proveedor/:id', component: ProveedorEditorView }, // Admin y Vendedor
+      { path: 'clientes', component: ClientesView }, // Admin y Vendedor
+      { path: 'cliente/:id', component: ClienteEditorView }, // Admin y Vendedor
+      { path: 'historial', component: HistorialView, meta: { rol: 'Admin' } },
+      { path: 'mermas', component: MermasView, meta: { rol: 'Admin' } },
+      { path: 'creditos', component: CreditosView }, // Admin y Vendedor
+      { path: 'gastos', component: GastosView, meta: { rol: 'Admin' } },
+      { path: 'gasto/:id', component: GastoEditorView, meta: { rol: 'Admin' } },
+      { path: 'transferencias', component: TransferenciasView, meta: { rol: 'Admin' } },
+      { path: 'cortes', component: CortesView, meta: { rol: 'Admin' } },
+      { path: 'deudas', component: DeudasView, meta: { rol: 'Admin' } },
+      { path: 'compras', component: ComprasView }, // Admin y Vendedor
+      { path: 'compra/:id', component: CompraEditorView }, // Admin y Vendedor
+      { path: 'proyecciones', component: ProyeccionesView, meta: { rol: 'Admin' } },
+      { path: 'cargas', component: CargasAutorizarView, meta: { rol: 'Admin' } },
+      { path: 'repartidores', component: RepartidoresView, meta: { rol: 'Admin' } },
+      { path: 'repartidor/:id', component: RepartidorEditorView, meta: { rol: 'Admin' } },
+      { path: 'vendedores', component: VendedoresView, meta: { rol: 'Admin' } },
+      { path: 'vendedor/:id', component: VendedorEditorView, meta: { rol: 'Admin' } }
     ]
   },
 
@@ -107,7 +114,10 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.requiresAuth && !auth.autenticado) return '/login'
-  if (to.meta.rol && auth.rol !== to.meta.rol) return auth.rutaInicial()
+  if (to.meta.rol) {
+    const permitidos = Array.isArray(to.meta.rol) ? to.meta.rol : [to.meta.rol]
+    if (!permitidos.includes(auth.rol)) return auth.rutaInicial()
+  }
   if (to.path === '/login' && auth.autenticado) return auth.rutaInicial()
   return true
 })

@@ -22,7 +22,8 @@ export const useAuthStore = defineStore('auth', {
     rol: (s) => s.usuario?.rol || null,
     usuarioId: (s) => s.usuario?.id || idDesdeToken(s.token),
     esAdmin: (s) => s.usuario?.rol === 'Admin',
-    esRepartidor: (s) => s.usuario?.rol === 'Repartidor'
+    esRepartidor: (s) => s.usuario?.rol === 'Repartidor',
+    esVendedor: (s) => s.usuario?.rol === 'Vendedor'
   },
   actions: {
     async login(email, password) {
@@ -40,7 +41,9 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('usuario')
     },
     rutaInicial() {
-      return this.esAdmin ? '/panel/resumen' : '/app/entregas'
+      if (this.esAdmin) return '/panel/resumen'
+      if (this.esVendedor) return '/panel/ventas'
+      return '/app/entregas'
     }
   }
 })

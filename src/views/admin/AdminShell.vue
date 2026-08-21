@@ -5,7 +5,7 @@
         <!-- SIDEBAR -->
         <aside class="side" :class="{ open: navAbierto }">
           <div class="logo"><div class="mk">D</div><div class="nm">Distribuidora<small>Panel admin</small></div></div>
-          <template v-for="g in grupos" :key="g.titulo">
+          <template v-for="g in gruposVisibles" :key="g.titulo">
             <div class="navlbl">{{ g.titulo }}</div>
             <a v-for="n in g.items" :key="n.path" class="nav-a" :class="{ on: activo(n) }" @click="ir(n.path)">
               <span v-html="n.icon"></span><span class="nav-txt">{{ n.label }}</span>
@@ -15,7 +15,7 @@
           <div class="spacer"></div>
           <div class="profile" @click="salir()" title="Cerrar sesión">
             <div class="av">{{ iniciales }}</div>
-            <div class="who"><div class="n">{{ auth.usuario?.nombre }}</div><div class="r">Dueño</div></div>
+            <div class="who"><div class="n">{{ auth.usuario?.nombre }}</div><div class="r">{{ auth.esVendedor ? 'Vendedor' : 'Dueño' }}</div></div>
           </div>
         </aside>
         <div class="scrim" :class="{ show: navAbierto }" @click="navAbierto = false"></div>
@@ -72,6 +72,7 @@ const auth = useAuthStore()
 const navAbierto = ref(false)
 const cargasPendientes = ref(0)
 async function contarCargasPendientes() {
+  if (!auth.esAdmin) return
   try {
     const [cargas, reabs] = await Promise.all([
       http.get('/cargas', { params: { estado: 'PendienteAutorizacion', tamano: 1 } }),
@@ -99,42 +100,53 @@ const ICN = {
   cortes: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>',
   deudas: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><path d="M17 3l4 2-4 2"/></svg>',
   compras: '<svg viewBox="0 0 24 24"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>',
-  proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'
+  proyecciones: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  ventas: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>'
 }
+// Cada item puede traer `rol` (lista de roles que lo ven); sin `rol` = visible para todos
+// los que entran al shell (hoy Admin y Vendedor).
 const grupos = [
   { titulo: 'Inicio', items: [
-    { path: '/panel/resumen', label: 'Resumen', icon: ICN.resumen, match: ['/panel/resumen'] }
+    { path: '/panel/resumen', label: 'Resumen', icon: ICN.resumen, match: ['/panel/resumen'], rol: ['Admin'] }
   ] },
   { titulo: 'Ventas', items: [
-    { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'] },
+    { path: '/panel/ventas', label: 'Ventas', icon: ICN.ventas, match: ['/panel/ventas'] },
+    { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'], rol: ['Admin'] },
     { path: '/panel/clientes', label: 'Clientes', icon: ICN.clientes, match: ['/panel/clientes', '/panel/cliente'] },
     { path: '/panel/creditos', label: 'Créditos', icon: ICN.cred, match: ['/panel/creditos'] }
   ] },
   { titulo: 'Inventario y compras', items: [
-    { path: '/panel/productos', label: 'Inventario', icon: ICN.inv, match: ['/panel/productos'] },
+    { path: '/panel/productos', label: 'Inventario', icon: ICN.inv, match: ['/panel/productos'], rol: ['Admin'] },
     { path: '/panel/compras', label: 'Compras', icon: ICN.compras, match: ['/panel/compras', '/panel/compra'] },
     { path: '/panel/proveedores', label: 'Proveedores', icon: ICN.prov, match: ['/panel/proveedores', '/panel/proveedor'] },
-    { path: '/panel/mermas', label: 'Mermas', icon: ICN.merma, match: ['/panel/mermas'] }
+    { path: '/panel/mermas', label: 'Mermas', icon: ICN.merma, match: ['/panel/mermas'], rol: ['Admin'] }
   ] },
   { titulo: 'Equipo y ruta', items: [
-    { path: '/panel/cargas', label: 'Cargas por autorizar', icon: ICN.cargas, match: ['/panel/cargas'], badge: 'cargasPendientes' },
-    { path: '/panel/repartidores', label: 'Repartidores', icon: ICN.reps, match: ['/panel/repartidores', '/panel/repartidor'] },
-    { path: '/panel/historial', label: 'Recorridos', icon: ICN.mapa, match: ['/panel/historial'] }
+    { path: '/panel/cargas', label: 'Cargas por autorizar', icon: ICN.cargas, match: ['/panel/cargas'], badge: 'cargasPendientes', rol: ['Admin'] },
+    { path: '/panel/repartidores', label: 'Repartidores', icon: ICN.reps, match: ['/panel/repartidores', '/panel/repartidor'], rol: ['Admin'] },
+    { path: '/panel/vendedores', label: 'Vendedores', icon: ICN.reps, match: ['/panel/vendedores', '/panel/vendedor'], rol: ['Admin'] },
+    { path: '/panel/historial', label: 'Recorridos', icon: ICN.mapa, match: ['/panel/historial'], rol: ['Admin'] }
   ] },
   { titulo: 'Finanzas', items: [
-    { path: '/panel/cortes', label: 'Cortes de caja', icon: ICN.cortes, match: ['/panel/cortes'] },
-    { path: '/panel/deudas', label: 'Deudas repartidores', icon: ICN.deudas, match: ['/panel/deudas'] },
-    { path: '/panel/gastos', label: 'Gastos', icon: ICN.gastos, match: ['/panel/gastos', '/panel/gasto'] },
-    { path: '/panel/transferencias', label: 'Transferencias', icon: ICN.transferencias, match: ['/panel/transferencias'] },
-    { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'] }
+    { path: '/panel/cortes', label: 'Cortes de caja', icon: ICN.cortes, match: ['/panel/cortes'], rol: ['Admin'] },
+    { path: '/panel/deudas', label: 'Deudas repartidores', icon: ICN.deudas, match: ['/panel/deudas'], rol: ['Admin'] },
+    { path: '/panel/gastos', label: 'Gastos', icon: ICN.gastos, match: ['/panel/gastos', '/panel/gasto'], rol: ['Admin'] },
+    { path: '/panel/transferencias', label: 'Transferencias', icon: ICN.transferencias, match: ['/panel/transferencias'], rol: ['Admin'] },
+    { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'], rol: ['Admin'] }
   ] }
 ]
-const itemsPlanos = grupos.flatMap((g) => g.items)
-const navMovil = computed(() =>
-  ['/panel/resumen', '/panel/pedidos', '/panel/productos', '/panel/creditos']
-    .map((p) => itemsPlanos.find((i) => i.path === p))
-    .filter(Boolean)
+const gruposVisibles = computed(() =>
+  grupos
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.rol || i.rol.includes(auth.rol)) }))
+    .filter((g) => g.items.length > 0)
 )
+const itemsPlanos = grupos.flatMap((g) => g.items)
+const navMovil = computed(() => {
+  const base = auth.esVendedor
+    ? ['/panel/ventas', '/panel/compras', '/panel/proveedores', '/panel/clientes']
+    : ['/panel/resumen', '/panel/pedidos', '/panel/productos', '/panel/creditos']
+  return base.map((p) => itemsPlanos.find((i) => i.path === p)).filter(Boolean)
+})
 
 const ctx = reactive({ titulo: 'Resumen', sub: '', back: null, acciones: null })
 function setCtx(c) { ctx.titulo = c.titulo ?? ''; ctx.sub = c.sub ?? ''; ctx.back = c.back ?? null; ctx.acciones = c.acciones ?? null }
