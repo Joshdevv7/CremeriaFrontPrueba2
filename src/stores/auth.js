@@ -4,7 +4,13 @@ import http from '@/api/http'
 function parseJwt(token) {
   try {
     const base = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    return JSON.parse(decodeURIComponent(escape(atob(base))))
+    const jsonPayload = decodeURIComponent(
+      atob(base)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(jsonPayload)
   } catch { return {} }
 }
 function idDesdeToken(token) {

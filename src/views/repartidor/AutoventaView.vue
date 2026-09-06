@@ -64,9 +64,9 @@
                 </div>
               </div>
               <div class="stepper">
-                <button @click="set(l, (cant[l.productoId]||0) - 1)" :disabled="(cant[l.productoId]||0)<=0">−</button>
-                <span class="q">{{ cant[l.productoId] || 0 }}</span>
-                <button @click="set(l, (cant[l.productoId]||0) + 1)" :disabled="(cant[l.productoId]||0) >= maxUnidad(l)">+</button>
+                <button @click="dec(l)" :disabled="(cant[l.productoId]||0)<=0">−</button>
+                <input class="q-input" type="number" step="any" min="0" :max="maxUnidad(l)" v-model.number="cant[l.productoId]" @blur="set(l, cant[l.productoId])" />
+                <button @click="inc(l)" :disabled="(cant[l.productoId]||0) >= maxUnidad(l)">+</button>
               </div>
             </div>
             <div v-if="info(l.productoId).vendePorCaja" class="uni">
@@ -215,8 +215,23 @@ function factorL(l) { const f = info(l.productoId).piezasPorCaja; return f && f 
 function precioL(l) { return esCaja(l) ? (info(l.productoId).precioCaja || 0) : l.precioVenta }
 function maxUnidad(l) { return esCaja(l) ? Math.floor(l.restante / factorL(l)) : l.restante }
 function setUnidad(l, u) { unidad[l.productoId] = u; cant[l.productoId] = 0 }
-function set(l, val) { cant[l.productoId] = Math.max(0, Math.min(val, maxUnidad(l))) }
 function setRef(id, el) { if (el) refs[id] = el }
+function set(l, val) {
+  const max = maxUnidad(l)
+  const num = Number(val)
+  if (isNaN(num) || num < 0) cant[l.productoId] = 0
+  else cant[l.productoId] = Math.min(Math.round(num * 1000) / 1000, max)
+}
+function inc(l) {
+  const cur = Number(cant[l.productoId] || 0)
+  const stepVal = (cur % 1 !== 0) ? Math.ceil(cur) - cur : 1
+  set(l, cur + (stepVal > 0 ? stepVal : 1))
+}
+function dec(l) {
+  const cur = Number(cant[l.productoId] || 0)
+  const stepVal = (cur % 1 !== 0) ? cur - Math.floor(cur) : 1
+  set(l, cur - (stepVal > 0 ? stepVal : 1))
+}
 
 // Normaliza un código: deja solo dígitos y quita ceros a la izquierda (EAN-13 vs UPC-A)
 function normCod(x) { const d = String(x || '').replace(/\D/g, ''); return d.replace(/^0+/, '') || d }
@@ -399,6 +414,8 @@ onMounted(async () => {
 .stepper button { width: 38px; height: 40px; border: none; background: transparent; font-size: 20px; color: var(--pine); cursor: pointer; }
 .stepper button:disabled { color: #C7CFC9; }
 .stepper .q { min-width: 30px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; }
+.stepper .q-input { width: 52px; border: none; background: transparent; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--ink); padding: 0 2px; outline: none; -moz-appearance: textfield; }
+.stepper .q-input::-webkit-outer-spin-button, .stepper .q-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pagos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .pagos button { display: flex; flex-direction: column; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 12px 4px; font-family: "Hanken Grotesk"; font-weight: 700; font-size: 12px; cursor: pointer; }
 .pagos button ion-icon { font-size: 20px; }

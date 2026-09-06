@@ -37,7 +37,7 @@
                   </div>
                   <div class="stepper">
                     <button @click="dec(i)" :disabled="l.entregado<=0">−</button>
-                    <span class="q">{{ fmtQty(l.entregado) }}</span>
+                    <input class="q-input" type="number" step="any" min="0" :max="maxEnt(l)" v-model.number="l.entregado" @blur="validarCantidad(l)" />
                     <button @click="inc(i)" :disabled="l.entregado>=maxEnt(l)">+</button>
                   </div>
                 </div>
@@ -274,8 +274,23 @@ const botonTexto = computed(() => {
 })
 
 function maxEnt(l) { return l.conCarga ? Math.min(l.cantidadPedida, l.disponible) : l.cantidadPedida }
-function inc(i) { if (lineas[i].entregado < maxEnt(lineas[i])) lineas[i].entregado++ }
-function dec(i) { if (lineas[i].entregado > 0) lineas[i].entregado-- }
+function validarCantidad(l) {
+  if (isNaN(l.entregado) || l.entregado < 0) l.entregado = 0
+  const max = maxEnt(l)
+  if (l.entregado > max) l.entregado = max
+  l.entregado = Math.round(l.entregado * 1000) / 1000
+}
+function inc(i) {
+  const l = lineas[i]
+  const max = maxEnt(l)
+  const stepVal = (l.entregado % 1 !== 0) ? Math.ceil(l.entregado) - l.entregado : 1
+  l.entregado = Math.min(max, Math.round((l.entregado + (stepVal > 0 ? stepVal : 1)) * 1000) / 1000)
+}
+function dec(i) {
+  const l = lineas[i]
+  const stepVal = (l.entregado % 1 !== 0) ? l.entregado - Math.floor(l.entregado) : 1
+  l.entregado = Math.max(0, Math.round((l.entregado - (stepVal > 0 ? stepVal : 1)) * 1000) / 1000)
+}
 function selPay(p) { pay.value = p; if (p === 'credito') pagoPendiente.value = false }
 
 function back() { if (step.value > 1) step.value-- ; else salir() }
@@ -592,6 +607,8 @@ onMounted(async () => {
 .stepper button:active { background: var(--pine-tint); }
 .stepper button:disabled { color: #C7CFC9; cursor: not-allowed; }
 .stepper .q { min-width: 34px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.stepper .q-input { width: 56px; border: none; background: transparent; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--ink); padding: 0 4px; outline: none; -moz-appearance: textfield; }
+.stepper .q-input::-webkit-outer-spin-button, .stepper .q-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .diff { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .diff .txt { font-size: 12.5px; font-weight: 600; color: var(--clay); }
 .diff .txt b { font-variant-numeric: tabular-nums; }
