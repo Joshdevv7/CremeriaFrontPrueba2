@@ -376,28 +376,28 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .cta { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 16px; padding: 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(21,42,36,.7); }
 .cta:disabled { opacity: .5; }
 .cta svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.done { position: fixed; inset: 0; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); display: none; flex-direction: column; align-items: center; padding: 54px 26px 26px; z-index: 50; overflow: auto; }
+.done { position: fixed; inset: 0; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); display: none; flex-direction: column; align-items: center; padding: 48px 24px 36px; z-index: 50; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .done.show { display: flex; animation: fade .4s ease; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.check { width: 74px; height: 74px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 16px; position: relative; }
+.check { width: 74px; height: 74px; flex: 0 0 74px; min-width: 74px; min-height: 74px; aspect-ratio: 1 / 1; flex-shrink: 0; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 16px; position: relative; }
 .check::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); animation: ring 1.6s ease-out infinite; }
 @keyframes ring { 0% { transform: scale(.85); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } }
-.check svg { width: 38px; height: 38px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .5s ease .2s forwards; }
+.check svg { width: 38px; height: 38px; flex-shrink: 0; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .5s ease .2s forwards; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-.done h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 23px; }
-.done p { color: #A9D2C6; font-size: 13.5px; font-weight: 500; margin-top: 5px; text-align: center; }
-.slip { background: #fff; width: 250px; border-radius: 5px; margin-top: 22px; padding: 18px 18px 10px; color: #1c1c1c; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); }
+.done h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 23px; flex-shrink: 0; }
+.done p { color: #A9D2C6; font-size: 13.5px; font-weight: 500; margin-top: 5px; text-align: center; flex-shrink: 0; }
+.slip { background: #fff; width: 250px; border-radius: 5px; margin-top: 22px; padding: 18px 18px 10px; color: #1c1c1c; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); flex-shrink: 0; }
 .slip .h { text-align: center; border-bottom: 1.5px dashed #c9c9c9; padding-bottom: 10px; }
 .slip .h .b { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 15px; letter-spacing: .03em; }
 .slip .h small { font-size: 10.5px; color: #777; display: block; margin-top: 2px; }
 .slip .r { display: flex; justify-content: space-between; font-size: 11.5px; margin: 7px 0; font-variant-numeric: tabular-nums; }
 .slip .r.b { font-family: "Bricolage Grotesque"; font-weight: 800; border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; font-size: 13px; }
 .slip .ok { color: #0E5C4A; font-weight: 700; }
-.acts { display: flex; gap: 10px; margin-top: 24px; width: 100%; }
+.acts { display: flex; gap: 10px; margin-top: 24px; width: 100%; flex-shrink: 0; }
 .da { flex: 1; border: none; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .da.ghost { background: rgba(255,255,255,.12); color: #fff; } .da.solid { background: var(--amber); color: #3a2607; }
 .da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
+.print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; flex-shrink: 0; }
 .slip .r.sec { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 10px; letter-spacing: .04em; color: #555; border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; }
 .slip .r.dev { color: #444; }
 </style>

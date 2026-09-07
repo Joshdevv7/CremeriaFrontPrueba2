@@ -443,14 +443,14 @@ onMounted(async () => {
 .done-view { position: fixed; inset: 0; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding: 60px 26px 26px; z-index: 50; overflow: auto; }
 .done-view.show { display: flex; animation: fadev .4s ease; }
 @keyframes fadev { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.done-view .check { width: 78px; height: 78px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 18px; position: relative; }
+.done-view .check { width: 78px; height: 78px; flex: 0 0 78px; min-width: 78px; min-height: 78px; aspect-ratio: 1 / 1; flex-shrink: 0; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 18px; position: relative; }
 .done-view .check::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); animation: ring 1.6s ease-out infinite; }
 @keyframes ring { 0% { transform: scale(.85); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } }
-.done-view .check svg { width: 40px; height: 40px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .5s ease .2s forwards; }
+.done-view .check svg { width: 40px; height: 40px; flex-shrink: 0; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .5s ease .2s forwards; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-.done-view h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; letter-spacing: -.01em; }
-.done-view p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; text-align: center; }
-.ticket { background: #fff; width: 240px; border-radius: 4px; margin-top: 24px; padding: 18px 18px 8px; font-family: "Hanken Grotesk"; color: #1c1c1c; position: relative; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); }
+.done-view h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; letter-spacing: -.01em; flex-shrink: 0; }
+.done-view p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; text-align: center; flex-shrink: 0; }
+.ticket { background: #fff; width: 240px; border-radius: 4px; margin-top: 24px; padding: 18px 18px 8px; font-family: "Hanken Grotesk"; color: #1c1c1c; position: relative; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); flex-shrink: 0; }
 .ticket .th { text-align: center; border-bottom: 1.5px dashed #c9c9c9; padding-bottom: 11px; }
 .ticket .th .b { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 17px; letter-spacing: .02em; }
 .ticket .th small { font-size: 10.5px; color: #777; display: block; margin-top: 2px; }
