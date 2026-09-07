@@ -9,8 +9,16 @@
         <div class="iconbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
       </div>
 
+      <!-- Carga abierta pendiente de cerrar -->
+      <div v-if="!cargando && resumen && !resumen.hayCargaPorCortar && resumen.tieneCargaAbierta" class="vacio">
+        <div class="v-ic warning"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+        <div class="v-t">Tienes la Carga #{{ resumen.cargaAbiertaId }} abierta</div>
+        <div class="v-s">Para realizar tu corte de caja, primero debes cerrar tu carga en <b>Inventario</b> para devolver la mercancía sobrante al almacén.</div>
+        <button class="v-btn" @click="irAInventario()">Ir a cerrar carga</button>
+      </div>
+
       <!-- No hay carga cerrada esperando corte -->
-      <div v-if="!cargando && resumen && !resumen.hayCargaPorCortar" class="vacio">
+      <div v-else-if="!cargando && resumen && !resumen.hayCargaPorCortar" class="vacio">
         <div class="v-ic"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
         <div class="v-t">No hay corte pendiente</div>
         <div class="v-s">Cuando cierres tu carga, aquí harás el corte de caja de esa carga.</div>
@@ -50,12 +58,23 @@
         <div class="cred-note"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> El crédito no se cobra hoy · pasa a cuentas por cobrar</div>
         <div class="eyebrow">Cuadre de efectivo</div>
         <div class="recon">
-          <div class="rrow"><span class="l">Efectivo esperado</span><span class="v">{{ money(resumen.efectivoEsperado) }}</span></div>
+          <div class="rrow" v-if="resumen.efectivoPendiente > 0">
+            <span class="l">Efectivo cobrado</span>
+            <span class="v">{{ money(resumen.totalEfectivo) }}</span>
+          </div>
+          <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
+            <span class="l">Efectivo pendiente de cobro</span>
+            <span class="v">−{{ money(resumen.efectivoPendiente) }}</span>
+          </div>
+          <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
+            <span class="l">Efectivo esperado</span>
+            <span class="v">{{ money(resumen.efectivoEsperado) }}</span>
+          </div>
           <div class="declare">
             <div class="fl">Efectivo que entrego</div>
             <div class="inwrap">
               <span class="pfx">$</span>
-              <input v-model="cashStr" type="text" inputmode="numeric" @input="onCash" :disabled="resumen.yaTieneCorte">
+              <input v-model="cashStr" type="text" inputmode="decimal" @input="onCash" :disabled="resumen.yaTieneCorte">
               <span class="sfx">MXN</span>
             </div>
           </div>
@@ -64,7 +83,7 @@
             <div class="dt"><div class="a">{{ tituloDiff }}</div><div class="b">{{ subDiff }}</div></div>
             <div class="dv">{{ valorDiff }}</div>
           </div>
-          <div class="note-field" v-show="diff !== 0">
+          <div class="note-field" v-show="!esCero">
             <div class="fl">Observación de la diferencia</div>
             <input v-model="observacion" placeholder="Explica el faltante o sobrante…">
           </div>
@@ -103,8 +122,9 @@
           <div class="r"><span>Tarjeta</span><span>{{ money2(corte.totalTarjeta) }}</span></div>
           <div class="r"><span>Crédito (x cobrar)</span><span>{{ money2(corte.totalCredito) }}</span></div>
           <div class="r b"><span>VENTAS</span><span>{{ money2(corte.totalVentas) }}</span></div>
-          <div class="r" style="margin-top:9px"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
-          <div class="r"><span>Diferencia</span><span :class="{ ok: corte.diferencia===0 }">{{ signo(corte.diferencia) }}{{ money2(Math.abs(corte.diferencia)) }}</span></div>
+          <div class="r" style="margin-top:9px"><span>Efectivo esperado</span><span>{{ money2(corte.efectivoEsperado) }}</span></div>
+          <div class="r"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
+          <div class="r"><span>Diferencia</span><span :class="{ ok: Math.abs(corte.diferencia) < 0.005 }">{{ signo(corte.diferencia) }}{{ money2(Math.abs(corte.diferencia)) }}</span></div>
           <template v-if="devueltosCorte.length">
             <div class="r sec"><span>DEVUELTO AL ALMACÉN</span><span></span></div>
             <div class="r dev" v-for="d in devueltosCorte" :key="d.productoNombre"><span>{{ d.productoNombre }}</span><span>{{ fmtCant(d.cantidad) }}</span></div>
@@ -169,15 +189,16 @@ const given = computed(() => {
   const n = parseFloat((cashStr.value || '').replace(/,/g, ''))
   return isNaN(n) ? 0 : n
 })
-const diff = computed(() => given.value - (resumen.value?.efectivoEsperado || 0))
-const estadoDiff = computed(() => diff.value === 0 ? 'ok' : diff.value < 0 ? 'short' : 'over')
+const diff = computed(() => Math.round((given.value - (resumen.value?.efectivoEsperado || 0)) * 100) / 100)
+const esCero = computed(() => Math.abs(diff.value) < 0.005)
+const estadoDiff = computed(() => esCero.value ? 'ok' : diff.value < 0 ? 'short' : 'over')
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>'
 const DOWN = '<svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>'
 const UP = '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
-const iconoDiff = computed(() => diff.value === 0 ? CHECK : diff.value < 0 ? DOWN : UP)
-const tituloDiff = computed(() => diff.value === 0 ? 'Cuadra perfecto' : diff.value < 0 ? 'Faltante' : 'Sobrante')
-const subDiff = computed(() => diff.value === 0 ? 'El efectivo coincide con lo esperado' : diff.value < 0 ? 'Entregas menos de lo esperado' : 'Entregas más de lo esperado')
-const valorDiff = computed(() => (diff.value === 0 ? '$0' : (diff.value < 0 ? '−' : '+') + money(diff.value)))
+const iconoDiff = computed(() => esCero.value ? CHECK : diff.value < 0 ? DOWN : UP)
+const tituloDiff = computed(() => esCero.value ? 'Cuadra perfecto' : diff.value < 0 ? 'Faltante' : 'Sobrante')
+const subDiff = computed(() => esCero.value ? 'El efectivo coincide con lo esperado' : diff.value < 0 ? 'Entregas menos de lo esperado' : 'Entregas más de lo esperado')
+const valorDiff = computed(() => (esCero.value ? '$0' : (diff.value < 0 ? '−' : '+') + money(diff.value)))
 function onCash() {
   let v = (cashStr.value || '').replace(/[^\d.]/g, '')
   const parts = v.split('.')
@@ -188,6 +209,7 @@ function onCash() {
   cashStr.value = dec !== undefined ? entFmt + '.' + dec : entFmt
 }
 function salir() { router.replace('/app/entregas') }
+function irAInventario() { router.replace('/app/inventario') }
 async function cargar() {
   cargando.value = true; error.value = ''
   try {
@@ -274,6 +296,8 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .cerrado { color: var(--pine); font-size: 13.5px; font-weight: 700; text-align: center; margin: 16px 4px; }
 .vacio { text-align: center; padding: 70px 26px; }
 .v-ic { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--pine-tint); }
+.v-ic.warning { background: var(--amber-soft); }
+.v-ic.warning svg { stroke: #B9781F; }
 .v-ic svg { width: 30px; height: 30px; stroke: var(--pine); fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .v-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; }
 .v-s { color: var(--muted); font-size: 13.5px; margin: 8px 0 22px; line-height: 1.5; }
@@ -312,6 +336,12 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .cred-note svg { width: 13px; height: 13px; stroke: var(--clay); fill: none; stroke-width: 2.2; }
 .recon { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px 16px; box-shadow: var(--shadow); }
 .rrow { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.rrow.pend { border-bottom: 1px dashed var(--line); }
+.rrow.pend .l { font-size: 13px; color: var(--clay); font-weight: 600; }
+.rrow.pend .v { color: var(--clay); font-size: 15px; }
+.rrow.total { border-bottom: none; padding-top: 10px; }
+.rrow.total .l { font-weight: 700; color: var(--ink); }
+.rrow.total .v { font-size: 19px; color: var(--pine); }
 .rrow .l { font-size: 14px; font-weight: 600; color: var(--ink-soft); }
 .rrow .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
 .declare { padding: 15px 0 6px; }

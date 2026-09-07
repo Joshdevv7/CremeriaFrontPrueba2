@@ -113,8 +113,8 @@ const grupos = [
   ] },
   { titulo: 'Ventas', items: [
     { path: '/panel/ventas', label: 'Ventas', icon: ICN.ventas, match: ['/panel/ventas'] },
-    { path: '/panel/mis-ventas', label: 'Mis ventas', icon: ICN.misVentas, match: ['/panel/mis-ventas'], rol: ['Vendedor'] },
-    { path: '/panel/mi-corte', label: 'Mi corte', icon: ICN.miCorte, match: ['/panel/mi-corte'], rol: ['Vendedor'] },
+    { path: '/panel/mis-ventas', label: 'Mis ventas', icon: ICN.misVentas, match: ['/panel/mis-ventas'], rol: ['Vendedor', 'Admin'] },
+    { path: '/panel/mi-corte', label: 'Mi corte', icon: ICN.miCorte, match: ['/panel/mi-corte'], rol: ['Vendedor', 'Admin'] },
     { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'], rol: ['Admin'] },
     { path: '/panel/clientes', label: 'Clientes', icon: ICN.clientes, match: ['/panel/clientes', '/panel/cliente'] },
     { path: '/panel/creditos', label: 'Créditos', icon: ICN.cred, match: ['/panel/creditos'] },

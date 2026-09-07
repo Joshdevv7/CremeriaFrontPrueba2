@@ -43,12 +43,23 @@
         <div class="col">
           <div class="eyebrow">Cuadre de efectivo</div>
           <div class="recon">
-            <div class="rrow"><span class="l">Efectivo esperado</span><span class="v">{{ money(resumen.efectivoEsperado) }}</span></div>
+            <div class="rrow" v-if="resumen.efectivoPendiente > 0">
+              <span class="l">Efectivo cobrado</span>
+              <span class="v">{{ money(resumen.totalEfectivo) }}</span>
+            </div>
+            <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
+              <span class="l">Efectivo pendiente de cobro</span>
+              <span class="v">−{{ money(resumen.efectivoPendiente) }}</span>
+            </div>
+            <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
+              <span class="l">Efectivo esperado</span>
+              <span class="v">{{ money(resumen.efectivoEsperado) }}</span>
+            </div>
             <div class="declare">
               <div class="fl">Efectivo que entregas</div>
               <div class="inwrap">
                 <span class="pfx">$</span>
-                <input v-model="cashStr" type="text" inputmode="numeric" @input="onCash">
+                <input v-model="cashStr" type="text" inputmode="decimal" @input="onCash">
                 <span class="sfx">MXN</span>
               </div>
             </div>
@@ -56,7 +67,7 @@
               <div class="dt"><div class="a">{{ tituloDiff }}</div><div class="b">{{ subDiff }}</div></div>
               <div class="dv">{{ valorDiff }}</div>
             </div>
-            <div class="note-field" v-show="diff !== 0">
+            <div class="note-field" v-show="!esCero">
               <div class="fl">Observación de la diferencia</div>
               <input v-model="observacion" placeholder="Explica el faltante o sobrante…">
             </div>
@@ -78,10 +89,17 @@
         <div class="r"><span>Tarjeta</span><span>{{ money2(corte.totalTarjeta) }}</span></div>
         <div class="r"><span>Crédito (x cobrar)</span><span>{{ money2(corte.totalCredito) }}</span></div>
         <div class="r b"><span>VENTAS</span><span>{{ money2(corte.totalVentas) }}</span></div>
-        <div class="r" style="margin-top:9px"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
-        <div class="r"><span>Diferencia</span><span :class="{ ok: corte.diferencia === 0 }">{{ signo(corte.diferencia) }}{{ money2(Math.abs(corte.diferencia)) }}</span></div>
+        <div class="r" style="margin-top:9px"><span>Efectivo esperado</span><span>{{ money2(corte.efectivoEsperado) }}</span></div>
+        <div class="r"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
+        <div class="r"><span>Diferencia</span><span :class="{ ok: Math.abs(corte.diferencia) < 0.005 }">{{ signo(corte.diferencia) }}{{ money2(Math.abs(corte.diferencia)) }}</span></div>
       </div>
-      <button class="cta2" @click="nuevoCorte()">Listo</button>
+      <div class="acts">
+        <button class="cta-print" :disabled="imprimiendo" @click="imprimirTicket()">
+          <ion-icon :icon="printOutline" /> {{ imprimiendo ? 'Imprimiendo…' : 'Imprimir ticket' }}
+        </button>
+        <button class="cta2" @click="nuevoCorte()">Listo</button>
+      </div>
+      <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
     </div>
   </div>
 </template>
@@ -89,9 +107,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
-import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, checkmarkDoneOutline } from 'ionicons/icons'
+import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, checkmarkDoneOutline, printOutline } from 'ionicons/icons'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import { imprimirCorte } from '@/services/printer'
 
 const emit = defineEmits(['ctx'])
 const auth = useAuthStore()
@@ -103,6 +122,8 @@ const observacion = ref('')
 const enviando = ref(false)
 const cerrado = ref(false)
 const corte = ref(null)
+const imprimiendo = ref(false)
+const printMsg = ref('')
 
 const money = (n) => '$' + Math.abs(Number(n || 0)).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const money2 = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -119,11 +140,12 @@ const given = computed(() => {
   const n = parseFloat((cashStr.value || '').replace(/,/g, ''))
   return isNaN(n) ? 0 : n
 })
-const diff = computed(() => given.value - (resumen.value?.efectivoEsperado || 0))
-const estadoDiff = computed(() => diff.value === 0 ? 'ok' : diff.value < 0 ? 'short' : 'over')
-const tituloDiff = computed(() => diff.value === 0 ? 'Cuadra perfecto' : diff.value < 0 ? 'Faltante' : 'Sobrante')
-const subDiff = computed(() => diff.value === 0 ? 'El efectivo coincide con lo esperado' : diff.value < 0 ? 'Entregas menos de lo esperado' : 'Entregas más de lo esperado')
-const valorDiff = computed(() => (diff.value === 0 ? '$0' : (diff.value < 0 ? '−' : '+') + money(diff.value)))
+const diff = computed(() => Math.round((given.value - (resumen.value?.efectivoEsperado || 0)) * 100) / 100)
+const esCero = computed(() => Math.abs(diff.value) < 0.005)
+const estadoDiff = computed(() => esCero.value ? 'ok' : diff.value < 0 ? 'short' : 'over')
+const tituloDiff = computed(() => esCero.value ? 'Cuadra perfecto' : diff.value < 0 ? 'Faltante' : 'Sobrante')
+const subDiff = computed(() => esCero.value ? 'El efectivo coincide con lo esperado' : diff.value < 0 ? 'Entregas menos de lo esperado' : 'Entregas más de lo esperado')
+const valorDiff = computed(() => (esCero.value ? '$0' : (diff.value < 0 ? '−' : '+') + money(diff.value)))
 
 function onCash() {
   let v = (cashStr.value || '').replace(/[^\d.]/g, '')
@@ -158,14 +180,66 @@ async function cerrar() {
     })
     corte.value = data
     cerrado.value = true
+    imprimirAuto()
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo cerrar el corte.'
   } finally { enviando.value = false }
 }
 
+async function imprimirTicket() {
+  imprimiendo.value = true; printMsg.value = ''
+  try {
+    const c = corte.value || {}
+    await imprimirCorte({
+      repartidor: c.repartidorNombre || auth.usuario?.nombre,
+      cargaId: null,
+      fecha: c.fecha || Date.now(),
+      totalEfectivo: c.totalEfectivo,
+      totalTransferencia: c.totalTransferencia,
+      totalTarjeta: c.totalTarjeta,
+      totalCredito: c.totalCredito,
+      totalVentas: c.totalVentas,
+      efectivoEsperado: c.efectivoEsperado,
+      efectivoEntregado: c.efectivoEntregado,
+      diferencia: c.diferencia,
+      valorDevuelto: 0,
+      valorMerma: 0,
+      devueltos: []
+    })
+    printMsg.value = 'Corte impreso.'
+  } catch (e) {
+    printMsg.value = e?.message || 'No se pudo imprimir.'
+  } finally { imprimiendo.value = false }
+}
+
+async function imprimirAuto() {
+  try {
+    const c = corte.value || {}
+    await imprimirCorte({
+      repartidor: c.repartidorNombre || auth.usuario?.nombre,
+      cargaId: null,
+      fecha: c.fecha || Date.now(),
+      totalEfectivo: c.totalEfectivo,
+      totalTransferencia: c.totalTransferencia,
+      totalTarjeta: c.totalTarjeta,
+      totalCredito: c.totalCredito,
+      totalVentas: c.totalVentas,
+      efectivoEsperado: c.efectivoEsperado,
+      efectivoEntregado: c.efectivoEntregado,
+      diferencia: c.diferencia,
+      valorDevuelto: 0,
+      valorMerma: 0,
+      devueltos: []
+    })
+    printMsg.value = 'Corte impreso.'
+  } catch {
+    printMsg.value = 'El corte se guardó. Usa "Imprimir ticket" si requieres comprobante impreso.'
+  }
+}
+
 function nuevoCorte() {
   cerrado.value = false; corte.value = null
-  observacion.value = ''; cashStr.value = ''
+  observacion.value = ''; cashStr.value = ''; printMsg.value = ''
   cargar()
 }
 
@@ -203,6 +277,12 @@ onMounted(() => { emit('ctx', { titulo: 'Mi corte', sub: 'Corte de caja de tus v
 .cred-note { font-size: 11.5px; color: var(--clay); font-weight: 600; margin: 2px 4px 0; }
 .recon { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px 16px; box-shadow: var(--shadow); }
 .rrow { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.rrow.pend { border-bottom: 1px dashed var(--line); }
+.rrow.pend .l { font-size: 13px; color: var(--clay); font-weight: 600; }
+.rrow.pend .v { color: var(--clay); font-size: 15px; }
+.rrow.total { border-bottom: none; padding-top: 10px; }
+.rrow.total .l { font-weight: 700; color: var(--ink); }
+.rrow.total .v { font-size: 19px; color: var(--pine); }
 .rrow .l { font-size: 14px; font-weight: 600; color: var(--ink-soft); }
 .rrow .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
 .declare { padding: 15px 0 6px; }
@@ -238,6 +318,11 @@ onMounted(() => { emit('ctx', { titulo: 'Mi corte', sub: 'Corte de caja de tus v
 .slip .r { display: flex; justify-content: space-between; font-size: 11.5px; margin: 7px 0; font-variant-numeric: tabular-nums; }
 .slip .r.b { font-family: "Bricolage Grotesque"; font-weight: 800; border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; font-size: 13px; }
 .slip .ok { color: #0E5C4A; font-weight: 700; }
-.cta2 { margin-top: 20px; background: var(--pine); color: #fff; border: none; border-radius: 14px; padding: 13px 26px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
+.acts { display: flex; gap: 10px; justify-content: center; margin-top: 22px; }
+.cta-print { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 13px 20px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 7px; box-shadow: var(--shadow); }
+.cta-print:disabled { opacity: .5; }
+.cta-print ion-icon { font-size: 18px; color: var(--pine); }
+.print-msg { font-size: 12.5px; color: var(--muted); margin-top: 12px; font-weight: 500; text-align: center; }
+.cta2 { background: var(--pine); color: #fff; border: none; border-radius: 14px; padding: 13px 26px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
