@@ -1,5 +1,37 @@
 <template>
   <div>
+    <!-- KPIs de Pedidos -->
+    <div class="kpis" v-if="!cargando && items.length">
+      <div class="kpi-card">
+        <div class="kpi-icon sky"><ion-icon :icon="bagHandleOutline" /></div>
+        <div class="kpi-info">
+          <div class="kpi-l">Total pedidos</div>
+          <div class="kpi-v">{{ total }} pedido(s)</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon pine"><ion-icon :icon="cashOutline" /></div>
+        <div class="kpi-info">
+          <div class="kpi-l">Monto en pedidos</div>
+          <div class="kpi-v">{{ money(kpiMontoTotal) }}</div>
+        </div>
+      </div>
+      <div class="kpi-card" v-if="kpiPendientesCount > 0">
+        <div class="kpi-icon amber"><ion-icon :icon="timeOutline" /></div>
+        <div class="kpi-info">
+          <div class="kpi-l">Pagos pendientes</div>
+          <div class="kpi-v">{{ kpiPendientesCount }} ({{ money(kpiPendientesMonto) }})</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon pine"><ion-icon :icon="checkmarkCircleOutline" /></div>
+        <div class="kpi-info">
+          <div class="kpi-l">Completados</div>
+          <div class="kpi-v">{{ kpiCompletosCount }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Barra de filtros -->
     <div class="filtros">
       <div class="chips">
@@ -7,18 +39,24 @@
         <button class="chip vr" :class="{ on: soloVentaRuta }" @click="toggleVentaRuta()">Ventas en ruta</button>
         <button class="chip pend" :class="{ on: soloPendiente }" @click="togglePendiente()">Pago pendiente</button>
       </div>
+
       <div class="selects">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input v-model="buscarTexto" placeholder="Filtrar por cliente o # folio…">
+        </div>
         <BuscadorSelect v-model="clienteId" :opciones="clientes" nombre="cliente" placeholder="Cliente" />
         <BuscadorSelect v-model="repartidorId" :opciones="repartidores" nombre="repartidor" placeholder="Repartidor" />
       </div>
     </div>
 
-    <p v-if="cargando" class="muted">Cargando…</p>
+    <p v-if="cargando" class="muted">Cargando pedidos…</p>
     <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!items.length" class="muted">No hay pedidos con estos filtros.</p>
+    <p v-else-if="!itemsFiltrados.length" class="muted">No hay pedidos con los filtros seleccionados.</p>
 
-    <div class="grid" v-if="!cargando && items.length">
-      <div v-for="p in items" :key="p.id" class="card">
+    <!-- Grilla de pedidos -->
+    <div class="grid" v-if="!cargando && itemsFiltrados.length">
+      <div v-for="p in itemsFiltrados" :key="p.id" class="card">
         <div class="info" :class="{ click: p.estado === 'Abierto' }" @click="p.estado === 'Abierto' && editar(p.id)">
           <div class="top">
             <span class="cli">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
@@ -26,14 +64,14 @@
             <span v-if="p.estadoPago === 'Pendiente'" class="badge pend">Pago pendiente</span>
             <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
           </div>
-          <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor' }} · {{ fecha(p.fecha) }}</div>
+          <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor asignado' }} · {{ fecha(p.fecha) }}</div>
         </div>
         <div class="right">
           <div class="total">{{ money(p.total) }}</div>
-          <button v-if="p.estadoPago === 'Pendiente'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago">
+          <button v-if="p.estadoPago === 'Pendiente'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago recibido">
             <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </button>
-          <button v-if="p.estado === 'Abierto'" class="del" @click.stop="eliminar(p)" title="Eliminar"><ion-icon :icon="trashOutline" /></button>
+          <button v-if="p.estado === 'Abierto'" class="del" @click.stop="eliminar(p)" title="Eliminar pedido"><ion-icon :icon="trashOutline" /></button>
         </div>
       </div>
     </div>
@@ -55,20 +93,20 @@
       <div class="modal">
         <div class="m-head">
           <div>
-            <div class="m-title">Registrar pago</div>
-            <div class="m-sub">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }}</div>
+            <div class="m-title">Registrar pago de pedido</div>
+            <div class="m-sub">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · Total: {{ money(pagoModal.total) }}</div>
           </div>
           <button class="m-x" @click="cerrarPago()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
         <div class="m-body">
           <div class="m-field">
-            <div class="m-fl">Método de pago</div>
+            <div class="m-fl">Método de pago recibido</div>
             <div class="m-metodos">
               <button v-for="mp in metodosPago" :key="mp.v" class="m-metodo" :class="{ on: pagoMetodo === mp.v }" @click="pagoMetodo = mp.v">{{ mp.t }}</button>
             </div>
           </div>
           <div class="m-field">
-            <div class="m-fl">Folio / referencia de la transferencia</div>
+            <div class="m-fl">Folio / Referencia (opcional)</div>
             <input class="m-inp" v-model="pagoFolio" placeholder="Ej. 004821 · folio del comprobante" maxlength="60">
           </div>
           <p v-if="pagoError" class="m-err">{{ pagoError }}</p>
@@ -79,6 +117,36 @@
         </div>
       </div>
     </div>
+
+    <!-- Guía interactiva -->
+    <div class="guia-card">
+      <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
+        <div class="guia-icon">💡</div>
+        <div class="guia-tit">¿Cómo funciona el ciclo y control de Pedidos?</div>
+        <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
+      </div>
+      <div v-if="mostrarGuia" class="guia-content">
+        <div class="guia-item">
+          <div class="gi-num">1</div>
+          <div class="gi-text">
+            <b>Estados del pedido:</b>
+            <code>Abierto</code> (recién capturado, haz clic en la tarjeta para editarlo o eliminarlo), <code>En ruta</code> (asignado al repartidor para entrega), <code>Completa</code> (entregado al 100%), <code>Parcial</code> (se devolvieron piezas) o <code>No entregado</code>.
+          </div>
+        </div>
+        <div class="guia-item">
+          <div class="gi-num">2</div>
+          <div class="gi-text">
+            <b>Venta en ruta vs Preventa:</b>
+            Las ventas en ruta son ventas libres capturadas directamente por el repartidor en el camino o mostrador. Los pedidos convencionales se generan antes de la salida para programar la carga.
+          </div>
+        </div>
+        <div class="gi-num">3</div>
+        <div class="gi-text">
+          <b>Liquidación de Pago Pendiente:</b>
+          Si un pedido fue entregado con pago pendiente, usa el botón con el icono <b>$</b> para asentar el cobro (efectivo, transferencia o tarjeta) y la referencia bancaria.
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -86,7 +154,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
-import { trashOutline } from 'ionicons/icons'
+import {
+  trashOutline,
+  bagHandleOutline,
+  cashOutline,
+  timeOutline,
+  checkmarkCircleOutline
+} from 'ionicons/icons'
 import http from '@/api/http'
 import { confirmar } from '@/composables/useConfirm'
 import BuscadorSelect from '@/components/BuscadorSelect.vue'
@@ -103,6 +177,9 @@ const clienteId = ref(null)
 const repartidorId = ref(null)
 const soloVentaRuta = ref(false)
 const soloPendiente = ref(false)
+const buscarTexto = ref('')
+const mostrarGuia = ref(false)
+
 // modal de pago
 const pagoModal = ref(null)
 const pagoFolio = ref('')
@@ -143,6 +220,24 @@ const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFract
 const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
 const estadoTxt = (e) => ({ Abierto: 'Abierto', EnRuta: 'En ruta', CerradoCompleto: 'Completa', CerradoParcial: 'Parcial', CerradoNoEntregado: 'No entregado' }[e] || e)
 const badge = (e) => ({ Abierto: 'amber', EnRuta: 'sky', CerradoCompleto: 'pine', CerradoParcial: 'amber', CerradoNoEntregado: 'clay' }[e] || 'muted')
+
+// Filtro rápido de texto en cliente
+const itemsFiltrados = computed(() => {
+  const q = buscarTexto.value.trim().toLowerCase()
+  if (!q) return items.value
+  return items.value.filter(p => {
+    const nom = (p.clienteNombreMostrar || p.clienteNombre || '').toLowerCase()
+    const id = String(p.id)
+    return nom.includes(q) || id.includes(q)
+  })
+})
+
+// KPIs
+const kpiMontoTotal = computed(() => items.value.reduce((s, p) => s + (p.total || 0), 0))
+const kpiPendientes = computed(() => items.value.filter(p => p.estadoPago === 'Pendiente'))
+const kpiPendientesCount = computed(() => kpiPendientes.value.length)
+const kpiPendientesMonto = computed(() => kpiPendientes.value.reduce((s, p) => s + (p.total || 0), 0))
+const kpiCompletosCount = computed(() => items.value.filter(p => p.estado === 'CerradoCompleto').length)
 
 function setEstado(v) { estado.value = v }
 function toggleVentaRuta() { soloVentaRuta.value = !soloVentaRuta.value }
@@ -193,7 +288,7 @@ async function cargar() {
     if (soloVentaRuta.value) params.esVentaLibre = true
     if (soloPendiente.value) params.estadoPago = 'Pendiente' 
     const { data } = await http.get('/pedidos', { params })
-    items.value = data.items
+    items.value = data.items || []
     total.value = data.total ?? data.items.length
   } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudieron cargar los pedidos.' }
   finally { cargando.value = false }
@@ -207,7 +302,7 @@ async function cargarCatalogos() {
     ])
     clientes.value = cl.data.items || cl.data
     repartidores.value = rp.data
-  } catch { /* si falla, los selectores quedan vacíos pero la lista sigue */ }
+  } catch { /* continuar con lista vacía */ }
 }
 
 // Al cambiar cualquier filtro: volver a página 1 y recargar
@@ -215,11 +310,10 @@ watch([estado, clienteId, repartidorId, soloVentaRuta, soloPendiente], () => {
   if (pagina.value !== 1) pagina.value = 1
   else cargar()
 })
-// Al cambiar de página: recargar
 watch(pagina, cargar)
 
 onMounted(() => {
-  emit('ctx', { titulo: 'Pedidos', sub: '', back: null, acciones: { boton: { texto: 'Nuevo pedido', to: '/panel/pedido/nuevo' } } })
+  emit('ctx', { titulo: 'Pedidos', sub: 'Gestión y control de pedidos y preventas', back: null, acciones: { boton: { texto: 'Nuevo pedido', to: '/panel/pedido/nuevo' } } })
   cargarCatalogos()
   cargar()
 })
@@ -229,14 +323,32 @@ onMounted(() => {
 .muted { color: var(--muted); margin-top: 24px; }
 .err { color: var(--clay); font-weight: 600; margin-top: 24px; }
 
-/* filtros */
+/* KPIs */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpi-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
+.kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
+.kpi-icon ion-icon { font-size: 20px; }
+.kpi-icon.pine { background: var(--pine-tint); color: var(--pine); }
+.kpi-icon.sky { background: var(--sky-soft); color: var(--sky); }
+.kpi-icon.amber { background: var(--amber-soft); color: #B9781F; }
+.kpi-info { flex: 1; min-width: 0; }
+.kpi-l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.kpi-v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; color: var(--ink); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* Filtros */
 .filtros { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 999px; padding: 8px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: .15s; }
 .chip.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .chip.vr.on { background: var(--sky); border-color: var(--sky); }
-.selects { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip.pend.on { background: var(--amber); border-color: var(--amber); color: #3a2607; }
 
+.selects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.search-wrap { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 8px 12px; box-shadow: var(--shadow); }
+.search-wrap svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
+.search-wrap input { border: none; background: transparent; outline: none; font-size: 13.5px; font-weight: 500; color: var(--ink); width: 180px; }
+
+/* Grid de tarjetas */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
 .info { flex: 1; min-width: 0; }
@@ -247,12 +359,20 @@ onMounted(() => {
 .right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .total { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
 .badge { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 3px 8px; border-radius: 7px; flex: 0 0 auto; }
-.badge.amber { color: #B9781F; background: var(--amber-soft); } .badge.sky { color: var(--sky); background: var(--sky-soft); } .badge.pine { color: var(--pine); background: var(--pine-tint); } .badge.clay { color: var(--clay); background: var(--clay-soft); } .badge.muted { color: var(--muted); background: var(--paper-2); }
+.badge.amber { color: #B9781F; background: var(--amber-soft); }
+.badge.sky { color: var(--sky); background: var(--sky-soft); }
+.badge.pine { color: var(--pine); background: var(--pine-tint); }
+.badge.clay { color: var(--clay); background: var(--clay-soft); }
+.badge.muted { color: var(--muted); background: var(--paper-2); }
 .badge.vr { color: var(--sky); background: var(--sky-soft); }
+.badge.pend { color: #B9781F; background: var(--amber-soft); }
+
 .del { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--clay-soft); background: var(--clay-soft); display: grid; place-items: center; cursor: pointer; }
 .del ion-icon { font-size: 17px; color: var(--clay); }
+.pay { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--amber-soft); background: var(--amber-soft); display: grid; place-items: center; cursor: pointer; }
+.pay svg { width: 17px; height: 17px; stroke: #B9781F; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* paginación */
+/* Paginación */
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; }
 .pg { min-width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; color: var(--ink-soft); padding: 0 6px; }
 .pg svg { width: 17px; height: 17px; stroke: var(--ink-soft); fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -260,12 +380,7 @@ onMounted(() => {
 .pg.num.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .cuenta { text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; margin-top: 10px; }
 
-.chip.pend.on { background: var(--amber); border-color: var(--amber); color: #3a2607; }
-.badge.pend { color: #B9781F; background: var(--amber-soft); }
-.pay { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--amber-soft); background: var(--amber-soft); display: grid; place-items: center; cursor: pointer; }
-.pay svg { width: 17px; height: 17px; stroke: #B9781F; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-/* modal */
+/* Modal */
 .modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
 .modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 420px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; }
 .m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
@@ -285,4 +400,17 @@ onMounted(() => {
 .m-cancel { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 .m-ok { flex: 1.4; border: none; background: var(--pine); color: #fff; border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 .m-ok:disabled { opacity: .5; }
+
+/* Guía interactiva */
+.guia-card { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+.guia-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; user-select: none; background: var(--paper); }
+.guia-icon { font-size: 19px; }
+.guia-tit { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; color: var(--ink); flex: 1; }
+.guia-badge { font-size: 11.5px; font-weight: 700; color: var(--pine); background: var(--pine-tint); padding: 4px 10px; border-radius: 999px; }
+.guia-content { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); }
+.guia-item { display: flex; gap: 12px; align-items: flex-start; }
+.gi-num { width: 22px; height: 22px; border-radius: 50%; background: var(--pine-tint); color: var(--pine); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 11.5px; flex: 0 0 auto; margin-top: 2px; }
+.gi-text { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+.gi-text b { color: var(--ink); font-weight: 700; }
+.gi-text code { font-family: monospace; background: var(--paper-2); padding: 2px 5px; border-radius: 4px; font-size: 11.5px; }
 </style>

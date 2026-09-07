@@ -17,6 +17,7 @@
           </div>
         </div>
 
+        <slot />
         <button class="cta" @click="$emit('done')">{{ ctaTexto || 'Listo' }}</button>
       </div>
     </div>
