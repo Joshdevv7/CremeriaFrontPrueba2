@@ -157,6 +157,26 @@ async function cargar() {
         if (l.esCaja && l.piezasPorCaja > 0) { unidad[l.productoId] = 'caja'; cant[l.productoId] = l.cantidadPedida / l.piezasPorCaja }
         else cant[l.productoId] = l.cantidadPedida
       })
+    } else if (route.query.clienteId) {
+      const qCliId = Number(route.query.clienteId)
+      if (qCliId) {
+        let cli = clientes.value.find((c) => c.id === qCliId)
+        if (!cli) {
+          try {
+            const { data } = await http.get(`/clientes/${qCliId}`)
+            if (data) {
+              clientes.value.unshift(data)
+              cli = data
+            }
+          } catch { /* continuar */ }
+        }
+        if (cli) {
+          clienteId.value = cli.id
+          if (cli.repartidorId) {
+            repartidorId.value = cli.repartidorId
+          }
+        }
+      }
     }
   } catch (e) { error.value = 'No se pudieron cargar los datos.' }
   finally { cargando.value = false }

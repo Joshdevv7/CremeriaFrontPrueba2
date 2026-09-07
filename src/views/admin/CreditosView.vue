@@ -59,13 +59,25 @@
         </div>
 
         <div class="right">
-          <div class="monto">{{ money(c.monto) }}</div>
+          <div class="monto-block">
+            <template v-if="c.estado !== 'Pagada' && c.abonado > 0">
+              <div class="monto-saldo">{{ money(c.saldo) }}</div>
+              <div class="monto-sub">
+                de {{ money(c.monto) }}
+                <span class="tag-abono">Abonado {{ money(c.abonado) }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="monto">{{ money(c.monto) }}</div>
+            </template>
+          </div>
+
           <div class="card-acts">
             <a v-if="c.estado !== 'Pagada' && c.clienteTelefono" :href="whatsappCobro(c)" target="_blank" class="wa-btn" title="Recordatorio por WhatsApp">
               <ion-icon :icon="logoWhatsapp" />
             </a>
             <button v-if="c.estado !== 'Pagada'" class="pagar" :disabled="ocupado === c.id" @click="pagar(c)">
-              {{ ocupado === c.id ? '…' : 'Marcar pagada' }}
+              {{ ocupado === c.id ? '…' : (c.abonado > 0 ? 'Liquidar saldo (' + money(c.saldo) + ')' : 'Marcar pagada') }}
             </button>
           </div>
         </div>
@@ -103,13 +115,13 @@
         <div class="guia-item">
           <div class="gi-num">2</div>
           <div class="gi-text">
-            <b>Sincronización total con Deudas de Clientes:</b> Al marcar una cuenta como pagada, el sistema crea en automático el Abono del Cliente en Kardex, garantizando que el saldo deudor coincida exactamente.
+            <b>Sincronización total con Deudas de Clientes:</b> Al abonar a la cuenta o marcarla como pagada, el saldo restante se calcula y sincroniza en tiempo real de forma exacta.
           </div>
         </div>
         <div class="guia-item">
           <div class="gi-num">3</div>
           <div class="gi-text">
-            <b>Alertas y Cobranza WhatsApp:</b> Usa "Revisar vencimientos" para disparar las notificaciones del sistema y el botón de WhatsApp en cada tarjeta para enviar un recordatorio amistoso prellenado con monto y pedido.
+            <b>Alertas y Cobranza WhatsApp:</b> Usa "Revisar vencimientos" para disparar las notificaciones del sistema y el botón de WhatsApp en cada tarjeta para enviar un recordatorio amistoso prellenado con el saldo exacto pendiente.
           </div>
         </div>
       </div>
@@ -194,7 +206,10 @@ function irPagina(n) {
 function whatsappCobro(c) {
   const tel = (c.clienteTelefono || '').replace(/\D/g, '')
   const num = tel.length === 10 ? '52' + tel : tel
-  const msg = encodeURIComponent(`Hola ${c.clienteNombre}, le saludamos de Distribuidora. Le recordamos su saldo de ${money(c.monto)} correspondiente al pedido #${c.pedidoId} con fecha límite ${fecha(c.fechaLimite)}. Agradecemos su confirmación de pago. ¡Gracias!`)
+  const saldoPendiente = (c.saldo != null && c.saldo > 0) ? c.saldo : c.monto
+  let detAbono = ''
+  if (c.abonado > 0) detAbono = ` (de un total de ${money(c.monto)}, con abonos previos de ${money(c.abonado)})`
+  const msg = encodeURIComponent(`Hola ${c.clienteNombre}, le saludamos de Distribuidora. Le recordamos su saldo pendiente por pagar de ${money(saldoPendiente)}${detAbono} correspondiente al pedido #${c.pedidoId} con fecha límite ${fecha(c.fechaLimite)}. Agradecemos su confirmación de pago. ¡Muchas gracias!`)
   return `https://wa.me/${num}?text=${msg}`
 }
 
@@ -203,7 +218,7 @@ async function cargar() {
   try {
     const [lista, res] = await Promise.all([
       http.get('/creditos', { params: { estado: estado.value, tamano: 200 } }),
-      resumen.value ? Promise.resolve({ data: resumen.value }) : http.get('/creditos/resumen')
+      http.get('/creditos/resumen')
     ])
     items.value = lista.data.items || []
     resumen.value = res.data
@@ -215,7 +230,9 @@ async function cargar() {
 }
 
 async function pagar(c) {
-  if (!confirm(`¿Marcar como pagada la cuenta de ${c.clienteNombre} por ${money(c.monto)}?\n\nEsto registrará el abono y actualizará automáticamente el saldo en Deudas de Clientes.`)) return
+  const montoALiquidar = (c.saldo != null && c.saldo > 0) ? c.saldo : c.monto
+  const detalleExtra = c.abonado > 0 ? `\nYa se habían abonado previamente: ${money(c.abonado)}.` : ''
+  if (!confirm(`¿Liquidar el saldo de ${c.clienteNombre} por ${money(montoALiquidar)}?${detalleExtra}\n\nEsto marcará la cuenta como pagada y actualizará en tiempo real el saldo en Deudas de Clientes.`)) return
   ocupado.value = c.id
   try {
     await http.post(`/creditos/${c.id}/pagar`)
@@ -292,11 +309,15 @@ onMounted(() => {
 .estado.amber { color: #B9781F; } .estado.clay { color: var(--clay); } .estado.pine { color: var(--pine); }
 
 .right { text-align: right; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.monto-block { display: flex; flex-direction: column; align-items: flex-end; }
 .monto { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.monto-saldo { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--clay); font-variant-numeric: tabular-nums; }
+.monto-sub { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+.tag-abono { background: var(--pine-tint); color: var(--pine-deep); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
 .card-acts { display: flex; align-items: center; gap: 6px; }
 .wa-btn { width: 34px; height: 34px; border-radius: 10px; background: #E8F5E9; border: 1px solid #C8E6C9; color: #128C7E; display: grid; place-items: center; text-decoration: none; }
 .wa-btn ion-icon { font-size: 18px; }
-.pagar { background: var(--pine); color: #fff; border: none; border-radius: 10px; padding: 8px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.pagar { background: var(--pine); color: #fff; border: none; border-radius: 10px; padding: 8px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .pagar:disabled { opacity: .5; }
 
 /* Paginación */
