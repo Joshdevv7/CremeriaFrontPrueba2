@@ -67,7 +67,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/></svg>
               <span>Ver recorrido</span>
             </button>
-            <button class="btn-subaction" @click.stop="verDeudas()" title="Ver adeudos y saldo en caja">
+            <button class="btn-subaction" @click.stop="verDeudas(u.id)" title="Ver adeudos y saldo en caja">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
               <span>Deudas / Kardex</span>
             </button>
@@ -163,8 +163,12 @@ function verRecorrido(id) {
   router.push(`/panel/historial?repartidorId=${id}`)
 }
 
-function verDeudas() {
-  router.push(`/panel/deudas-repartidores`)
+function verDeudas(id) {
+  if (id) {
+    router.push({ path: '/panel/deudas', query: { repartidorId: id } })
+  } else {
+    router.push('/panel/deudas')
+  }
 }
 
 async function cargar() {

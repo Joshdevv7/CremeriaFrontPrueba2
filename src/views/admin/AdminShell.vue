@@ -134,7 +134,7 @@ const grupos = [
   ] },
   { titulo: 'Finanzas', items: [
     { path: '/panel/cortes', label: 'Cortes de caja', icon: ICN.cortes, match: ['/panel/cortes'], rol: ['Admin'] },
-    { path: '/panel/deudas', label: 'Deudas repartidores', icon: ICN.deudas, match: ['/panel/deudas'], rol: ['Admin'] },
+    { path: '/panel/deudas', label: 'Deudas repartidores', icon: ICN.deudas, match: ['/panel/deudas', '/panel/deudas-repartidores'], rol: ['Admin'] },
     { path: '/panel/gastos', label: 'Gastos', icon: ICN.gastos, match: ['/panel/gastos', '/panel/gasto'], rol: ['Admin'] },
     { path: '/panel/transferencias', label: 'Transferencias', icon: ICN.transferencias, match: ['/panel/transferencias'], rol: ['Admin'] },
     { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'], rol: ['Admin'] }

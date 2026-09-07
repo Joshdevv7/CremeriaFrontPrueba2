@@ -224,6 +224,38 @@ function initMapa() {
   setTimeout(() => map && map.invalidateSize(), 250)
 }
 
+// Distancia en kilómetros entre dos coordenadas GPS (Haversine)
+function distKm(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Separa una traza en segmentos continuos si hay saltos anómalos (> 25 km entre pings contiguos)
+function segmentarTraza(puntos, maxSaltoKm = 25) {
+  if (!puntos || !puntos.length) return []
+  const segmentos = []
+  let actual = [puntos[0]]
+
+  for (let i = 1; i < puntos.length; i++) {
+    const prev = puntos[i - 1]
+    const curr = puntos[i]
+    const d = distKm(prev.latitud, prev.longitud, curr.latitud, curr.longitud)
+    if (d > maxSaltoKm) {
+      if (actual.length > 1) segmentos.push(actual)
+      actual = [curr]
+    } else {
+      actual.push(curr)
+    }
+  }
+  if (actual.length > 1) segmentos.push(actual)
+  return segmentos
+}
+
 function pintar() {
   if (!map) return
   if (capa) { capa.remove(); capa = null }
@@ -231,15 +263,26 @@ function pintar() {
   markers = []
   const bounds = []
 
-  // 1) Traza continua del recorrido GPS (si existe registro continuo)
+  // 1) Traza continua del recorrido GPS (dividida en tramos para evitar líneas atravesando el estado por pruebas)
   if (traza.value.length > 1) {
-    const linea = traza.value.map((t) => [t.latitud, t.longitud])
-    L.polyline(linea, { color: '#0E5C4A', weight: 4.5, opacity: 0.85, lineJoin: 'round' }).addTo(capa)
-    linea.forEach((ll) => bounds.push(ll))
+    const tramos = segmentarTraza(traza.value, 25)
+    tramos.forEach((tramo) => {
+      const linea = tramo.map((t) => [t.latitud, t.longitud])
+      L.polyline(linea, { color: '#0E5C4A', weight: 4.5, opacity: 0.85, lineJoin: 'round' }).addTo(capa)
+    })
+    traza.value.forEach((t) => bounds.push([t.latitud, t.longitud]))
   } else if (paradas.value.length > 1) {
-    // 2) Si NO hubo traza continua, unir las entregas cronológicamente con línea punteada
-    const seqLinea = paradas.value.map((p) => [p.latitudEntrega, p.longitudEntrega])
-    L.polyline(seqLinea, { color: '#0E5C4A', weight: 3, opacity: 0.7, dashArray: '6, 8', lineCap: 'round' }).addTo(capa)
+    // 2) Si NO hubo traza continua, unir entregas contiguas dentro del mismo radio (< 35 km)
+    for (let i = 1; i < paradas.value.length; i++) {
+      const p1 = paradas.value[i - 1]
+      const p2 = paradas.value[i]
+      if (distKm(p1.latitudEntrega, p1.longitudEntrega, p2.latitudEntrega, p2.longitudEntrega) <= 35) {
+        L.polyline(
+          [[p1.latitudEntrega, p1.longitudEntrega], [p2.latitudEntrega, p2.longitudEntrega]],
+          { color: '#0E5C4A', weight: 3, opacity: 0.7, dashArray: '6, 8', lineCap: 'round' }
+        ).addTo(capa)
+      }
+    }
   }
 
   // 3) Pines de entrega encima

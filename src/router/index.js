@@ -45,6 +45,7 @@ const routes = [
       { path: 'transferencias', component: () => import('@/views/admin/TransferenciasView.vue'), meta: { rol: 'Admin' } },
       { path: 'cortes', component: () => import('@/views/admin/CortesView.vue'), meta: { rol: 'Admin' } },
       { path: 'deudas', component: () => import('@/views/admin/DeudasView.vue'), meta: { rol: 'Admin' } },
+      { path: 'deudas-repartidores', redirect: '/panel/deudas' },
       { path: 'compras', component: () => import('@/views/admin/ComprasView.vue') }, // Admin y Vendedor
       { path: 'compra/:id', component: () => import('@/views/admin/CompraEditorView.vue') }, // Admin y Vendedor
       { path: 'proyecciones', component: () => import('@/views/admin/ProyeccionesView.vue'), meta: { rol: 'Admin' } },
