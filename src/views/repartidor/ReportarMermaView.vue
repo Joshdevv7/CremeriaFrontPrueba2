@@ -59,11 +59,11 @@
 
             <div class="field"><div class="fl">Evidencia (foto) *</div>
               <input ref="fileInput" type="file" accept="image/*" capture="environment" hidden @change="onFoto">
-              <div v-if="!fotoPreview" class="foto-btn" @click="$refs.fileInput.click()">
+              <div v-if="!fotoPreview" class="foto-btn" @click="tomarFoto()">
                 <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
                 Tomar foto de la merma
               </div>
-              <div v-else class="foto-prev"><img :src="fotoPreview" alt="evidencia"><button class="recambiar" @click="$refs.fileInput.click()">Cambiar foto</button></div>
+              <div v-else class="foto-prev"><img :src="fotoPreview" alt="evidencia"><button class="recambiar" @click="tomarFoto()">Cambiar foto</button></div>
             </div>
 
             <p v-if="error" class="err">{{ error }}</p>
@@ -87,6 +87,7 @@ import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
+import { tomarFotoNativa } from '@/composables/useNativo'
 
 const auth = useAuthStore()
 const carga = ref(null)
@@ -120,6 +121,17 @@ function elegir(l) { seleccion.value = l; cantidad.value = 1 }
 function reset() { seleccion.value = null; cantidad.value = 1; motivo.value = ''; motivoLibre.value = ''; fotoFile = null; fotoPreview.value = ''; error.value = '' }
 function clamp() { if (seleccion.value && cantidad.value > seleccion.value.restante) cantidad.value = seleccion.value.restante }
 function onFoto(e) { const f = e.target.files?.[0]; if (!f) return; fotoFile = f; fotoPreview.value = URL.createObjectURL(f) }
+async function tomarFoto() {
+  try {
+    const file = await tomarFotoNativa()
+    if (file) {
+      fotoFile = file
+      fotoPreview.value = URL.createObjectURL(file)
+      return
+    }
+  } catch { /* fallback a input de archivo */ }
+  fileInput.value?.click()
+}
 
 function onScan(code) {
   const pid = codMap.value[String(code || '').replace(/\s/g, '')]
