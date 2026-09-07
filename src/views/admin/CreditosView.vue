@@ -3,9 +3,9 @@
     <!-- Resumen de cartera -->
     <div class="resumen" v-if="resumen">
       <div class="rc">
-        <div class="l">Por cobrar</div>
-        <div class="v">{{ money(resumen.totalPendiente) }}</div>
-        <div class="s">{{ resumen.cuentasPendientes }} cuentas vigentes</div>
+        <div class="l">Por cobrar (vigente)</div>
+        <div class="v">{{ money(resumen.totalVigente ?? Math.max(0, (resumen.totalPendiente || 0) - (resumen.totalVencido || 0))) }}</div>
+        <div class="s">{{ resumen.cuentasVigentes ?? Math.max(0, (resumen.cuentasPendientes || 0) - (resumen.cuentasVencidas || 0)) }} cuentas vigentes</div>
       </div>
       <div class="rc rojo">
         <div class="l">Vencido</div>
@@ -14,8 +14,8 @@
       </div>
       <div class="rc pine">
         <div class="l">Total Cartera</div>
-        <div class="v">{{ money((resumen.totalPendiente || 0) + (resumen.totalVencido || 0)) }}</div>
-        <div class="s">{{ (resumen.cuentasPendientes || 0) + (resumen.cuentasVencidas || 0) }} cuentas activas</div>
+        <div class="v">{{ money(resumen.totalCartera ?? resumen.totalPendiente) }}</div>
+        <div class="s">{{ resumen.cuentasTotales ?? resumen.cuentasPendientes }} cuentas activas</div>
       </div>
     </div>
 

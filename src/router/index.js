@@ -23,7 +23,13 @@ const routes = [
     component: AdminShell,
     meta: { requiresAuth: true, rol: ['Admin', 'Vendedor'] },
     children: [
-      { path: '', redirect: '/panel/resumen' },
+      {
+        path: '',
+        redirect: () => {
+          const auth = useAuthStore()
+          return auth.esVendedor ? '/panel/ventas' : '/panel/resumen'
+        }
+      },
       { path: 'resumen', component: () => import('@/views/admin/ResumenView.vue'), meta: { rol: 'Admin' } },
       { path: 'ventas', component: () => import('@/views/admin/VentasView.vue') }, // Admin y Vendedor
       { path: 'mis-ventas', component: () => import('@/views/admin/MisVentasView.vue'), meta: { rol: ['Vendedor', 'Admin'] } },
