@@ -154,6 +154,7 @@ import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import { imprimirTicketVenta } from '@/services/printer'
+import { obtenerUbicacion } from '@/composables/useNativo'
 
 const auth = useAuthStore()
 const cargando = ref(true)
@@ -273,6 +274,17 @@ async function vender() {
   if (!pagoPendiente.value && (metodo.value === 1 || metodo.value === 2) && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
   try {
+    try {
+      const pos = await Promise.race([
+        obtenerUbicacion(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
+      ])
+      if (pos && pos.lat != null && pos.lng != null) {
+        body.latitud = pos.lat
+        body.longitud = pos.lng
+      }
+    } catch { /* si no hay señal o permiso, no bloquea la venta */ }
+
     const { data } = await http.post('/pedidos/autoventa', body)
     armarTicket(data)
     exito.value = true
