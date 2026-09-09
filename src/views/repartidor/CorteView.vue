@@ -56,6 +56,37 @@
           <div class="mv">{{ money(resumen.totalCredito) }}<small>MXN</small></div>
         </div>
         <div class="cred-note"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> El crédito no se cobra hoy · pasa a cuentas por cobrar</div>
+
+        <!-- Listado desplegable de tickets / pedidos -->
+        <div class="tickets-acc" v-if="resumen.pedidos && resumen.pedidos.length">
+          <button type="button" class="acc-head" @click="mostrarTickets = !mostrarTickets">
+            <div class="ah-left">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+              <span>Ver ventas incluidas ({{ resumen.pedidos.length }})</span>
+            </div>
+            <div class="ah-right">
+              <span class="ah-tot">{{ money(resumen.totalVentas) }}</span>
+              <svg class="chevron" :class="{ open: mostrarTickets }" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </button>
+          <div class="acc-body" v-show="mostrarTickets">
+            <div v-for="p in resumen.pedidos" :key="p.id" class="t-row">
+              <div class="t-info">
+                <div class="t-nm">
+                  <span>#{{ p.id }} · {{ p.clienteNombre }}</span>
+                  <span v-if="p.esAutoventa" class="t-badge ruta">Ruta</span>
+                </div>
+                <div class="t-sub">
+                  <span>{{ p.metodoPago }}</span>
+                  <span v-if="p.estadoPago === 'Pendiente'" class="t-badge pend">Pendiente</span>
+                  <span class="t-hora">{{ fmtHora(p.fecha) }}</span>
+                </div>
+              </div>
+              <div class="t-tot">{{ money2(p.total) }}</div>
+            </div>
+          </div>
+        </div>
+
         <div class="eyebrow">Cuadre de efectivo</div>
         <div class="recon">
           <div class="rrow" v-if="resumen.efectivoPendiente > 0">
@@ -161,6 +192,11 @@ const done = ref(false)
 const corte = ref(null)
 const imprimiendo = ref(false)
 const printMsg = ref('')
+const mostrarTickets = ref(false)
+function fmtHora(f) {
+  if (!f) return ''
+  return new Date(f).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+}
 
 const money = (n) => '$' + Math.abs(Number(n || 0)).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const money2 = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -400,4 +436,25 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; flex-shrink: 0; }
 .slip .r.sec { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 10px; letter-spacing: .04em; color: #555; border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; }
 .slip .r.dev { color: #444; }
+
+/* tickets accordion */
+.tickets-acc { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; margin: 12px 0 16px; overflow: hidden; box-shadow: var(--shadow); }
+.acc-head { width: 100%; border: none; background: transparent; padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left; }
+.ah-left { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13.5px; color: var(--ink); }
+.ah-left svg { width: 16px; height: 16px; stroke: var(--pine); fill: none; stroke-width: 2.2; flex-shrink: 0; }
+.ah-right { display: flex; align-items: center; gap: 8px; }
+.ah-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; color: var(--pine); }
+.chevron { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2.2; transition: transform .2s ease; }
+.chevron.open { transform: rotate(180deg); }
+.acc-body { padding: 4px 14px 12px; border-top: 1px dashed var(--line); max-height: 240px; overflow-y: auto; }
+.t-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); gap: 10px; }
+.t-row:last-child { border-bottom: none; }
+.t-info { flex: 1; min-width: 0; }
+.t-nm { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-sub { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.t-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; }
+.t-badge.ruta { background: var(--pine-tint); color: var(--pine); }
+.t-badge.pend { background: #FEF2F2; color: var(--clay); border: 1px solid #FECACA; }
+.t-hora { margin-left: auto; font-variant-numeric: tabular-nums; }
+.t-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 </style>

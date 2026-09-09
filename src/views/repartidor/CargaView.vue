@@ -63,8 +63,15 @@
               </div>
             </div>
             <div class="eyebrow">Productos en ruta <span class="cnt">{{ carga.lineas.length }}</span></div>
+
+            <div class="search-wrap" v-if="carga.lineas.length > 3">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+              <input v-model="buscarEnCarga" placeholder="Buscar producto en la camioneta…">
+              <button v-if="buscarEnCarga" class="clear-btn" @click="buscarEnCarga = ''">✕</button>
+            </div>
+
             <div>
-              <div v-for="l in carga.lineas" :key="l.id" class="item">
+              <div v-for="l in lineasCargaFiltradas" :key="l.id" class="item">
                 <div class="row">
                   <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
                   <div class="meta">
@@ -84,6 +91,7 @@
                   {{ fmtQty(l.cantidadMermada) }} merma reportada
                 </div>
               </div>
+              <p v-if="!lineasCargaFiltradas.length && buscarEnCarga" class="muted2">No se encontraron productos que coincidan con "{{ buscarEnCarga }}".</p>
             </div>
             <div class="acc-row">
               <button class="venta" @click="$router.push('/autoventa')">
@@ -93,7 +101,7 @@
                 <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar carga
               </button>
             </div>
-            <button class="cerrar" :disabled="enviando" @click="cerrarCarga">
+            <button class="cerrar" :disabled="enviando" @click="pedirConfirmacionCerrar">
               {{ enviando ? 'Cerrando…' : 'Cerrar carga del día' }}
             </button>
           </template>
@@ -163,6 +171,21 @@
         </div>
       </div>
 
+      <!-- Confirmación: cerrar carga del día -->
+      <div v-if="confirmarCerrarModal" class="corte-bg">
+        <div class="corte-modal">
+          <div class="cm-ic warn"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+          <div class="cm-t">¿Cerrar carga del día?</div>
+          <div class="cm-s">Se devolverá el producto restante al almacén y pasarás a <b>hacer tu corte de caja</b>. Ya no podrás registrar más ventas ni entregas con esta carga.</div>
+          <div class="cm-actions">
+            <button class="cm-cancel" @click="confirmarCerrarModal = false" :disabled="enviando">Cancelar</button>
+            <button class="cm-ok danger" @click="ejecutarCerrarCarga" :disabled="enviando">
+              {{ enviando ? 'Cerrando…' : 'Sí, cerrar carga' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Recordatorio: al cerrar la carga toca hacer el corte -->
       <div v-if="recordarCorte" class="corte-bg">
         <div class="corte-modal">
@@ -192,6 +215,20 @@ const productos = ref([])
 const creando = ref(false)
 const nueva = reactive({})
 const unidadNueva = reactive({}) // productoId -> 'pza' | 'caja'
+const buscarEnCarga = ref('')
+const confirmarCerrarModal = ref(false)
+const lineasCargaFiltradas = computed(() => {
+  const q = buscarEnCarga.value.trim().toLowerCase()
+  if (!q) return carga.value?.lineas || []
+  return (carga.value?.lineas || []).filter((l) => l.productoNombre.toLowerCase().includes(q))
+})
+function pedirConfirmacionCerrar() {
+  confirmarCerrarModal.value = true
+}
+async function ejecutarCerrarCarga() {
+  confirmarCerrarModal.value = false
+  await cerrarCarga()
+}
 function factorP(p) { return p && p.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
 function maxNueva(p) { return unidadNueva[p.id] === 'caja' ? Math.floor(p.stockAlmacen / factorP(p)) : p.stockAlmacen }
 function setUnidadNueva(pid, u) { unidadNueva[pid] = u; nueva[pid] = 0 }
@@ -433,9 +470,21 @@ onIonViewWillEnter(() => { if (!cargaCargando.value) cargarCarga() })
 .corte-bg { position: fixed; inset: 0; background: rgba(21,42,36,.5); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 4000; padding: 24px; }
 .corte-modal { background: var(--surface); border-radius: 24px; padding: 28px 22px 22px; text-align: center; max-width: 360px; width: 100%; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); }
 .cm-ic { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; background: var(--pine-tint); }
+.cm-ic.warn { background: #FEF3C7; }
+.cm-ic.warn svg { stroke: #D97706; }
 .cm-ic svg { width: 30px; height: 30px; stroke: var(--pine); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .cm-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 21px; letter-spacing: -.01em; }
 .cm-s { font-size: 13.5px; color: var(--muted); font-weight: 500; margin-top: 9px; line-height: 1.5; }
 .cm-s b { color: var(--pine); }
+.cm-actions { display: flex; gap: 10px; margin-top: 20px; }
+.cm-cancel { flex: 1; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
 .cm-ok { width: 100%; margin-top: 20px; border: none; background: var(--pine); color: #fff; border-radius: 14px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; }
+.cm-actions .cm-ok { margin-top: 0; flex: 1; }
+.cm-ok.danger { background: var(--clay); }
+
+/* search wrap in cargo */
+.search-wrap { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.search-wrap svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; flex-shrink: 0; }
+.search-wrap input { flex: 1; border: none; background: transparent; outline: none; font-size: 14px; font-weight: 500; color: var(--ink); }
+.clear-btn { border: none; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; padding: 0 4px; }
 </style>

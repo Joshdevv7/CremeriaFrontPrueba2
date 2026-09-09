@@ -126,6 +126,10 @@ export async function imprimirTicketVenta(v) {
   b = b.text(linea())
     .bold().text(fila('TOTAL', money(v.total))).clearFormatting()
     .text(fila('Pago:', corta(v.metodo || '-', 20)))
+  if (v.pagoCon != null) {
+    b = b.text(fila('Pago con:', money(v.pagoCon)))
+    if (v.cambio != null) b = b.text(fila('Cambio:', money(v.cambio)))
+  }
   if (v.pagoPendiente) b = b.align('center').text('** PAGO PENDIENTE **\n').align('left')
   if (v.credito && v.vence) b = b.align('center').text('CREDITO - vence ' + v.vence + '\n').align('left')
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
@@ -147,6 +151,10 @@ export async function imprimirTicketEntrega(e) {
   b = b.text(linea())
     .bold().text(fila('TOTAL', money(e.total))).clearFormatting()
     .text(fila('Pago:', corta(e.metodo || '-', 20)))
+  if (e.pagoCon != null) {
+    b = b.text(fila('Pago con:', money(e.pagoCon)))
+    if (e.cambio != null) b = b.text(fila('Cambio:', money(e.cambio)))
+  }
   if (e.pagoPendiente) b = b.align('center').text('** PAGO PENDIENTE **\n').align('left')
   if (e.credito && e.vence) b = b.align('center').text('CREDITO - vence ' + e.vence + '\n').align('left')
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')

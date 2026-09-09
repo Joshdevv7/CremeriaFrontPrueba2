@@ -11,7 +11,7 @@
             <div class="s">Entrega</div>
             <div class="n">{{ pedido.clienteNombre }}</div>
           </div>
-          <div class="iconbtn">
+          <div class="iconbtn" @click="abrirNavegacionGps()" title="Navegar en Google Maps">
             <svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           </div>
         </div>
@@ -24,6 +24,31 @@
         </div>
 
         <div class="body" ref="bodyRef">
+          <!-- barra rápida del cliente: teléfono y dirección -->
+          <div class="cli-bar" v-if="pedido && (pedido.clienteTelefono || pedido.clienteDireccion)">
+            <div class="cli-info">
+              <div class="cli-dir" v-if="pedido.clienteDireccion">
+                <svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>{{ pedido.clienteDireccion }}</span>
+              </div>
+              <div class="cli-tel" v-if="pedido.clienteTelefono">
+                <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span>{{ pedido.clienteTelefono }}</span>
+              </div>
+            </div>
+            <div class="cli-actions">
+              <a v-if="pedido.clienteTelefono" :href="'tel:' + pedido.clienteTelefono" class="act-btn call" title="Llamar">
+                <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </a>
+              <button v-if="pedido.clienteTelefono" type="button" @click="abrirWhatsapp(pedido.clienteTelefono)" class="act-btn wa" title="WhatsApp">
+                <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              </button>
+              <button v-if="pedido.clienteDireccion || (pedido.clienteLatitud && pedido.clienteLongitud)" type="button" @click="abrirNavegacionGps()" class="act-btn map" title="Navegar en Google Maps">
+                <svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+              </button>
+            </div>
+          </div>
+
           <!-- PASO 1: PRODUCTOS -->
           <div class="view" :class="{ show: step===1 }">
             <div class="eyebrow">Confirma lo que entregas</div>
@@ -97,8 +122,28 @@
             </div>
             <!-- efectivo -->
             <div v-show="pay==='efectivo'">
-              <div class="field"><div class="fl">Efectivo recibido</div>
-                <input class="inp" type="text" v-model="efectivoRecibido" placeholder="$ 0.00" inputmode="numeric"></div>
+              <div class="field">
+                <div class="fl">
+                  <span>Efectivo recibido</span>
+                  <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
+                </div>
+                <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
+                
+                <div class="feria-box" v-if="efectivoRecibido > 0">
+                  <template v-if="cambioCalculado >= 0">
+                    <div class="feria-row">
+                      <span class="feria-lbl">Cambio / Feria:</span>
+                      <span class="feria-val">{{ money2(cambioCalculado) }}</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="feria-row falta">
+                      <span class="feria-lbl">Faltante:</span>
+                      <span class="feria-val">-{{ money2(Math.abs(cambioCalculado)) }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
             </div>
             <!-- transferencia -->
             <div v-show="pay==='transferencia'">
@@ -188,6 +233,8 @@
           <div class="tr" v-for="t in ticket.lineas" :key="t.nombre"><span>{{ t.nombre }} ({{ t.cant }})</span><span>{{ money2(t.sub) }}</span></div>
           <div class="tr muted"><span>Cliente</span><span>{{ pedido?.clienteNombre }}</span></div>
           <div class="tt"><span>TOTAL</span><span>{{ money2(ticket.total) }}</span></div>
+          <div class="tr muted" v-if="ticket.pagoCon != null"><span>Efectivo recibido</span><span>{{ money2(ticket.pagoCon) }}</span></div>
+          <div class="tr muted" v-if="ticket.cambio != null"><span>Cambio (feria)</span><span>{{ money2(ticket.cambio) }}</span></div>
           <div class="credit" v-if="ticket.credito">CRÉDITO · vence {{ ticket.vence }} · firmado</div>
           <div style="height:14px"></div>
         </div>
@@ -268,6 +315,32 @@ const total = computed(() => lineas.reduce((s, l) => s + l.entregado * l.precioU
 const totalEntregado = computed(() => lineas.reduce((s, l) => s + l.entregado, 0))
 const totalPedido = computed(() => lineas.reduce((s, l) => s + l.cantidadPedida, 0))
 const payLabel = computed(() => ({ credito: 'Crédito · 7 días', tarjeta: 'Tarjeta', efectivo: 'Efectivo', transferencia: 'Transferencia' }[pay.value]))
+const cambioCalculado = computed(() => {
+  const rec = parseFloat(efectivoRecibido.value) || 0
+  return rec - total.value
+})
+
+function limpiarTelefono(t) {
+  return String(t || '').replace(/\D/g, '')
+}
+
+function abrirWhatsapp(t) {
+  const num = limpiarTelefono(t)
+  if (!num) return
+  const finalNum = num.length === 10 ? '52' + num : num
+  const msg = encodeURIComponent(`Hola ${pedido.value?.clienteNombre || ''}, voy en camino con su pedido.`)
+  window.open(`https://wa.me/${finalNum}?text=${msg}`, '_blank')
+}
+
+function abrirNavegacionGps() {
+  if (!pedido.value) return
+  if (pedido.value.clienteLatitud && pedido.value.clienteLongitud) {
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${pedido.value.clienteLatitud},${pedido.value.clienteLongitud}`, '_blank')
+  } else if (pedido.value.clienteDireccion) {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pedido.value.clienteDireccion)}`, '_blank')
+  }
+}
+
 const botonTexto = computed(() => {
   if (enviando.value) return 'Confirmando…'
   return step.value === 1 ? 'Continuar al cobro' : step.value === 2 ? 'Continuar a verificación' : 'Confirmar entrega e imprimir'
@@ -468,6 +541,8 @@ function armarTicket(d) {
   const estados = { CerradoCompleto: 'Entrega completa', CerradoParcial: 'Entrega parcial', CerradoNoEntregado: 'No entregado' }
   resultadoEstado.value = estados[d.estado] || 'Cerrada'
   hayPendiente.value = d.estado === 'CerradoParcial' || d.estado === 'CerradoNoEntregado'
+  const pagoRecibido = pay.value === 'efectivo' && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
+  const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
   ticket.value = {
     id: d.id,
     fechaIso: d.fecha,
@@ -475,6 +550,8 @@ function armarTicket(d) {
     fecha: new Date(d.fecha).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     lineas: d.lineas.filter((l) => l.cantidadEntregada > 0).map((l) => ({ nombre: l.productoNombre, cant: cantTicket(l), sub: l.subtotal })),
     total: d.total,
+    pagoCon: pagoRecibido,
+    cambio: cambio,
     credito: d.metodoPago === 'Credito',
     vence: fechaLimite.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
   }
@@ -483,6 +560,8 @@ function armarTicket(d) {
 
 // Datos para la impresora: se toman de las líneas reales de la entrega.
 function datosParaImprimir() {
+  const pagoRecibido = pay.value === 'efectivo' && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
+  const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
   return {
     pedidoId: pedido.value?.id,
     fecha: ticket.value?.fechaIso || Date.now(),
@@ -490,6 +569,8 @@ function datosParaImprimir() {
     repartidor: auth.usuario?.nombre,
     folio: (pay.value === 'tarjeta' || pay.value === 'transferencia') ? (referencia.value || null) : null,
     metodo: payLabel.value,
+    pagoCon: pagoRecibido,
+    cambio: cambio,
     pagoPendiente: pagoPendiente.value,
     credito: pay.value === 'credito',
     vence: ticket.value?.vence,
@@ -590,6 +671,30 @@ onMounted(async () => {
 @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 8px 4px 10px; }
+
+/* customer quick bar */
+.cli-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.cli-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cli-dir, .cli-tel { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cli-dir svg, .cli-tel svg { width: 14px; height: 14px; stroke: var(--pine); fill: none; stroke-width: 2.2; flex-shrink: 0; }
+.cli-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.act-btn { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--paper-2); color: var(--ink); text-decoration: none; cursor: pointer; transition: transform .12s, background .15s; }
+.act-btn:active { transform: scale(.92); }
+.act-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+.act-btn.call { background: #ECFDF5; border-color: #A7F3D0; color: #047857; }
+.act-btn.wa { background: #F0FDF4; border-color: #BBF7D0; color: #15803D; }
+.act-btn.map { background: #EFF6FF; border-color: #BFDBFE; color: #1D4ED8; }
+
+/* feria / cash change */
+.tot-hint { font-size: 12px; color: var(--pine); text-transform: none; letter-spacing: 0; }
+.tot-hint b { font-variant-numeric: tabular-nums; }
+.feria-box { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--pine-tint); border: 1px solid #C8E0D6; }
+.feria-row { display: flex; align-items: center; justify-content: space-between; }
+.feria-row.falta { color: var(--clay); }
+.feria-lbl { font-size: 13px; font-weight: 700; color: var(--pine); }
+.feria-row.falta .feria-lbl { color: var(--clay); }
+.feria-val { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--pine); font-variant-numeric: tabular-nums; }
+.feria-row.falta .feria-val { color: var(--clay); }
 
 /* product line */
 .line { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 11px; box-shadow: var(--shadow); transition: border-color .2s; }

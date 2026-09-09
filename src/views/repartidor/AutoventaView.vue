@@ -24,10 +24,19 @@
 
           <!-- Modo: cliente registrado -->
           <template v-if="!ocasional">
-            <div v-if="cliente" class="cli-sel" @click="cliente = null">
-              <div class="av-ic">{{ ini(cliente.nombre) }}</div>
-              <div class="info"><div class="nm">{{ cliente.nombre }}</div><div class="sub">Toca para cambiar</div></div>
-              <ion-icon :icon="swapHorizontal" />
+            <div v-if="cliente" class="cli-sel-wrap">
+              <div class="cli-sel" @click="cliente = null">
+                <div class="av-ic">{{ ini(cliente.nombre) }}</div>
+                <div class="info"><div class="nm">{{ cliente.nombre }}</div><div class="sub">Toca para cambiar</div></div>
+                <ion-icon :icon="swapHorizontal" />
+              </div>
+              <div v-if="cliente.saldoDeuda > 0" class="deuda-warn" :class="{ danger: metodo === 3 }">
+                <svg viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <div class="deuda-txt">
+                  <span>Adeudo pendiente: <b>{{ money2(cliente.saldoDeuda) }}</b></span>
+                  <small v-if="metodo === 3">¡Atención! Venta a crédito con adeudo activo.</small>
+                </div>
+              </div>
             </div>
             <template v-else>
               <div class="search">
@@ -36,7 +45,11 @@
               </div>
               <div class="cli-lista">
                 <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
-                  <div class="av-ic">{{ ini(c.nombre) }}</div><div class="nm">{{ c.nombre }}</div>
+                  <div class="av-ic">{{ ini(c.nombre) }}</div>
+                  <div class="nm-wrap">
+                    <div class="nm">{{ c.nombre }}</div>
+                    <span v-if="c.saldoDeuda > 0" class="tag-deuda">Debe {{ money2(c.saldoDeuda) }}</span>
+                  </div>
                 </div>
                 <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes. Regístralos primero.</p>
               </div>
@@ -82,6 +95,27 @@
             <button v-for="m in metodos" :key="m.k" :class="{ on: metodo === m.k }" @click="metodo = m.k">
               <ion-icon :icon="m.icon" />{{ m.t }}
             </button>
+          </div>
+          <div v-if="metodo === 0" class="field">
+            <div class="fl">
+              <span>Efectivo recibido</span>
+              <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
+            </div>
+            <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
+            <div class="feria-box" v-if="efectivoRecibido > 0">
+              <template v-if="cambioCalculado >= 0">
+                <div class="feria-row">
+                  <span class="feria-lbl">Cambio / Feria:</span>
+                  <span class="feria-val">{{ money2(cambioCalculado) }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="feria-row falta">
+                  <span class="feria-lbl">Faltante:</span>
+                  <span class="feria-val">-{{ money2(Math.abs(cambioCalculado)) }}</span>
+                </div>
+              </template>
+            </div>
           </div>
           <div v-if="metodo === 1" class="field">
             <div class="fl">Folio de la transferencia</div>
@@ -130,6 +164,8 @@
           <div class="tr muted"><span>Cliente</span><span>{{ nombreMostrar }}</span></div>
           <div class="tr muted"><span>Atendió</span><span>{{ ticket.repartidor }}</span></div>
           <div class="tt"><span>TOTAL</span><span>{{ money2(ticket.total) }}</span></div>
+          <div class="tr muted" v-if="ticket.pagoCon != null"><span>Efectivo recibido</span><span>{{ money2(ticket.pagoCon) }}</span></div>
+          <div class="tr muted" v-if="ticket.cambio != null"><span>Cambio (feria)</span><span>{{ money2(ticket.cambio) }}</span></div>
           <div class="credit" v-if="ticket.credito">CRÉDITO · vence {{ ticket.vence }}</div>
           <div style="height:14px"></div>
         </div>
@@ -171,7 +207,16 @@ const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
 const pagoPendiente = ref(false)
-watch(() => metodo.value, (m) => { if (m === 3) pagoPendiente.value = false; referencia.value = '' })
+const efectivoRecibido = ref('')
+const cambioCalculado = computed(() => {
+  const rec = parseFloat(efectivoRecibido.value) || 0
+  return rec - total.value
+})
+watch(() => metodo.value, (m) => {
+  if (m === 3) pagoPendiente.value = false
+  referencia.value = ''
+  efectivoRecibido.value = ''
+})
 const diasCredito = ref(7)
 const enviando = ref(false)
 const error = ref('')
@@ -300,6 +345,8 @@ function cantTicket(l) {
     : fmt(l.cantidadEntregada)
 }
 function armarTicket(d) {
+  const pagoRecibido = metodo.value === 0 && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
+  const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
   ticket.value = {
     id: d.id,
     fechaIso: d.fecha,
@@ -308,6 +355,8 @@ function armarTicket(d) {
     total: d.total,
     metodoPago: d.metodoPago,
     repartidor: d.repartidorNombre,
+    pagoCon: pagoRecibido,
+    cambio: cambio,
     credito: d.metodoPago === 'Credito',
     vence: fechaLimite.value.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
   }
@@ -315,11 +364,15 @@ function armarTicket(d) {
 
 // Construye el objeto que espera el servicio de impresión a partir del ticket ya armado.
 function datosParaImprimir() {
+  const pagoRecibido = metodo.value === 0 && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
+  const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
   return {
     fecha: ticket.value?.fechaIso || Date.now(),
     folio: referencia.value.trim() || null,
     cliente: nombreMostrar.value,
     metodo: metodoTxt(ticket.value?.metodoPago),
+    pagoCon: pagoRecibido,
+    cambio: cambio,
     pagoPendiente: pagoPendiente.value,
     total: ticket.value?.total || total.value,
     items: (ticket.value?.lineas || []).map((t) => {
@@ -410,6 +463,29 @@ onMounted(async () => {
 .av-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--amber-soft); display: grid; place-items: center; color: #B9781F; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; flex: 0 0 auto; }
 .cli-op .nm, .cli-sel .nm { font-weight: 700; font-size: 14.5px; }
 .cli-sel .info { flex: 1; } .cli-sel .sub { font-size: 12px; color: var(--muted); }
+
+.cli-sel-wrap { margin-bottom: 8px; }
+.nm-wrap { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tag-deuda { font-size: 11px; font-weight: 700; color: var(--clay); background: #FEF2F2; border: 1px solid #FECACA; padding: 2px 7px; border-radius: 6px; }
+.deuda-warn { display: flex; align-items: center; gap: 9px; background: var(--amber-soft); border: 1px solid #EAD9B8; border-radius: 12px; padding: 10px 12px; margin-top: 6px; }
+.deuda-warn.danger { background: #FEF2F2; border-color: #FECACA; }
+.deuda-warn svg { width: 18px; height: 18px; stroke: #B45309; fill: none; stroke-width: 2; flex-shrink: 0; }
+.deuda-warn.danger svg { stroke: #DC2626; }
+.deuda-txt { font-size: 12.5px; color: #92400E; }
+.deuda-warn.danger .deuda-txt { color: #991B1B; }
+.deuda-txt b { font-variant-numeric: tabular-nums; }
+.deuda-txt small { display: block; font-size: 11.5px; font-weight: 600; margin-top: 1px; }
+
+/* feria / cash change */
+.tot-hint { font-size: 12px; color: var(--pine); text-transform: none; letter-spacing: 0; }
+.tot-hint b { font-variant-numeric: tabular-nums; }
+.feria-box { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--pine-tint); border: 1px solid #C8E0D6; }
+.feria-row { display: flex; align-items: center; justify-content: space-between; }
+.feria-row.falta { color: var(--clay); }
+.feria-lbl { font-size: 13px; font-weight: 700; color: var(--pine); }
+.feria-row.falta .feria-lbl { color: var(--clay); }
+.feria-val { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--pine); font-variant-numeric: tabular-nums; }
+.feria-row.falta .feria-val { color: var(--clay); }
 .prod { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 9px; box-shadow: var(--shadow); transition: background .3s, border-color .3s; }
 .prod.flash { background: var(--pine-tint); border-color: var(--pine); }
 .prod .top { display: flex; align-items: center; gap: 12px; }
