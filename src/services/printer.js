@@ -160,6 +160,23 @@ export async function imprimirTicketEntrega(e) {
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
   await enviar(b)
 }
+// Comprobante de abono de cliente
+export async function imprimirTicketAbono(a) {
+  await asegurarConexion()
+  let b = encabezado('COMPROBANTE DE ABONO')
+  if (a.abonoId) b = b.text(fila('Folio abono:', '#' + a.abonoId))
+  b = b.text(fila('Fecha:', fechaCorta(a.fecha)))
+  if (a.cliente) b = b.text(fila('Cliente:', corta(a.cliente, 19)))
+  if (a.repartidor) b = b.text(fila('Cobro:', corta(a.repartidor, 19)))
+  b = b.text(linea())
+    .bold().text(fila('MONTO ABONADO', money(a.monto))).clearFormatting()
+    .text(fila('Metodo:', corta(a.metodo || 'Efectivo', 20)))
+  if (a.saldoAnterior != null) b = b.text(fila('Saldo anterior:', money(a.saldoAnterior)))
+  if (a.saldoRestante != null) b = b.bold().text(fila('SALDO ACTUAL', money(a.saldoRestante))).clearFormatting()
+  if (a.nota) b = b.text(corta('Nota: ' + a.nota, ANCHO) + '\n')
+  b = b.text(linea()).align('center').text('Gracias por su abono\n').text('\n\n\n')
+  await enviar(b)
+}
 // Corte de caja (por carga)
 export async function imprimirCorte(c) {
   await asegurarConexion()
@@ -168,11 +185,14 @@ export async function imprimirCorte(c) {
   b = b.text(fila('Fecha:', fechaCorta(c.fecha)))
   if (c.repartidor) b = b.text(fila('Repartidor:', corta(c.repartidor, 17)))
   b = b.text(linea())
-    .text(fila('Efectivo', money(c.totalEfectivo)))
+    .text(fila('Efectivo vtas', money(c.totalEfectivo)))
     .text(fila('Transferencia', money(c.totalTransferencia)))
     .text(fila('Tarjeta', money(c.totalTarjeta)))
     .text(fila('Credito', money(c.totalCredito)))
-    .text(linea())
+  if (c.totalAbonosEfectivo > 0 || c.totalAbonos > 0) {
+    b = b.text(fila('Abonos efvo', '+' + money(c.totalAbonosEfectivo || c.totalAbonos)))
+  }
+  b = b.text(linea())
     .bold().text(fila('VENTAS', money(c.totalVentas))).clearFormatting()
     .text(linea())
     .text(fila('Efvo. esperado', money(c.efectivoEsperado)))

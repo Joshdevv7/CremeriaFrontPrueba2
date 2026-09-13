@@ -55,6 +55,11 @@
           <div class="ml"><div class="k">Crédito</div><div class="c">{{ conteo('Credito') }} ventas</div></div>
           <div class="mv">{{ money(resumen.totalCredito) }}<small>MXN</small></div>
         </div>
+        <div class="mrow abono" v-if="resumen.totalAbonos > 0">
+          <div class="mic"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg></div>
+          <div class="ml"><div class="k">Abonos cobrados</div><div class="c">{{ resumen.abonos?.length || 0 }} pagos de clientes</div></div>
+          <div class="mv green">{{ money(resumen.totalAbonos) }}<small>MXN</small></div>
+        </div>
         <div class="cred-note"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> El crédito no se cobra hoy · pasa a cuentas por cobrar</div>
 
         <!-- Listado desplegable de tickets / pedidos -->
@@ -87,18 +92,51 @@
           </div>
         </div>
 
+        <!-- Listado desplegable de abonos de clientes -->
+        <div class="tickets-acc" v-if="resumen.abonos && resumen.abonos.length">
+          <button type="button" class="acc-head" @click="mostrarAbonos = !mostrarAbonos">
+            <div class="ah-left">
+              <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
+              <span>Abonos de clientes incluidos ({{ resumen.abonos.length }})</span>
+            </div>
+            <div class="ah-right">
+              <span class="ah-tot green">{{ money(resumen.totalAbonos) }}</span>
+              <svg class="chevron" :class="{ open: mostrarAbonos }" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </button>
+          <div class="acc-body" v-show="mostrarAbonos">
+            <div v-for="a in resumen.abonos" :key="a.id" class="t-row">
+              <div class="t-info">
+                <div class="t-nm">
+                  <span>#{{ a.id }} · {{ a.clienteNombre }}</span>
+                  <span class="t-badge ruta">{{ a.metodoPago }}</span>
+                </div>
+                <div class="t-sub">
+                  <span v-if="a.nota">"{{ a.nota }}"</span>
+                  <span class="t-hora">{{ fmtHora(a.fecha) }}</span>
+                </div>
+              </div>
+              <div class="t-tot green">+{{ money2(a.monto) }}</div>
+            </div>
+          </div>
+        </div>
+
         <div class="eyebrow">Cuadre de efectivo</div>
         <div class="recon">
-          <div class="rrow" v-if="resumen.efectivoPendiente > 0">
-            <span class="l">Efectivo cobrado</span>
+          <div class="rrow">
+            <span class="l">Efectivo cobrado en ventas</span>
             <span class="v">{{ money(resumen.totalEfectivo) }}</span>
           </div>
           <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
             <span class="l">Efectivo pendiente de cobro</span>
             <span class="v">−{{ money(resumen.efectivoPendiente) }}</span>
           </div>
-          <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
-            <span class="l">Efectivo esperado</span>
+          <div class="rrow abono-rrow" v-if="resumen.totalAbonosEfectivo > 0">
+            <span class="l">+ Abonos cobrados en efectivo</span>
+            <span class="v green">+{{ money(resumen.totalAbonosEfectivo) }}</span>
+          </div>
+          <div class="rrow total">
+            <span class="l">Efectivo total esperado</span>
             <span class="v">{{ money(resumen.efectivoEsperado) }}</span>
           </div>
           <div class="declare">
@@ -193,6 +231,7 @@ const corte = ref(null)
 const imprimiendo = ref(false)
 const printMsg = ref('')
 const mostrarTickets = ref(false)
+const mostrarAbonos = ref(false)
 function fmtHora(f) {
   if (!f) return ''
   return new Date(f).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
@@ -290,13 +329,14 @@ function datosParaImprimir() {
     totalTarjeta: c.totalTarjeta,
     totalCredito: c.totalCredito,
     totalVentas: c.totalVentas,
+    totalAbonos: c.totalAbonos ?? r.totalAbonos,
+    totalAbonosEfectivo: c.totalAbonosEfectivo ?? r.totalAbonosEfectivo,
     efectivoEsperado: c.efectivoEsperado ?? r.efectivoEsperado,
     efectivoEntregado: c.efectivoEntregado,
     diferencia: c.diferencia,
     valorDevuelto: c.valorDevuelto ?? r.valorDevuelto,
     valorMerma: c.valorMerma ?? r.valorMerma,
     devueltos: (c.devueltos && c.devueltos.length ? c.devueltos : r.devueltos) || []
-    
   }
 }
 
@@ -457,4 +497,6 @@ onIonViewWillEnter(() => { if (!cargando.value && !done.value) cargar() })
 .t-badge.pend { background: #FEF2F2; color: var(--clay); border: 1px solid #FECACA; }
 .t-hora { margin-left: auto; font-variant-numeric: tabular-nums; }
 .t-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.green { color: var(--pine) !important; font-weight: 700; }
+.abono-rrow { background: var(--pine-tint); border-radius: 8px; padding: 6px 10px; margin: 4px -10px; }
 </style>

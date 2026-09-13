@@ -71,6 +71,7 @@ const routes = [
     children: [
       { path: '', redirect: '/app/entregas' },
       { path: 'entregas', component: () => import('@/views/repartidor/EntregasView.vue') },
+      { path: 'cobranza', component: () => import('@/views/repartidor/CobranzaView.vue') },
       { path: 'inventario', component: () => import('@/views/repartidor/CargaView.vue') },
       { path: 'corte', component: () => import('@/views/repartidor/CorteView.vue') },
       { path: 'perfil', component: () => import('@/views/PerfilView.vue') },

@@ -8,6 +8,11 @@
           <ion-label>Entregas</ion-label>
           <ion-badge v-if="paradasPendientes > 0" class="badge-tab">{{ paradasPendientes }}</ion-badge>
         </ion-tab-button>
+        <ion-tab-button tab="cobranza" href="/app/cobranza">
+          <ion-icon :icon="walletOutline" />
+          <ion-label>Cobranza</ion-label>
+          <ion-badge v-if="clientesConDeuda > 0" class="badge-tab">{{ clientesConDeuda }}</ion-badge>
+        </ion-tab-button>
         <ion-tab-button tab="inventario" href="/app/inventario">
           <ion-icon :icon="fileTrayStackedOutline" />
           <ion-label>Inventario</ion-label>
@@ -29,13 +34,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { IonPage, IonTabs, IonRouterOutlet, IonTabBar, IonTabButton, IonIcon, IonLabel, IonBadge } from '@ionic/vue'
-import { navigateOutline, fileTrayStackedOutline, cashOutline, personOutline } from 'ionicons/icons'
+import { navigateOutline, walletOutline, fileTrayStackedOutline, cashOutline, personOutline } from 'ionicons/icons'
 import { useAuthStore } from '@/stores/auth'
 import { iniciarRastreo, detenerRastreo } from '@/composables/useRastreo'
 import http from '@/api/http'
 
 const auth = useAuthStore()
 const paradasPendientes = ref(0)
+const clientesConDeuda = ref(0)
 const cortePendiente = ref(false)
 let timer = null
 
@@ -46,6 +52,11 @@ async function actualizarBadges() {
       params: { repartidorId: auth.usuarioId, estado: 'Abierto', tamano: 50 }
     })
     paradasPendientes.value = pData.total ?? pData.items?.length ?? 0
+  } catch { /* noop */ }
+
+  try {
+    const { data: dData } = await http.get('/creditos/deudas-clientes')
+    clientesConDeuda.value = (dData || []).filter(d => d.saldo > 0).length
   } catch { /* noop */ }
 
   try {

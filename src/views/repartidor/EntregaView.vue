@@ -49,6 +49,20 @@
             </div>
           </div>
 
+          <!-- Banner de saldo deudor previo del cliente -->
+          <div class="deuda-banner" v-if="deudaCliente > 0">
+            <div class="db-left">
+              <div class="db-tag">Saldo deudor pendiente</div>
+              <div class="db-val">{{ money2(deudaCliente) }}</div>
+            </div>
+            <button type="button" class="db-btn" @click="abrirAbonoModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>
+              </svg>
+              <span>Cobrar abono</span>
+            </button>
+          </div>
+
           <!-- PASO 1: PRODUCTOS -->
           <div class="view" :class="{ show: step===1 }">
             <div class="eyebrow">Confirma lo que entregas</div>
@@ -249,6 +263,133 @@
         </div>
         <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
       </div>
+
+      <!-- MODAL DE CAPTURA DE ABONO EN ENTREGA -->
+      <div v-if="modalAbonoVisible" class="modal-backdrop" @click.self="cerrarAbonoModal()">
+        <div class="modal-sheet">
+          <div class="ms-handle"></div>
+          <div class="ms-head">
+            <div>
+              <div class="ms-title">Cobrar abono</div>
+              <div class="ms-sub">{{ pedido?.clienteNombre }}</div>
+            </div>
+            <button class="ms-close" @click="cerrarAbonoModal()">✕</button>
+          </div>
+
+          <div class="ms-body">
+            <!-- Saldo actual badge -->
+            <div class="saldo-card">
+              <span class="sc-l">Saldo pendiente actual</span>
+              <span class="sc-v">{{ money2(deudaCliente) }}</span>
+            </div>
+
+            <!-- Atajos de monto -->
+            <div class="presets-row">
+              <button type="button" class="preset-btn" @click="montoAbono = deudaCliente">
+                Total ({{ money2(deudaCliente) }})
+              </button>
+              <button type="button" class="preset-btn" v-if="deudaCliente > 50" @click="montoAbono = Math.round(deudaCliente / 2)">
+                50% ({{ money2(Math.round(deudaCliente / 2)) }})
+              </button>
+              <button type="button" class="preset-btn" v-if="deudaCliente >= 500" @click="montoAbono = 500">
+                $500
+              </button>
+              <button type="button" class="preset-btn" v-if="deudaCliente >= 200" @click="montoAbono = 200">
+                $200
+              </button>
+            </div>
+
+            <!-- Campo Monto -->
+            <div class="input-field">
+              <label>Monto a abonar (MXN)</label>
+              <div class="money-input-wrap">
+                <span class="sym">$</span>
+                <input type="number" step="any" min="1" :max="deudaCliente" v-model.number="montoAbono" placeholder="0.00" inputmode="decimal" />
+              </div>
+            </div>
+
+            <!-- Selector de Método de Pago -->
+            <div class="input-field">
+              <label>Método de cobro</label>
+              <div class="pay-method-grid">
+                <button type="button" class="pm-btn" :class="{ on: metodoAbono === 0 }" @click="metodoAbono = 0">
+                  <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  <span>Efectivo</span>
+                </button>
+                <button type="button" class="pm-btn" :class="{ on: metodoAbono === 1 }" @click="metodoAbono = 1">
+                  <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M8 5l-4 4 4 4M16 11l4 4-4 4"/></svg>
+                  <span>Transferencia</span>
+                </button>
+              </div>
+              <div class="pm-tip" v-if="metodoAbono === 0">
+                ⚠️ El efectivo cobrado se sumará a tu entrega de caja en el Corte del turno.
+              </div>
+              <div class="pm-tip" v-else>
+                ℹ️ Transferencia directa a cuenta. No se exige efectivo físico en tu corte.
+              </div>
+            </div>
+
+            <!-- Nota o referencia -->
+            <div class="input-field">
+              <label>Nota o referencia (opcional)</label>
+              <input type="text" v-model="notaAbono" :placeholder="metodoAbono === 1 ? 'Folio de rastreo / Banco' : 'Ej. Pago en entrega de pedido'" />
+            </div>
+
+            <p v-if="modalAbonoError" class="field-error">{{ modalAbonoError }}</p>
+          </div>
+
+          <div class="ms-foot">
+            <button class="btn-cancel" @click="cerrarAbonoModal()">Cancelar</button>
+            <button class="btn-submit" :disabled="guardandoAbono || !puedeGuardarAbono" @click="confirmarAbono()">
+              {{ guardandoAbono ? 'Guardando…' : `Cobrar ${money2(montoAbono || 0)}` }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL DE ÉXITO DE ABONO (RECIBO Y COMPROBANTES) -->
+      <div v-if="abonoExito" class="modal-backdrop" @click.self="abonoExito = null">
+        <div class="modal-sheet exito-sheet">
+          <div class="exito-icon">✓</div>
+          <div class="exito-title">¡Abono registrado!</div>
+          <div class="exito-sub">{{ pedido?.clienteNombre }}</div>
+
+          <div class="receipt-card">
+            <div class="rc-row">
+              <span class="rc-k">Folio abono</span>
+              <span class="rc-v">#{{ abonoExito.id }}</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-k">Monto abonado</span>
+              <span class="rc-v bold">{{ money2(abonoExito.monto) }}</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-k">Método</span>
+              <span class="rc-v">{{ abonoExito.metodoPagoTexto || (abonoExito.metodoPago === 1 ? 'Transferencia' : 'Efectivo') }}</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-k">Nuevo saldo cliente</span>
+              <span class="rc-v green">{{ money2(abonoExito.saldoRestante) }}</span>
+            </div>
+          </div>
+
+          <div class="exito-acts">
+            <button class="btn-ticket" :disabled="imprimiendoTicketAbono" @click="imprimirTicketAbonoActual()">
+              <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+              </svg>
+              <span>{{ imprimiendoTicketAbono ? 'Imprimiendo…' : 'Imprimir ticket Bluetooth' }}</span>
+            </button>
+            <button class="btn-wa" @click="compartirWhatsappAbono()">
+              <svg class="btn-ic" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span>Enviar comprobante por WhatsApp</span>
+            </button>
+          </div>
+          <p v-if="ticketAbonoMsg" class="ticket-status" :class="{ ok: ticketAbonoMsg.includes('correctamente') }">{{ ticketAbonoMsg }}</p>
+
+          <button class="btn-close-exito" @click="abonoExito = null">Continuar con la entrega</button>
+        </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -260,7 +401,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
 import { tomarFotoNativa, obtenerUbicacion, esNativo } from '@/composables/useNativo'
-import { imprimirTicketEntrega } from '@/services/printer'
+import { imprimirTicketEntrega, imprimirTicketAbono } from '@/services/printer'
 
 const route = useRoute()
 const router = useRouter()
@@ -271,6 +412,120 @@ const lineas = reactive([])
 const cargando = ref(true)
 const enviando = ref(false)
 const error = ref('')
+
+// Cobro de abono de cliente en la entrega
+const deudaCliente = ref(0)
+const modalAbonoVisible = ref(false)
+const montoAbono = ref('')
+const metodoAbono = ref(0) // 0: Efectivo, 1: Transferencia
+const notaAbono = ref('')
+const guardandoAbono = ref(false)
+const modalAbonoError = ref('')
+const abonoExito = ref(null)
+const imprimiendoTicketAbono = ref(false)
+const ticketAbonoMsg = ref('')
+
+const puedeGuardarAbono = computed(() => {
+  const m = Number(montoAbono.value)
+  return m > 0 && m <= (deudaCliente.value || 0) + 0.01
+})
+
+async function consultarDeudaCliente(clienteId) {
+  if (!clienteId) return
+  try {
+    const { data } = await http.get(`/creditos/kardex-cliente/${clienteId}`)
+    deudaCliente.value = data?.saldoActual || 0
+  } catch {
+    deudaCliente.value = 0
+  }
+}
+
+function abrirAbonoModal() {
+  montoAbono.value = deudaCliente.value
+  metodoAbono.value = 0
+  notaAbono.value = ''
+  modalAbonoError.value = ''
+  modalAbonoVisible.value = true
+}
+
+function cerrarAbonoModal() {
+  modalAbonoVisible.value = false
+}
+
+async function confirmarAbono() {
+  if (!puedeGuardarAbono.value) return
+  guardandoAbono.value = true
+  modalAbonoError.value = ''
+  const monto = Number(montoAbono.value)
+  try {
+    const { data } = await http.post('/creditos/abonos-cliente', {
+      clienteId: pedido.value.clienteId,
+      monto: monto,
+      metodoPago: metodoAbono.value,
+      nota: notaAbono.value.trim() || null
+    })
+
+    const saldoRestante = Math.max(0, deudaCliente.value - monto)
+    abonoExito.value = {
+      ...data,
+      clienteNombre: pedido.value.clienteNombre,
+      clienteTelefono: pedido.value.clienteTelefono,
+      saldoAnterior: deudaCliente.value,
+      saldoRestante
+    }
+    deudaCliente.value = saldoRestante
+    cerrarAbonoModal()
+  } catch (e) {
+    modalAbonoError.value = e.response?.data?.mensaje || 'Error al registrar el abono.'
+  } finally {
+    guardandoAbono.value = false
+  }
+}
+
+async function imprimirTicketAbonoActual() {
+  if (!abonoExito.value) return
+  imprimiendoTicketAbono.value = true
+  ticketAbonoMsg.value = ''
+  try {
+    await imprimirTicketAbono({
+      abonoId: abonoExito.value.id,
+      fecha: abonoExito.value.fecha || new Date(),
+      cliente: abonoExito.value.clienteNombre,
+      repartidor: auth.usuario?.nombre || 'Repartidor',
+      monto: abonoExito.value.monto,
+      metodo: abonoExito.value.metodoPagoTexto || (abonoExito.value.metodoPago === 1 ? 'Transferencia' : 'Efectivo'),
+      saldoAnterior: abonoExito.value.saldoAnterior,
+      saldoRestante: abonoExito.value.saldoRestante,
+      nota: abonoExito.value.nota
+    })
+    ticketAbonoMsg.value = 'Ticket impreso correctamente.'
+  } catch (e) {
+    ticketAbonoMsg.value = 'Error de impresión: ' + (e.message || 'Verifique impresora Bluetooth.')
+  } finally {
+    imprimiendoTicketAbono.value = false
+  }
+}
+
+function compartirWhatsappAbono() {
+  if (!abonoExito.value) return
+  const a = abonoExito.value
+  const tel = a.clienteTelefono ? a.clienteTelefono.replace(/\D/g, '') : ''
+  const fechaStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+  let msg = `*COMPROBANTE DE ABONO - DISTRIBUIDORA*\n`
+  msg += `Folio de abono: #${a.id}\n`
+  msg += `Cliente: ${a.clienteNombre}\n`
+  msg += `Fecha: ${fechaStr}\n`
+  msg += `Recibió: ${auth.usuario?.nombre || 'Repartidor'}\n\n`
+  msg += `• Monto abonado: *${money2(a.monto)}*\n`
+  msg += `• Método: ${a.metodoPagoTexto || (a.metodoPago === 1 ? 'Transferencia' : 'Efectivo')}\n`
+  if (a.nota) msg += `• Referencia: ${a.nota}\n`
+  msg += `• Saldo restante: *${money2(a.saldoRestante)}*\n\n`
+  msg += `Agradecemos su pago puntual.`
+
+  const url = tel ? `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
+  window.open(url, '_blank')
+}
 
 const step = ref(1)
 const pay = ref('credito')
@@ -612,6 +867,8 @@ onMounted(async () => {
     const id = route.params.id
     const { data } = await http.get(`/pedidos/${id}`)
     pedido.value = data
+    // Consultar deuda previa del cliente
+    consultarDeudaCliente(data.clienteId)
     // Disponible real según la carga abierta del repartidor (lo que trae en la camioneta)
     let dispMap = null
     try {
@@ -840,4 +1097,382 @@ onMounted(async () => {
 .pt-t { font-weight: 700; font-size: 14.5px; }
 .pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
 .print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
+
+/* banner de deuda del cliente */
+.deuda-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #FFF7ED;
+  border: 1.5px solid #FDBA74;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.db-left {
+  flex: 1;
+  min-width: 0;
+}
+.db-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #C2410C;
+}
+.db-val {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 18px;
+  color: #9A3412;
+  margin-top: 1px;
+}
+.db-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--pine);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(14,92,74,.25);
+  flex-shrink: 0;
+}
+.db-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+/* Modales de abono en entrega */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(4px);
+  z-index: 2500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-sheet {
+  background: var(--surface);
+  width: 100%;
+  max-width: 520px;
+  border-radius: 22px 22px 0 0;
+  padding: 16px 18px 24px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -10px 40px rgba(0,0,0,.2);
+  animation: slideUp .22s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.ms-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--line);
+  border-radius: 99px;
+  margin: 0 auto 12px;
+}
+.ms-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.ms-title {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--ink);
+}
+.ms-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ms-close {
+  background: var(--paper-2);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ms-body {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.saldo-card {
+  background: #FDF2E9;
+  border: 1px solid #F5C6A5;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sc-l {
+  font-size: 12px;
+  font-weight: 700;
+  color: #92400E;
+}
+.sc-v {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 17px;
+  color: #C0573B;
+}
+
+.presets-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.preset-btn {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.input-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.money-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--paper);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 0 14px;
+  height: 48px;
+}
+.money-input-wrap .sym {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--pine);
+  margin-right: 6px;
+}
+.money-input-wrap input {
+  border: none;
+  background: transparent;
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--ink);
+  width: 100%;
+  outline: none;
+}
+
+.pay-method-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pm-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pm-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+.pm-btn.on {
+  border-color: var(--pine);
+  background: var(--pine-tint);
+  color: var(--pine);
+}
+.pm-tip {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.input-field input[type="text"] {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.field-error {
+  font-size: 12px;
+  color: #DC2626;
+  font-weight: 600;
+}
+
+.ms-foot {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+.btn-cancel {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  padding: 12px;
+  border-radius: 14px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.btn-submit {
+  background: var(--amber);
+  border: none;
+  padding: 12px;
+  border-radius: 14px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 14px;
+  color: #3b2808;
+  cursor: pointer;
+}
+.btn-submit:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* Éxito de abono */
+.exito-sheet {
+  text-align: center;
+  align-items: center;
+}
+.exito-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--pine-tint);
+  color: var(--pine);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+.exito-title {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--ink);
+}
+.exito-sub {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.receipt-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 16px;
+  width: 100%;
+  max-width: 380px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+.rc-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 13px;
+}
+.rc-k { color: var(--muted); font-weight: 600; }
+.rc-v { font-family: "Bricolage Grotesque"; font-weight: 700; color: var(--ink); }
+.rc-v.bold { font-size: 15px; color: var(--amber); }
+.rc-v.green { color: var(--pine); }
+
+.exito-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 380px;
+  margin-bottom: 12px;
+}
+.btn-ticket, .btn-wa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 13px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.btn-ticket {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  color: var(--ink);
+}
+.btn-ticket svg { width: 18px; height: 18px; }
+.btn-wa {
+  background: #25D366;
+  border: none;
+  color: #fff;
+}
+.btn-wa svg { width: 18px; height: 18px; fill: #fff; }
+.ticket-status { font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: 8px; }
+.ticket-status.ok { color: var(--pine); }
+.btn-close-exito {
+  background: var(--pine);
+  border: none;
+  color: #fff;
+  padding: 13px;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 380px;
+  font-family: "Bricolage Grotesque";
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
 </style>
