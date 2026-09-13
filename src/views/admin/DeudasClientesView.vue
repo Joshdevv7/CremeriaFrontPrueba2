@@ -104,7 +104,7 @@
         <div class="m-head">
           <div>
             <div class="m-title">Estado de Cuenta / Kardex</div>
-            <div class="m-sub">{{ kardexData?.clienteNombre || modalKardex.clienteNombre }} · {{ kardexData?.clienteTelefono || 'Sin teléfono' }}</div>
+            <div class="m-sub">{{ kardexData?.clienteNombre || modalKardex.clienteNombre }} · {{ telefonoClienteKardex }}</div>
           </div>
           <button class="m-x" @click="cerrarKardex()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
@@ -125,7 +125,7 @@
             </div>
             <div class="kb-col">
               <span class="kbl">Saldo deudor</span>
-              <span class="kbv rojo">{{ money(kardexData.saldoActual) }}</span>
+              <span class="kbv rojo">{{ money(saldoRealKardex) }}</span>
             </div>
           </div>
 
@@ -142,8 +142,8 @@
           <!-- Tab Compras -->
           <div v-if="kardexTab === 'compras'" class="kardex-tab-content">
             <p v-if="!kardexData.compras?.length" class="muted2">No hay compras a crédito registradas.</p>
-            <div v-for="c in kardexData.compras" :key="c.cuentaPorCobrarId" class="compra-item">
-              <div class="ci-head" @click="toggleCompra(c.cuentaPorCobrarId)">
+            <div v-for="c in kardexData.compras" :key="c.cuentaId || c.cuentaPorCobrarId || c.pedidoId" class="compra-item">
+              <div class="ci-head" @click="toggleCompra(c.cuentaId || c.cuentaPorCobrarId || c.pedidoId)">
                 <div>
                   <div class="ci-tit">
                     <b>Pedido #{{ c.pedidoId }}</b> · {{ fecha(c.fecha) }}
@@ -151,16 +151,18 @@
                   </div>
                   <div class="ci-sub">
                     Límite: {{ fecha(c.fechaLimite) }} <span v-if="c.pagadaEn">· Pagada: {{ fecha(c.pagadaEn) }}</span>
+                    <span v-if="c.abonado > 0 && c.saldo > 0" class="ci-amort">· Amortizado: {{ money(c.abonado) }}</span>
                   </div>
                 </div>
-                <div class="ci-tot">
-                  {{ money(c.monto) }}
-                  <ion-icon :icon="compraAbierta === c.cuentaPorCobrarId ? chevronUp : chevronDown" />
+                <div class="ci-tot-col">
+                  <div class="ci-tot">{{ money(c.monto) }}</div>
+                  <div v-if="c.saldo > 0 && c.saldo < c.monto" class="ci-resta">Resta: {{ money(c.saldo) }}</div>
+                  <ion-icon :icon="compraAbierta === (c.cuentaId || c.cuentaPorCobrarId || c.pedidoId) ? chevronUp : chevronDown" />
                 </div>
               </div>
 
               <!-- Desglose de productos de la compra -->
-              <div v-if="compraAbierta === c.cuentaPorCobrarId" class="ci-det">
+              <div v-if="compraAbierta === (c.cuentaId || c.cuentaPorCobrarId || c.pedidoId)" class="ci-det">
                 <div v-for="(l, idx) in c.lineas" :key="idx" class="ci-linea">
                   <span class="cl-n">{{ l.productoNombre }}</span>
                   <span class="cl-q">{{ l.cantidad }} {{ l.esCaja ? 'caja(s)' : 'pza(s)' }} × {{ money(l.precioUnitario) }}</span>
@@ -173,7 +175,7 @@
           <!-- Tab Abonos -->
           <div v-if="kardexTab === 'abonos'" class="kardex-tab-content">
             <p v-if="!kardexData.abonos?.length" class="muted2">Aún no se han registrado abonos para este cliente.</p>
-            <div v-for="a in kardexData.abonos" :key="a.abonoId" class="abono-item">
+            <div v-for="a in kardexData.abonos" :key="a.id || a.abonoId" class="abono-item">
               <div class="ai-left">
                 <div class="ai-m">{{ money(a.monto) }}</div>
                 <div class="ai-n">{{ a.nota || 'Abono general a cuenta' }}</div>
@@ -184,8 +186,14 @@
         </div>
 
         <div class="m-foot">
+          <button v-if="kardexData" class="m-pdf" @click="descargarPdf()" title="Descargar o imprimir Estado de Cuenta en PDF">
+            <ion-icon :icon="documentTextOutline" /> Estado de cuenta en PDF
+          </button>
+          <button v-if="kardexData" class="m-copy" @click="copiarResumen()" :title="copiado ? '¡Copiado!' : 'Copiar texto para WhatsApp'">
+            <ion-icon :icon="copiado ? checkmarkOutline : copyOutline" /> {{ copiado ? '¡Copiado!' : 'Copiar nota' }}
+          </button>
           <button v-if="kardexData" class="m-wa" @click="compartirKardexWhatsApp()">
-            <ion-icon :icon="logoWhatsapp" /> Compartir estado de cuenta por WhatsApp
+            <ion-icon :icon="logoWhatsapp" /> WhatsApp
           </button>
           <button class="m-cancel" @click="cerrarKardex()">Cerrar</button>
         </div>
@@ -221,6 +229,11 @@
           <div class="campo">
             <div class="fl2">Nota o concepto del abono (opcional)</div>
             <input class="inp" v-model="notaAbono" placeholder="Ej. Pago en efectivo recibido en bodega">
+            <div class="quick-notas">
+              <button type="button" @click="notaAbono = 'Abono en efectivo en mostrador'">En mostrador</button>
+              <button type="button" @click="notaAbono = 'Abono vía transferencia bancaria'">Transferencia</button>
+              <button type="button" @click="notaAbono = 'Liquidación total de adeudo'">Liquidación total</button>
+            </div>
           </div>
           <p v-if="modalError" class="m-err">{{ modalError }}</p>
         </div>
@@ -243,9 +256,13 @@ import {
   cashOutline,
   chevronDown,
   chevronUp,
-  logoWhatsapp
+  logoWhatsapp,
+  documentTextOutline,
+  copyOutline,
+  checkmarkOutline
 } from 'ionicons/icons'
 import http from '@/api/http'
+import { imprimirEstadoCuentaPdf } from '@/services/estadoCuentaPdf'
 
 const emit = defineEmits(['ctx'])
 const deudas = ref([])
@@ -253,6 +270,7 @@ const cargando = ref(true)
 const error = ref('')
 const buscar = ref('')
 const mostrarGuia = ref(false)
+const copiado = ref(false)
 
 // Modales
 const modalAbono = ref(null)
@@ -268,8 +286,8 @@ const kardexTab = ref('compras') // 'compras' | 'abonos'
 const compraAbierta = ref(null)
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-const fechaHora = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+const fechaHora = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
 const conDeuda = computed(() => deudas.value.filter((d) => d.saldo > 0))
@@ -287,6 +305,16 @@ const sinDeudaFiltrada = computed(() => {
   const q = buscar.value.trim().toLowerCase()
   if (!q) return sinDeuda.value
   return sinDeuda.value.filter(d => (d.clienteNombre || '').toLowerCase().includes(q))
+})
+
+const saldoRealKardex = computed(() => {
+  if (!kardexData.value) return 0
+  const kd = kardexData.value
+  return kd.saldo ?? kd.saldoActual ?? ((kd.totalCargado || 0) - (kd.totalAbonado || 0))
+})
+
+const telefonoClienteKardex = computed(() => {
+  return kardexData.value?.telefono || kardexData.value?.clienteTelefono || modalKardex.value?.telefono || modalKardex.value?.clienteTelefono || 'Sin teléfono'
 })
 
 const puedeGuardarAbono = computed(() => Number(montoAbono.value) > 0 && Number(montoAbono.value) <= (modalAbono.value?.saldo ?? 0) + 0.01)
@@ -350,23 +378,35 @@ function toggleCompra(id) {
   compraAbierta.value = compraAbierta.value === id ? null : id
 }
 
-function compartirKardexWhatsApp() {
-  if (!kardexData.value) return
+function descargarPdf() {
+  if (kardexData.value) {
+    imprimirEstadoCuentaPdf(kardexData.value)
+  }
+}
+
+function construirMensajeWhatsApp() {
+  if (!kardexData.value) return ''
   const kd = kardexData.value
-  const tel = (kd.clienteTelefono || '').replace(/\D/g, '')
-  const num = tel.length === 10 ? '52' + tel : tel
+  const saldo = saldoRealKardex.value
+  const fechaHoy = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
 
   let msg = `*ESTADO DE CUENTA - DISTRIBUIDORA*\n`
   msg += `Cliente: ${kd.clienteNombre}\n`
-  msg += `Fecha: ${new Date().toLocaleDateString('es-MX')}\n\n`
+  msg += `Fecha de corte: ${fechaHoy}\n\n`
+  msg += `*RESUMEN GENERAL:*\n`
   msg += `• Total comprado a crédito: ${money(kd.totalCargado)}\n`
-  msg += `• Total abonado: ${money(kd.totalAbonado)}\n`
-  msg += `*• SALDO PENDIENTE ACTUAL: ${money(kd.saldoActual)}*\n\n`
+  msg += `• Total abonado histórico: ${money(kd.totalAbonado)}\n`
+  msg += `*• SALDO PENDIENTE ACTUAL: ${money(saldo)}*\n\n`
 
   if (kd.compras?.length) {
-    msg += `*Compras a crédito pendientes / recientes:*\n`
-    kd.compras.slice(0, 5).forEach(c => {
-      msg += `▪ Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)} [${c.estado}]\n`
+    const pendientes = kd.compras.filter(c => c.estado !== 'Pagada' && (c.saldo == null || c.saldo > 0))
+    const paraMostrar = pendientes.length ? pendientes.slice(0, 6) : kd.compras.slice(0, 5)
+
+    msg += `*Compras a crédito ${pendientes.length ? 'pendientes' : 'recientes'}:*\n`
+    paraMostrar.forEach(c => {
+      const saldoComp = c.saldo ?? (c.monto - (c.abonado || 0))
+      const detalleSaldo = saldoComp < c.monto && saldoComp > 0 ? ` (Resta: ${money(saldoComp)})` : ''
+      msg += `• Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)}${detalleSaldo} [${c.estado}]\n`
     })
     msg += `\n`
   }
@@ -374,14 +414,31 @@ function compartirKardexWhatsApp() {
   if (kd.abonos?.length) {
     msg += `*Últimos abonos registrados:*\n`
     kd.abonos.slice(0, 4).forEach(a => {
-      msg += `✔ ${fecha(a.fecha)}: ${money(a.monto)} - ${a.nota || 'Abono general'}\n`
+      msg += `• ${fecha(a.fecha)}: ${money(a.monto)} - ${a.nota || 'Abono general'}\n`
     })
     msg += `\n`
   }
 
-  msg += `Agradecemos su preferencia y quedamos a sus órdenes.`
+  msg += `Agradecemos su preferencia y quedamos a sus órdenes para cualquier aclaración.`
+  return msg
+}
 
-  const url = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
+function copiarResumen() {
+  const txt = construirMensajeWhatsApp()
+  if (!txt) return
+  navigator.clipboard?.writeText(txt)
+  copiado.value = true
+  setTimeout(() => { copiado.value = false }, 2500)
+}
+
+function compartirKardexWhatsApp() {
+  if (!kardexData.value) return
+  const kd = kardexData.value
+  const tel = (telefonoClienteKardex.value || '').replace(/\D/g, '')
+  const num = tel.length === 10 ? '52' + tel : tel
+
+  const msg = construirMensajeWhatsApp()
+  const url = num ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
   window.open(url, '_blank')
 }
 
@@ -406,41 +463,44 @@ onMounted(() => {
 .sk { font-size: 11px; color: #F0D5CB; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .sv { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; margin-top: 2px; }
 
-/* Barra de búsqueda */
+/* Búsqueda */
 .search-bar { margin-bottom: 16px; }
-.search-wrap { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 9px 13px; max-width: 420px; box-shadow: var(--shadow); }
-.search-wrap svg { width: 17px; height: 17px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
-.search-wrap input { border: none; background: transparent; outline: none; font-size: 14px; font-weight: 500; color: var(--ink); width: 100%; }
+.search-wrap { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; box-shadow: var(--shadow); }
+.search-wrap svg { width: 17px; height: 17px; stroke: var(--muted); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.search-wrap input { flex: 1; border: none; background: transparent; padding: 12px 0; font-family: "Hanken Grotesk"; font-size: 14px; font-weight: 600; color: var(--ink); }
+.search-wrap input:focus { outline: none; }
 
-/* Grid de clientes */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 13px; }
-.card { background: var(--surface); border: 1px solid var(--clay-soft); border-radius: 18px; padding: 15px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+/* Grid deudores */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
 .c-top { display: flex; align-items: center; gap: 12px; }
-.av { width: 42px; height: 42px; border-radius: 12px; background: var(--clay-soft); display: grid; place-items: center; color: var(--clay); font-weight: 700; font-size: 14px; flex: 0 0 auto; font-family: "Bricolage Grotesque"; }
+.av { width: 42px; height: 42px; border-radius: 12px; background: var(--clay-soft); color: var(--clay); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 15px; flex: 0 0 auto; }
 .info { flex: 1; min-width: 0; }
-.nm { font-weight: 700; font-size: 15px; }
-.meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-.saldo { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; color: var(--clay); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.nm { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.meta { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 1px; }
+.saldo { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; color: var(--clay); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .card-acts { display: flex; gap: 8px; }
-.btn-kardex, .btn-abonar { display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 11px; padding: 10px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: .15s; }
-.btn-kardex { flex: 1.3; background: var(--paper); border: 1px solid var(--line); color: var(--ink-soft); }
-.btn-kardex ion-icon { font-size: 16px; color: var(--sky); }
-.btn-abonar { flex: 1; background: var(--pine); border: none; color: #fff; }
+.btn-kardex { flex: 1.4; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 11px; padding: 8px 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: all .15s; }
+.btn-kardex:hover { background: var(--line); }
+.btn-kardex ion-icon { font-size: 16px; color: var(--pine); }
+.btn-abonar { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; border: none; background: var(--pine); color: #fff; border-radius: 11px; padding: 8px 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: background .15s; }
+.btn-abonar:hover { background: var(--pine-deep); }
 .btn-abonar ion-icon { font-size: 16px; }
 
 /* Clientes limpios */
-.limpios { margin-top: 26px; }
-.lm-t { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-.lm-list { display: flex; gap: 8px; flex-wrap: wrap; }
-.lm-item { background: var(--pine-tint); border: 1px solid #BFD8CD; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.lm-nm { color: var(--pine-deep); }
-.lm-tag { font-size: 11px; color: var(--pine); font-weight: 700; }
+.limpios { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 18px; margin-bottom: 20px; box-shadow: var(--shadow); }
+.lm-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+.lm-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.lm-item { display: flex; align-items: center; gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; cursor: pointer; transition: background .15s; }
+.lm-item:hover { background: var(--pine-tint); }
+.lm-nm { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.lm-tag { font-size: 11px; color: var(--pine); font-weight: 600; }
 
 /* Modales */
 .modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
 .modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 440px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
-.modal.modal-lg { max-width: 580px; }
+.modal.modal-lg { max-width: 620px; }
 .m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
 .m-title { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; }
 .m-sub { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 2px; }
@@ -459,14 +519,21 @@ onMounted(() => {
 .mwrap:focus-within { border-color: var(--pine); }
 .mwrap .pfx { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; color: var(--ink-soft); }
 .inp.mono { border: none; background: transparent; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; padding-left: 6px; }
-.quick-abonos { display: flex; gap: 6px; margin-top: 8px; }
-.quick-abonos button { background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; font-weight: 700; border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+.quick-abonos, .quick-notas { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.quick-abonos button, .quick-notas button { background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; font-weight: 700; border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+.quick-notas button:hover { background: var(--pine-tint); color: var(--pine); }
 .m-err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
-.m-foot { display: flex; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--line); flex: 0 0 auto; flex-wrap: wrap; }
-.m-cancel { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
-.m-ok { flex: 1.6; border: none; background: var(--pine); color: #fff; border-radius: 13px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.m-foot { display: flex; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--line); flex: 0 0 auto; flex-wrap: wrap; }
+.m-cancel { flex: 1; min-width: 80px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 12px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
+.m-ok { flex: 1.6; border: none; background: var(--pine); color: #fff; border-radius: 12px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
 .m-ok:disabled { opacity: .5; }
-.m-wa { flex: 2; display: flex; align-items: center; justify-content: center; gap: 6px; border: none; background: #128C7E; color: #fff; border-radius: 13px; padding: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
+.m-pdf { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--paper-2); color: var(--ink); border-radius: 12px; padding: 11px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: all .15s; }
+.m-pdf:hover { background: var(--line); }
+.m-pdf ion-icon { font-size: 17px; color: var(--pine); }
+.m-copy { display: flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 12px; padding: 11px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.m-copy ion-icon { font-size: 16px; }
+.m-wa { display: flex; align-items: center; justify-content: center; gap: 6px; border: none; background: #128C7E; color: #fff; border-radius: 12px; padding: 11px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s; }
+.m-wa:hover { filter: brightness(1.08); }
 .m-wa ion-icon { font-size: 17px; }
 
 /* Kardex styles */
@@ -485,11 +552,14 @@ onMounted(() => {
 .ci-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
 .ci-tit { font-size: 13px; }
 .ci-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.ci-amort { color: var(--pine); font-weight: 600; margin-left: 4px; }
+.ci-tot-col { display: flex; align-items: center; gap: 8px; }
+.ci-resta { font-size: 10.5px; font-weight: 700; color: var(--clay); background: var(--clay-soft); padding: 2px 6px; border-radius: 6px; }
 .tag-est { font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
 .tag-est.pendiente { background: var(--amber-soft); color: #B9781F; }
 .tag-est.vencida { background: var(--clay-soft); color: var(--clay); }
 .tag-est.pagada { background: var(--pine-tint); color: var(--pine); }
-.ci-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14.5px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.ci-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .ci-det { border-top: 1px solid var(--line); background: var(--surface); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 .ci-linea { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-soft); }
 .cl-n { font-weight: 600; flex: 1; min-width: 0; }
