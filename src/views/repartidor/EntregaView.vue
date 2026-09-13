@@ -123,10 +123,12 @@
                 <div class="fl">Fecha límite de pago <span class="due">7 días</span></div>
                 <input class="inp" type="text" :value="fechaLimiteTexto" readonly>
               </div>
-              <div class="field sigwrap">
-                <div class="fl">Firma del cliente</div>
-                <canvas class="sigpad" ref="sigRef"></canvas>
-                <div class="sighint"><span>Firma con el dedo sobre la línea</span><a @click="clearSig()">Borrar</a></div>
+              <div class="ticket-sig-notice">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <div class="ts-txt">
+                  <b>Firma física en ticket</b>
+                  <span>Al confirmar, el ticket térmico imprimirá la línea para la firma de conformidad del cliente en papel.</span>
+                </div>
               </div>
             </div>
             <!-- tarjeta -->
@@ -194,7 +196,7 @@
             <div class="vsum">
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h12"/></svg> Productos entregados</span><span class="r">{{ totalEntregado }} de {{ totalPedido }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg> Método de pago</span><span class="r" :class="{ cred: pay==='credito' }">{{ payLabel }}<template v-if="pagoPendiente"> · pendiente</template></span></div>
-              <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Firma del cliente</span><span class="r">{{ pay==='credito' ? (firmado ? 'Registrada' : 'Pendiente') : 'No requerida' }}</span></div>
+              <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Firma de conformidad</span><span class="r">{{ pay==='credito' ? 'En ticket impreso' : 'No requerida' }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Ubicacion de entrega</span><span class="r">{{ gpsEstado==='ok' ? 'Capturada' : gpsEstado==='cargando' ? 'Obteniendo...' : 'No disponible' }}</span></div>
               <div class="vrow"><span class="l"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Total</span><span class="r">{{ money(total) }}</span></div>
             </div>
@@ -628,38 +630,12 @@ async function next() {
   error.value = ''
   if (step.value < 3) {
     step.value++
-    if (step.value === 2) await nextTick(), fitCanvas()
     if (step.value === 3) capturarGps()
     bodyRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
     return
   }
   await confirmar()
 }
-
-/* ---- firma ---- */
-function fitCanvas() {
-  const cv = sigRef.value
-  if (!cv) return
-  const r = cv.getBoundingClientRect()
-  cv.width = r.width * 2; cv.height = r.height * 2
-  cx = cv.getContext('2d')
-  cx.scale(2, 2); cx.strokeStyle = '#152A24'; cx.lineWidth = 2.2; cx.lineCap = 'round'; cx.lineJoin = 'round'
-}
-let drawing = false
-function pos(e) { const r = sigRef.value.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top } }
-function startDraw(e) { if (!cx) fitCanvas(); drawing = true; firmado.value = true; const p = pos(e); cx.beginPath(); cx.moveTo(p.x, p.y); e.preventDefault() }
-function moveDraw(e) { if (!drawing) return; const p = pos(e); cx.lineTo(p.x, p.y); cx.stroke(); e.preventDefault() }
-function endDraw() { drawing = false }
-function clearSig() { if (cx) cx.clearRect(0, 0, sigRef.value.width, sigRef.value.height); firmado.value = false }
-
-watch(sigRef, (cv) => {
-  if (!cv) return
-  cv.addEventListener('mousedown', startDraw); cv.addEventListener('mousemove', moveDraw)
-  window.addEventListener('mouseup', endDraw)
-  cv.addEventListener('touchstart', startDraw, { passive: false })
-  cv.addEventListener('touchmove', moveDraw, { passive: false })
-  cv.addEventListener('touchend', endDraw)
-})
 
 /* ---- foto: cámara nativa en APK, input file en web ---- */
 async function abrirCamara() {
@@ -695,9 +671,6 @@ async function subir(file, nombre) {
   fd.append('archivo', file, nombre)
   const { data } = await http.post('/archivos/subir', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
   return data.url
-}
-function canvasABlob() {
-  return new Promise((res) => sigRef.value.toBlob((b) => res(b), 'image/png'))
 }
 
 /* ---- gps de entrega: nativo en APK, navigator en web (best-effort) ---- */
@@ -739,31 +712,22 @@ async function reprogramar() {
   finally { reprogramando.value = false }
 }
 
-/* ---- confirmar ---- */
 async function confirmar() {
   error.value = ''
   if (!fotoFile) {
     error.value = 'La foto de entrega es obligatoria para cerrar el pedido.'
     return
   }
-  if (pay.value === 'credito' && !firmado.value) {
-    error.value = 'Falta la firma del cliente para la venta a crédito.'
-    return
-  }
   enviando.value = true
   try {
-    let firmaUrl = null, fotoUrl = null
-    if (pay.value === 'credito' && firmado.value) {
-      const blob = await canvasABlob()
-      firmaUrl = await subir(blob, 'firma.png')
-    }
+    let fotoUrl = null
     if (fotoFile) fotoUrl = await subir(fotoFile, fotoFile.name || 'entrega.jpg')
 
     const payload = {
       metodoPago: METODO[pay.value],
       pagoPendiente: pagoPendiente.value,
       referenciaPago: (!pagoPendiente.value && (pay.value === 'tarjeta' || pay.value === 'transferencia')) ? (referencia.value || null) : null,
-      firmaUrl, fotoEntregaUrl: fotoUrl,
+      firmaUrl: null, fotoEntregaUrl: fotoUrl,
       fechaLimiteCredito: pay.value === 'credito' ? fechaLimite.toISOString() : null,
       latitudEntrega: latEntrega.value, longitudEntrega: lngEntrega.value,
       lineas: lineas.map((l) => ({
@@ -1474,5 +1438,34 @@ onMounted(async () => {
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
+}
+.ticket-sig-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-top: 10px;
+  color: var(--ink);
+}
+.ticket-sig-notice svg {
+  stroke: var(--pine);
+  flex-shrink: 0;
+}
+.ts-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ts-txt b {
+  font-size: 13px;
+  color: var(--ink);
+}
+.ts-txt span {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
 }
 </style>

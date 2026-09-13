@@ -132,6 +132,14 @@ export async function imprimirTicketVenta(v) {
   }
   if (v.pagoPendiente) b = b.align('center').text('** PAGO PENDIENTE **\n').align('left')
   if (v.credito && v.vence) b = b.align('center').text('CREDITO - vence ' + v.vence + '\n').align('left')
+  if (v.credito || v.pagoPendiente) {
+    b = b.text(linea())
+      .align('center')
+      .text('RECIBI DE CONFORMIDAD:\n\n\n')
+      .text('_____________________________\n')
+      .text(corta(v.cliente || 'FIRMA DEL CLIENTE', ANCHO) + '\n')
+      .align('left')
+  }
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
   await enviar(b)
 }
@@ -157,6 +165,14 @@ export async function imprimirTicketEntrega(e) {
   }
   if (e.pagoPendiente) b = b.align('center').text('** PAGO PENDIENTE **\n').align('left')
   if (e.credito && e.vence) b = b.align('center').text('CREDITO - vence ' + e.vence + '\n').align('left')
+  if (e.credito || e.pagoPendiente) {
+    b = b.text(linea())
+      .align('center')
+      .text('RECIBI DE CONFORMIDAD:\n\n\n')
+      .text('_____________________________\n')
+      .text(corta(e.cliente || 'FIRMA DEL CLIENTE', ANCHO) + '\n')
+      .align('left')
+  }
   b = b.text(linea()).align('center').text('Gracias por su compra\n').text('\n\n\n')
   await enviar(b)
 }

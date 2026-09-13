@@ -29,12 +29,12 @@ export function imprimirEstadoCuentaPdf(kd) {
 
     return `
       <tr class="compra-row">
-        <td><b>Pedido #${c.pedidoId}</b><br><small class="text-muted">${fecha(c.fecha)}</small></td>
+        <td><b>Pedido #${c.pedidoId}</b><br><small class="text-muted">${fecha(c.fecha)}${c.esPagoPendiente ? ' · Pago pendiente (' + (c.metodoPago || 'Efectivo') + ')' : ''}</small></td>
         <td>${fecha(c.fechaLimite)}</td>
         <td class="text-right font-mono font-bold">${money(c.monto)}</td>
         <td class="text-right font-mono text-verde">${money(c.abonado)}</td>
         <td class="text-right font-mono ${saldoComp > 0 ? 'text-rojo' : 'text-muted'} font-bold">${money(saldoComp)}</td>
-        <td class="text-center"><span class="badge ${estadoClass}">${c.estado}</span></td>
+        <td class="text-center"><span class="badge ${estadoClass}">${c.esPagoPendiente && c.estado === 'Pendiente' ? 'Pendiente' : c.estado}</span></td>
       </tr>
       ${lineasHtml}
     `

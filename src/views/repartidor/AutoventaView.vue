@@ -1,144 +1,249 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="av">
+      <!-- Barra superior -->
       <div class="bar">
-        <div class="iconbtn" @click="$router.replace('/app/inventario')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
-        <div class="ttl"><div class="s">En ruta</div><div class="n">Venta en ruta</div></div>
-        <button class="iconbtn scan" @click="mostrarScan = true" title="Escanear"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg></button>
+        <div class="iconbtn" @click="back()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="ttl">
+          <div class="s">En ruta</div>
+          <div class="n">Venta en ruta</div>
+        </div>
+        <button v-if="step === 1 && !sinCarga && !cargando" class="iconbtn scan" @click="mostrarScan = true" title="Escanear">
+          <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg>
+        </button>
       </div>
 
-      <div class="body" v-show="!exito">
+      <!-- Barra de progreso de 3 pasos (estilo guiado de ruta) -->
+      <div class="steps" v-if="!sinCarga && !cargando && !exito">
+        <div class="stepi" :class="{ on: step === 1, done: step > 1 }">
+          <div class="num">1</div>
+          <div class="tx">Productos</div>
+          <div class="ln"></div>
+        </div>
+        <div class="stepi" :class="{ on: step === 2, done: step > 2 }">
+          <div class="num">2</div>
+          <div class="tx">Cobro</div>
+          <div class="ln"></div>
+        </div>
+        <div class="stepi" :class="{ on: step === 3 }">
+          <div class="num">3</div>
+          <div class="tx">Verificar</div>
+        </div>
+      </div>
+
+      <div class="body" v-show="!exito" ref="bodyRef">
         <p v-if="cargando" class="muted">Cargando…</p>
         <div v-else-if="sinCarga" class="vacio">
           <div class="emoji-big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></div>
           <p>No tienes una carga abierta.<br>Abre tu carga del día para vender en ruta.</p>
           <button class="cta-line" @click="$router.replace('/app/inventario')">Ir a inventario</button>
         </div>
-        <template v-else>
-          <!-- Cliente -->
-          <div class="sec">Cliente</div>
-          <div class="modo-cli">
-            <button :class="{ on: !ocasional }" @click="setOcasional(false)">Cliente registrado</button>
-            <button :class="{ on: ocasional }" @click="setOcasional(true)">Cliente ocasional</button>
-          </div>
 
-          <!-- Modo: cliente registrado -->
-          <template v-if="!ocasional">
-            <div v-if="cliente" class="cli-sel-wrap">
-              <div class="cli-sel" @click="cliente = null">
-                <div class="av-ic">{{ ini(cliente.nombre) }}</div>
-                <div class="info"><div class="nm">{{ cliente.nombre }}</div><div class="sub">Toca para cambiar</div></div>
-                <ion-icon :icon="swapHorizontal" />
-              </div>
-              <div v-if="cliente.saldoDeuda > 0" class="deuda-warn" :class="{ danger: metodo === 3 }">
-                <svg viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                <div class="deuda-txt">
-                  <span>Adeudo pendiente: <b>{{ money2(cliente.saldoDeuda) }}</b></span>
-                  <small v-if="metodo === 3">¡Atención! Venta a crédito con adeudo activo.</small>
-                </div>
-              </div>
+        <template v-else>
+          <!-- ===== PASO 1: CLIENTE Y PRODUCTOS ===== -->
+          <div v-show="step === 1">
+            <!-- Selección de Cliente -->
+            <div class="sec">Cliente</div>
+            <div class="modo-cli">
+              <button :class="{ on: !ocasional }" @click="setOcasional(false)">Cliente registrado</button>
+              <button :class="{ on: ocasional }" @click="setOcasional(true)">Cliente ocasional</button>
             </div>
-            <template v-else>
-              <div class="search">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-                <input v-model="buscarCli" placeholder="Buscar cliente…">
-              </div>
-              <div class="cli-lista">
-                <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
-                  <div class="av-ic">{{ ini(c.nombre) }}</div>
-                  <div class="nm-wrap">
-                    <div class="nm">{{ c.nombre }}</div>
-                    <span v-if="c.saldoDeuda > 0" class="tag-deuda">Debe {{ money2(c.saldoDeuda) }}</span>
+
+            <!-- Modo: cliente registrado -->
+            <template v-if="!ocasional">
+              <div v-if="cliente" class="cli-sel-wrap">
+                <div class="cli-sel" @click="cliente = null">
+                  <div class="av-ic">{{ ini(cliente.nombre) }}</div>
+                  <div class="info">
+                    <div class="nm">{{ cliente.nombre }}</div>
+                    <div class="sub">Toca para cambiar</div>
+                  </div>
+                  <ion-icon :icon="swapHorizontal" />
+                </div>
+                <div v-if="cliente.saldoDeuda > 0" class="deuda-warn" :class="{ danger: metodo === 3 }">
+                  <svg viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                  <div class="deuda-txt">
+                    <span>Adeudo pendiente: <b>{{ money2(cliente.saldoDeuda) }}</b></span>
+                    <small v-if="metodo === 3">¡Atención! Venta a crédito con adeudo activo.</small>
                   </div>
                 </div>
-                <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes. Regístralos primero.</p>
               </div>
-            </template>
-          </template>
-
-          <!-- Modo: cliente ocasional (no se registra en la base) -->
-          <template v-else>
-            <div class="field">
-              <input class="inp" v-model="nombreOcasional" placeholder="Nombre y apellido del comprador" maxlength="80">
-            </div>
-            <p class="ocasional-hint">Esta persona no se guardará como cliente. Solo queda registrada en esta venta.</p>
-          </template>
-
-          <!-- Productos -->
-          <div class="sec">¿Qué vende?</div>
-          <div v-for="l in lineasCarga" :key="l.productoId" class="prod" :class="{ flash: resaltado===l.productoId }" :ref="(el)=>setRef(l.productoId, el)">
-            <div class="top">
-              <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
-              <div class="info">
-                <div class="nm">{{ l.productoNombre }}</div>
-                <div class="pr">
-                  <template v-if="esCaja(l)"><b>{{ money(precioL(l)) }}</b> / caja · te quedan {{ maxUnidad(l) }} caja(s)</template>
-                  <template v-else><b>{{ money(precioL(l)) }}</b> · te quedan {{ fmt(l.restante) }}</template>
-                </div>
-              </div>
-              <div class="stepper">
-                <button @click="dec(l)" :disabled="(cant[l.productoId]||0)<=0">−</button>
-                <input class="q-input" type="number" step="any" min="0" :max="maxUnidad(l)" v-model.number="cant[l.productoId]" @blur="set(l, cant[l.productoId])" />
-                <button @click="inc(l)" :disabled="(cant[l.productoId]||0) >= maxUnidad(l)">+</button>
-              </div>
-            </div>
-            <div v-if="info(l.productoId).vendePorCaja" class="uni">
-              <button :class="{ on: !esCaja(l) }" @click="setUnidad(l, 'pza')">Pieza</button>
-              <button :class="{ on: esCaja(l) }" @click="setUnidad(l, 'caja')">Caja ({{ info(l.productoId).piezasPorCaja }})</button>
-            </div>
-          </div>
-          <p v-if="!lineasCarga.length" class="muted2">No traes productos disponibles en la carga.</p>
-
-          <!-- Pago -->
-          <div class="sec">Método de pago</div>
-          <div class="pagos">
-            <button v-for="m in metodos" :key="m.k" :class="{ on: metodo === m.k }" @click="metodo = m.k">
-              <ion-icon :icon="m.icon" />{{ m.t }}
-            </button>
-          </div>
-          <div v-if="metodo === 0" class="field">
-            <div class="fl">
-              <span>Efectivo recibido</span>
-              <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
-            </div>
-            <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
-            <div class="feria-box" v-if="efectivoRecibido > 0">
-              <template v-if="cambioCalculado >= 0">
-                <div class="feria-row">
-                  <span class="feria-lbl">Cambio / Feria:</span>
-                  <span class="feria-val">{{ money2(cambioCalculado) }}</span>
-                </div>
-              </template>
               <template v-else>
-                <div class="feria-row falta">
-                  <span class="feria-lbl">Faltante:</span>
-                  <span class="feria-val">-{{ money2(Math.abs(cambioCalculado)) }}</span>
+                <div class="search">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+                  <input v-model="buscarCli" placeholder="Buscar cliente…">
+                </div>
+                <div class="cli-lista">
+                  <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
+                    <div class="av-ic">{{ ini(c.nombre) }}</div>
+                    <div class="nm-wrap">
+                      <div class="nm">{{ c.nombre }}</div>
+                      <span v-if="c.saldoDeuda > 0" class="tag-deuda">Debe {{ money2(c.saldoDeuda) }}</span>
+                    </div>
+                  </div>
+                  <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes. Regístralos primero.</p>
                 </div>
               </template>
+            </template>
+
+            <!-- Modo: cliente ocasional -->
+            <template v-else>
+              <div class="field">
+                <input class="inp" v-model="nombreOcasional" placeholder="Nombre y apellido del comprador" maxlength="80">
+              </div>
+              <p class="ocasional-hint">Esta persona no se guardará como cliente. Solo queda registrada en esta venta.</p>
+            </template>
+
+            <!-- Catálogo de productos de la carga -->
+            <div class="sec">¿Qué vende de su carga?</div>
+            <div v-for="l in lineasCarga" :key="l.productoId" class="prod" :class="{ flash: resaltado===l.productoId }" :ref="(el)=>setRef(l.productoId, el)">
+              <div class="top">
+                <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
+                <div class="info">
+                  <div class="nm">{{ l.productoNombre }}</div>
+                  <div class="pr">
+                    <template v-if="esCaja(l)"><b>{{ money(precioL(l)) }}</b> / caja · te quedan {{ maxUnidad(l) }} caja(s)</template>
+                    <template v-else><b>{{ money(precioL(l)) }}</b> · te quedan {{ fmt(l.restante) }}</template>
+                  </div>
+                </div>
+                <div class="stepper">
+                  <button @click="dec(l)" :disabled="(cant[l.productoId]||0)<=0">−</button>
+                  <input class="q-input" type="number" step="any" min="0" :max="maxUnidad(l)" v-model.number="cant[l.productoId]" @blur="set(l, cant[l.productoId])" />
+                  <button @click="inc(l)" :disabled="(cant[l.productoId]||0) >= maxUnidad(l)">+</button>
+                </div>
+              </div>
+              <div v-if="info(l.productoId).vendePorCaja" class="uni">
+                <button :class="{ on: !esCaja(l) }" @click="setUnidad(l, 'pza')">Pieza</button>
+                <button :class="{ on: esCaja(l) }" @click="setUnidad(l, 'caja')">Caja ({{ info(l.productoId).piezasPorCaja }})</button>
+              </div>
             </div>
-          </div>
-          <div v-if="metodo === 1" class="field">
-            <div class="fl">Folio de la transferencia</div>
-            <input class="inp" v-model="referencia" placeholder="Número de la transferencia" :disabled="pagoPendiente">
-          </div>
-          <div v-if="metodo === 2" class="field">
-            <div class="fl">Referencia de la terminal</div>
-            <input class="inp" v-model="referencia" placeholder="Referencia (opcional)" :disabled="pagoPendiente">
-          </div>
-          <div v-if="metodo === 3" class="field credito">
-            <div class="fl">Días para pagar</div>
-            <div class="dias">
-              <button v-for="d in [7,15,30]" :key="d" :class="{ on: diasCredito === d }" @click="diasCredito = d">{{ d }} días</button>
-            </div>
-            <div class="hint">Vence el {{ fechaLimiteTxt }}. Se registrará como cuenta por cobrar.</div>
+            <p v-if="!lineasCarga.length" class="muted2">No traes productos disponibles en la carga.</p>
           </div>
 
-          <!-- Pago pendiente (no aplica a crédito) -->
-          <div v-if="metodo !== 3" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
-            <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
-            <div class="pt-tx">
-              <div class="pt-t">Pago pendiente</div>
-              <div class="pt-s">Se entrega ahora; el pago y su folio se registran después.</div>
+          <!-- ===== PASO 2: FORMA DE PAGO Y CONDICIONES ===== -->
+          <div v-show="step === 2">
+            <div class="sec">Método de pago</div>
+            <div class="pagos">
+              <button v-for="m in metodos" :key="m.k" :class="{ on: metodo === m.k }" @click="metodo = m.k">
+                <ion-icon :icon="m.icon" />{{ m.t }}
+              </button>
+            </div>
+
+            <!-- Efectivo -->
+            <div v-if="metodo === 0" class="field">
+              <div class="fl">
+                <span>Efectivo recibido</span>
+                <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
+              </div>
+              <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
+              <div class="feria-box" v-if="efectivoRecibido > 0">
+                <template v-if="cambioCalculado >= 0">
+                  <div class="feria-row">
+                    <span class="feria-lbl">Cambio / Feria:</span>
+                    <span class="feria-val">{{ money2(cambioCalculado) }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="feria-row falta">
+                    <span class="feria-lbl">Faltante:</span>
+                    <span class="feria-val">-{{ money2(Math.abs(cambioCalculado)) }}</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Transferencia -->
+            <div v-if="metodo === 1" class="field">
+              <div class="fl">Folio de la transferencia</div>
+              <input class="inp" v-model="referencia" placeholder="Número o comprobante de la transferencia" :disabled="pagoPendiente">
+            </div>
+
+            <!-- Tarjeta -->
+            <div v-if="metodo === 2" class="field">
+              <div class="fl">Referencia de la terminal</div>
+              <input class="inp" v-model="referencia" placeholder="Voucher o referencia de terminal (opcional)" :disabled="pagoPendiente">
+            </div>
+
+            <!-- Crédito -->
+            <div v-if="metodo === 3" class="field credito">
+              <div class="fl">Plazo para pagar</div>
+              <div class="dias">
+                <button v-for="d in [7,15,30]" :key="d" :class="{ on: diasCredito === d }" @click="diasCredito = d">{{ d }} días</button>
+              </div>
+              <div class="hint">Vence el {{ fechaLimiteTxt }}. Se registrará como cuenta por cobrar en Kardex.</div>
+            </div>
+
+            <!-- Pago pendiente (para métodos de contado) -->
+            <div v-if="metodo !== 3" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
+              <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+              <div class="pt-tx">
+                <div class="pt-t">Pago pendiente</div>
+                <div class="pt-s">Se entrega ahora; el pago y su comprobante se registran después.</div>
+              </div>
+            </div>
+
+            <!-- Aviso de firma física en ticket (en vez de canvas en pantalla) -->
+            <div v-if="metodo === 3 || pagoPendiente" class="ticket-sig-notice">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <div class="ts-txt">
+                <b>Firma física en ticket impreso</b>
+                <span>Al confirmar, la mini-impresora Bluetooth imprimirá el ticket con la línea de firma para que el cliente firme con pluma de conformidad.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== PASO 3: RESUMEN Y VERIFICACIÓN ===== -->
+          <div v-show="step === 3">
+            <div class="sec">Resumen de la venta</div>
+            
+            <div class="vsum">
+              <div class="vrow">
+                <span class="l"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> Cliente</span>
+                <span class="r bold">{{ nombreMostrar }}</span>
+              </div>
+              <div class="vrow">
+                <span class="l"><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h12"/></svg> Artículos</span>
+                <span class="r">{{ lineasSeleccionadas.length }} producto(s)</span>
+              </div>
+              <div class="vrow">
+                <span class="l"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg> Pago</span>
+                <span class="r" :class="{ cred: metodo === 3 }">
+                  {{ metodos.find(m => m.k === metodo)?.t }}
+                  <template v-if="pagoPendiente"> · pendiente</template>
+                  <template v-if="metodo === 3"> · {{ diasCredito }} días</template>
+                </span>
+              </div>
+              <div class="vrow">
+                <span class="l"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Firma de conformidad</span>
+                <span class="r">{{ (metodo === 3 || pagoPendiente) ? 'En ticket impreso' : 'No requerida' }}</span>
+              </div>
+              <div class="vrow">
+                <span class="l"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Ubicación GPS</span>
+                <span class="r">{{ gpsEstado === 'ok' ? 'Capturada' : gpsEstado === 'cargando' ? 'Obteniendo…' : 'En segundo plano' }}</span>
+              </div>
+              <div class="vrow total-row">
+                <span class="l"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Total a pagar</span>
+                <span class="r grand-total">{{ money(total) }}</span>
+              </div>
+            </div>
+
+            <!-- Desglose de productos a entregar -->
+            <div class="sec" style="margin-top: 18px">Detalle de mercancía</div>
+            <div class="resumen-lista">
+              <div v-for="l in lineasSeleccionadas" :key="l.productoId" class="res-item">
+                <div class="res-main">
+                  <div class="res-nm">{{ l.productoNombre }}</div>
+                  <div class="res-qty">
+                    <template v-if="l.esCaja">
+                      {{ l.cantidad }} caja(s) de {{ l.piezasPorCaja || 1 }} pzas · {{ money2(l.precio) }}/caja
+                    </template>
+                    <template v-else>
+                      {{ fmt(l.cantidad) }} pzas · {{ money2(l.precio) }}/pza
+                    </template>
+                  </div>
+                </div>
+                <div class="res-sub">{{ money2(l.subtotal) }}</div>
+              </div>
             </div>
           </div>
         </template>
@@ -147,10 +252,24 @@
       <transition name="fadem"><div v-if="scanMsg" class="scanmsg" :class="scanTipo">{{ scanMsg }}</div></transition>
       <BarcodeScanner :show="mostrarScan" continuo :resultado="scanResult" @scan="onScan" @close="mostrarScan = false" />
 
+      <!-- Barra de navegación y total inferior fija -->
       <div class="footer" v-if="!sinCarga && !cargando && !exito">
-        <div class="tot"><span>Total</span><b>{{ money(total) }}</b></div>
+        <div class="tot">
+          <span>{{ step === 1 ? 'Total estimado' : step === 2 ? 'Total a liquidar' : 'Total final' }}</span>
+          <b>{{ money(total) }}</b>
+        </div>
         <p v-if="error" class="err">{{ error }}</p>
-        <button class="cta" :disabled="enviando || !valido" @click="vender()">{{ enviando ? 'Registrando…' : 'Cobrar y registrar venta' }}</button>
+        
+        <div class="nav-acts">
+          <button v-if="step > 1" class="btn-prev" @click="back()" :disabled="enviando">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            <span>Atrás</span>
+          </button>
+          <button class="cta" :class="{ green: step === 3 }" :disabled="enviando || !puedeAvanzar" @click="next()">
+            <span>{{ botonTexto }}</span>
+            <svg v-if="step < 3" class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- ÉXITO + TICKET -->
@@ -158,23 +277,40 @@
         <div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
         <h2>Venta registrada</h2>
         <p>{{ nombreMostrar }} · {{ ticket ? metodoTxt(ticket.metodoPago) : '' }}</p>
+        
         <div class="ticket" v-if="ticket">
-          <div class="th"><div class="b">DISTRIBUIDORA</div><small>Venta en ruta · Ticket #{{ ticket.id }} · {{ ticket.fecha }}</small></div>
-          <div class="tr" v-for="t in ticket.lineas" :key="t.nombre"><span>{{ t.nombre }} ({{ t.cant }})</span><span>{{ money2(t.sub) }}</span></div>
+          <div class="th">
+            <div class="b">DISTRIBUIDORA</div>
+            <small>Venta en ruta · Ticket #{{ ticket.id }} · {{ ticket.fecha }}</small>
+          </div>
+          <div class="tr" v-for="t in ticket.lineas" :key="t.nombre">
+            <span>{{ t.nombre }} ({{ t.cant }})</span>
+            <span>{{ money2(t.sub) }}</span>
+          </div>
           <div class="tr muted"><span>Cliente</span><span>{{ nombreMostrar }}</span></div>
           <div class="tr muted"><span>Atendió</span><span>{{ ticket.repartidor }}</span></div>
           <div class="tt"><span>TOTAL</span><span>{{ money2(ticket.total) }}</span></div>
           <div class="tr muted" v-if="ticket.pagoCon != null"><span>Efectivo recibido</span><span>{{ money2(ticket.pagoCon) }}</span></div>
           <div class="tr muted" v-if="ticket.cambio != null"><span>Cambio (feria)</span><span>{{ money2(ticket.cambio) }}</span></div>
           <div class="credit" v-if="ticket.credito">CRÉDITO · vence {{ ticket.vence }}</div>
+          
+          <!-- Representación visual de firma física en ticket impreso -->
+          <div class="ticket-sig-preview" v-if="ticket.credito || pagoPendiente">
+            <div class="tsp-lbl">RECIBÍ DE CONFORMIDAD</div>
+            <div class="tsp-line"></div>
+            <div class="tsp-nom">{{ nombreMostrar }}</div>
+          </div>
           <div style="height:14px"></div>
         </div>
+
         <div class="done-actions">
           <button class="da ghost" :disabled="imprimiendo" @click="imprimirTicket()">
             <svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
             {{ imprimiendo ? 'Imprimiendo…' : 'Imprimir ticket' }}
           </button>
-          <button class="da solid" @click="$router.replace('/app/inventario')">Listo <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button class="da solid" @click="$router.replace('/app/inventario')">
+            Listo <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
         </div>
         <p v-if="printMsg" class="print-msg">{{ printMsg }}</p>
       </div>
@@ -184,6 +320,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
@@ -192,52 +329,99 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import { imprimirTicketVenta } from '@/services/printer'
 import { obtenerUbicacion } from '@/composables/useNativo'
 
+const router = useRouter()
 const auth = useAuthStore()
+
 const cargando = ref(true)
 const sinCarga = ref(false)
+const enviando = ref(false)
+const error = ref('')
+const bodyRef = ref(null)
+
+const step = ref(1)
+
 const lineasCarga = ref([])
 const clientes = ref([])
 const cliente = ref(null)
 const buscarCli = ref('')
 const ocasional = ref(false)
 const nombreOcasional = ref('')
-function setOcasional(v) { ocasional.value = v; if (v) cliente.value = null; else nombreOcasional.value = '' }
-const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.trim() || 'Cliente ocasional') : (cliente.value?.nombre || ''))
+
+function setOcasional(v) {
+  ocasional.value = v
+  if (v) cliente.value = null
+  else nombreOcasional.value = ''
+}
+
+const nombreMostrar = computed(() =>
+  ocasional.value ? (nombreOcasional.value.trim() || 'Cliente ocasional') : (cliente.value?.nombre || ''))
+
 const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
 const pagoPendiente = ref(false)
 const efectivoRecibido = ref('')
+
 const cambioCalculado = computed(() => {
   const rec = parseFloat(efectivoRecibido.value) || 0
   return rec - total.value
 })
+
 watch(() => metodo.value, (m) => {
   if (m === 3) pagoPendiente.value = false
   referencia.value = ''
   efectivoRecibido.value = ''
 })
+
 const diasCredito = ref(7)
-const enviando = ref(false)
-const error = ref('')
+const fechaLimite = computed(() => {
+  const d = new Date()
+  d.setDate(d.getDate() + diasCredito.value)
+  return d
+})
+const fechaLimiteTxt = computed(() =>
+  fechaLimite.value.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }))
+
+const unidad = reactive({}) // productoId -> 'pza' | 'caja'
+const codMap = ref({})
+const infoMap = ref({})
+const nombreMap = ref({})
+const refs = reactive({})
+const resaltado = ref(null)
+
+const mostrarScan = ref(false)
+const scanResult = ref(null)
+let scanResultTimer = null
+const scanMsg = ref('')
+const scanTipo = ref('')
+
 const exito = ref(false)
-const exitoDet = ref([])
 const ticket = ref(null)
 const imprimiendo = ref(false)
 const printMsg = ref('')
-const METODO_TXT = { 0: 'Efectivo', 1: 'Transferencia', 2: 'Tarjeta', 3: 'Crédito', Efectivo: 'Efectivo', Transferencia: 'Transferencia', Tarjeta: 'Tarjeta', Credito: 'Crédito' }
-function metodoTxt(m) { return METODO_TXT[m] || String(m || '') }
-const mostrarScan = ref(false)
-const scanMsg = ref('')
-const scanTipo = ref('') // '' | 'err'
-const scanResult = ref(null) // { texto, tipo } -> se muestra DENTRO del escáner
-let scanResultTimer = null
-const resaltado = ref(null)
-const refs = {}
-const codMap = ref({})   // codigoBarras NORMALIZADO -> productoId
-const nombreMap = ref({}) // productoId -> nombre (para mensajes)
-const infoMap = ref({})  // productoId -> { vendePorCaja, piezasPorCaja, precioCaja, precioVenta }
-const unidad = reactive({}) // productoId -> 'pza' | 'caja'
+
+// GPS
+const coords = reactive({ lat: null, lng: null })
+const gpsEstado = ref('idle')
+
+async function capturarGps() {
+  gpsEstado.value = 'cargando'
+  try {
+    const pos = await Promise.race([
+      obtenerUbicacion(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
+    ])
+    if (pos && pos.lat != null && pos.lng != null) {
+      coords.lat = pos.lat
+      coords.lng = pos.lng
+      gpsEstado.value = 'ok'
+    } else {
+      gpsEstado.value = 'nd'
+    }
+  } catch {
+    gpsEstado.value = 'nd'
+  }
+}
 
 const metodos = [
   { k: 0, t: 'Efectivo', icon: cashOutline },
@@ -245,15 +429,16 @@ const metodos = [
   { k: 2, t: 'Tarjeta', icon: cardOutline },
   { k: 3, t: 'Crédito', icon: timeOutline }
 ]
+
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const money2 = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
-const clientesFiltrados = computed(() => { const t = buscarCli.value.trim().toLowerCase(); return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value })
-const total = computed(() => lineasCarga.value.reduce((s, l) => s + (cant[l.productoId] || 0) * precioL(l), 0))
-const valido = computed(() => total.value > 0 && (ocasional.value ? nombreOcasional.value.trim().length > 1 : !!cliente.value))
-const fechaLimite = computed(() => { const d = new Date(); d.setDate(d.getDate() + diasCredito.value); return d })
-const fechaLimiteTxt = computed(() => fechaLimite.value.toLocaleDateString('es-MX', { day: '2-digit', month: 'long' }))
+
+const clientesFiltrados = computed(() => {
+  const t = buscarCli.value.trim().toLowerCase()
+  return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value
+})
 
 function info(pid) { return infoMap.value[pid] || {} }
 function esCaja(l) { return unidad[l.productoId] === 'caja' }
@@ -262,28 +447,100 @@ function precioL(l) { return esCaja(l) ? (info(l.productoId).precioCaja || 0) : 
 function maxUnidad(l) { return esCaja(l) ? Math.floor(l.restante / factorL(l)) : l.restante }
 function setUnidad(l, u) { unidad[l.productoId] = u; cant[l.productoId] = 0 }
 function setRef(id, el) { if (el) refs[id] = el }
+
 function set(l, val) {
   const max = maxUnidad(l)
   const num = Number(val)
   if (isNaN(num) || num < 0) cant[l.productoId] = 0
   else cant[l.productoId] = Math.min(Math.round(num * 1000) / 1000, max)
 }
+
 function inc(l) {
   const cur = Number(cant[l.productoId] || 0)
   const stepVal = (cur % 1 !== 0) ? Math.ceil(cur) - cur : 1
   set(l, cur + (stepVal > 0 ? stepVal : 1))
 }
+
 function dec(l) {
   const cur = Number(cant[l.productoId] || 0)
   const stepVal = (cur % 1 !== 0) ? cur - Math.floor(cur) : 1
   set(l, cur - (stepVal > 0 ? stepVal : 1))
 }
 
-// Normaliza un código: deja solo dígitos y quita ceros a la izquierda (EAN-13 vs UPC-A)
-function normCod(x) { const d = String(x || '').replace(/\D/g, ''); return d.replace(/^0+/, '') || d }
+const total = computed(() => lineasCarga.value.reduce((s, l) => s + (cant[l.productoId] || 0) * precioL(l), 0))
+
+const lineasSeleccionadas = computed(() => {
+  return lineasCarga.value
+    .filter((l) => (cant[l.productoId] || 0) > 0)
+    .map((l) => ({
+      productoId: l.productoId,
+      productoNombre: l.productoNombre,
+      cantidad: cant[l.productoId],
+      esCaja: esCaja(l),
+      piezasPorCaja: info(l.productoId).piezasPorCaja,
+      precio: precioL(l),
+      subtotal: (cant[l.productoId] || 0) * precioL(l)
+    }))
+})
+
+const validoCliente = computed(() =>
+  ocasional.value ? nombreOcasional.value.trim().length > 1 : !!cliente.value)
+
+const puedeAvanzar = computed(() => {
+  if (step.value === 1) return validoCliente.value && lineasSeleccionadas.value.length > 0 && total.value > 0
+  if (step.value === 2) return total.value > 0
+  return total.value > 0 && validoCliente.value
+})
+
+const botonTexto = computed(() => {
+  if (enviando.value) return 'Registrando venta…'
+  if (step.value === 1) return 'Continuar al cobro'
+  if (step.value === 2) return 'Continuar a verificación'
+  return 'Confirmar venta e imprimir ticket'
+})
+
+function back() {
+  error.value = ''
+  if (step.value > 1) {
+    step.value--
+    bodyRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  } else {
+    router.replace('/app/inventario')
+  }
+}
+
+async function next() {
+  error.value = ''
+  if (step.value === 1) {
+    if (!validoCliente.value) {
+      error.value = 'Selecciona un cliente registrado o escribe el nombre del comprador.'
+      return
+    }
+    if (!lineasSeleccionadas.value.length) {
+      error.value = 'Agrega al menos un producto a la venta.'
+      return
+    }
+    step.value = 2
+    bodyRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+  if (step.value === 2) {
+    capturarGps()
+    step.value = 3
+    bodyRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+  if (step.value === 3) {
+    await vender()
+  }
+}
+
+function normCod(x) {
+  const d = String(x || '').replace(/\D/g, '')
+  return d.replace(/^0+/, '') || d
+}
 
 function aviso(msg, tipo = '') {
-  // Si el escáner está abierto, el mensaje se muestra DENTRO de él; si no, como toast inferior.
   if (mostrarScan.value) {
     scanResult.value = { texto: msg, tipo }
     clearTimeout(scanResultTimer)
@@ -303,47 +560,77 @@ function onScan(code) {
   if ((cant[l.productoId] || 0) >= maxUnidad(l)) { aviso(`${l.productoNombre}: ya alcanzaste lo disponible`, 'err'); return }
   set(l, (cant[l.productoId] || 0) + 1)
   aviso(`${l.productoNombre} agregado (${cant[l.productoId]})`)
-  // resaltar la tarjeta y hacer scroll a ella
   resaltado.value = l.productoId
   setTimeout(() => { if (resaltado.value === l.productoId) resaltado.value = null }, 1200)
   nextTick(() => { refs[l.productoId]?.scrollIntoView({ behavior: 'smooth', block: 'center' }) })
 }
+
 async function vender() {
-  if (!valido.value) return
-  const lineas = lineasCarga.value.filter((l) => (cant[l.productoId] || 0) > 0).map((l) => ({ productoId: l.productoId, cantidad: cant[l.productoId], esCaja: esCaja(l) }))
+  if (!puedeAvanzar.value) return
+  const lineas = lineasSeleccionadas.value.map((l) => ({
+    productoId: l.productoId,
+    cantidad: l.cantidad,
+    esCaja: l.esCaja
+  }))
   if (!lineas.length) { error.value = 'Agrega al menos un producto.'; return }
-  enviando.value = true; error.value = ''
-  const body = { metodoPago: metodo.value, pagoPendiente: pagoPendiente.value, lineas }
-  if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() }
-  else { body.clienteId = cliente.value.id }
-  if (!pagoPendiente.value && (metodo.value === 1 || metodo.value === 2) && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
-  if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
+  
+  enviando.value = true
+  error.value = ''
+  
+  const body = {
+    metodoPago: metodo.value,
+    pagoPendiente: pagoPendiente.value,
+    lineas
+  }
+  
+  if (ocasional.value) {
+    body.clienteId = 0
+    body.nombreOcasional = nombreOcasional.value.trim()
+  } else {
+    body.clienteId = cliente.value.id
+  }
+  
+  if (!pagoPendiente.value && (metodo.value === 1 || metodo.value === 2) && referencia.value.trim()) {
+    body.referenciaPago = referencia.value.trim()
+  }
+  if (metodo.value === 3) {
+    body.fechaLimiteCredito = fechaLimite.value.toISOString()
+  }
+
   try {
-    try {
-      const pos = await Promise.race([
-        obtenerUbicacion(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
-      ])
-      if (pos && pos.lat != null && pos.lng != null) {
-        body.latitud = pos.lat
-        body.longitud = pos.lng
-      }
-    } catch { /* si no hay señal o permiso, no bloquea la venta */ }
+    if (coords.lat != null && coords.lng != null) {
+      body.latitud = coords.lat
+      body.longitud = coords.lng
+    } else {
+      try {
+        const pos = await Promise.race([
+          obtenerUbicacion(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
+        ])
+        if (pos && pos.lat != null && pos.lng != null) {
+          body.latitud = pos.lat
+          body.longitud = pos.lng
+        }
+      } catch { /* GPS best-effort */ }
+    }
 
     const { data } = await http.post('/pedidos/autoventa', body)
     armarTicket(data)
     exito.value = true
     imprimirAuto()
-  } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo registrar la venta.' }
-  finally { enviando.value = false }
+  } catch (e) {
+    error.value = e.response?.data?.mensaje || 'No se pudo registrar la venta.'
+  } finally {
+    enviando.value = false
+  }
 }
-// La línea vive en piezas (así funciona el inventario); si se vendió por caja, mostramos
-// "N caja(s)" en el ticket en vez de las piezas sueltas (que confunden: precio raro, cantidad grande).
+
 function cantTicket(l) {
   return l.esCaja && l.piezasPorCaja > 0
     ? (l.cantidadEntregada / l.piezasPorCaja === 1 ? '1 caja' : `${fmt(l.cantidadEntregada / l.piezasPorCaja)} cajas`)
     : fmt(l.cantidadEntregada)
 }
+
 function armarTicket(d) {
   const pagoRecibido = metodo.value === 0 && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
   const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
@@ -362,18 +649,25 @@ function armarTicket(d) {
   }
 }
 
-// Construye el objeto que espera el servicio de impresión a partir del ticket ya armado.
+function metodoTxt(m) {
+  const n = typeof m === 'number' ? m : { Efectivo: 0, Transferencia: 1, Tarjeta: 2, Credito: 3 }[m] ?? 0
+  return metodos.find((x) => x.k === n)?.t || 'Efectivo'
+}
+
 function datosParaImprimir() {
   const pagoRecibido = metodo.value === 0 && Number(efectivoRecibido.value) > 0 ? Number(efectivoRecibido.value) : null
   const cambio = pagoRecibido != null ? Math.max(0, cambioCalculado.value) : null
   return {
     fecha: ticket.value?.fechaIso || Date.now(),
     folio: referencia.value.trim() || null,
+    ticketId: ticket.value?.id,
     cliente: nombreMostrar.value,
     metodo: metodoTxt(ticket.value?.metodoPago),
     pagoCon: pagoRecibido,
     cambio: cambio,
     pagoPendiente: pagoPendiente.value,
+    credito: ticket.value?.credito,
+    vence: ticket.value?.vence,
     total: ticket.value?.total || total.value,
     items: (ticket.value?.lineas || []).map((t) => {
       const cantidad = Number(String(t.cant).replace(/[^\d.]/g, '')) || 1
@@ -384,30 +678,31 @@ function datosParaImprimir() {
         ticketId: ticket.value?.id,
         repartidor: ticket.value?.repartidor,
         credito: ticket.value?.credito,
-        vence: ticket.value?.vence,
+        vence: ticket.value?.vence
       }
     })
   }
 }
 
-// Impresión manual (botón "Imprimir ticket" / reimprimir).
 async function imprimirTicket() {
-  imprimiendo.value = true; printMsg.value = ''
+  imprimiendo.value = true
+  printMsg.value = ''
   try {
     await imprimirTicketVenta(datosParaImprimir())
-    printMsg.value = 'Ticket impreso.'
+    printMsg.value = 'Ticket impreso correctamente.'
   } catch (e) {
-    printMsg.value = e?.message || 'No se pudo imprimir. Revisa la impresora e intenta con Reimprimir.'
-  } finally { imprimiendo.value = false }
+    printMsg.value = e?.message || 'No se pudo imprimir. Revisa la impresora e intenta de nuevo.'
+  } finally {
+    imprimiendo.value = false
+  }
 }
 
-// Impresión automática tras registrar la venta. NUNCA tumba la venta: si falla, solo avisa.
 async function imprimirAuto() {
   try {
     await imprimirTicketVenta(datosParaImprimir())
     printMsg.value = 'Ticket impreso.'
-  } catch (e) {
-    printMsg.value = 'La venta se guardó, pero no se pudo imprimir. Usa "Reimprimir".'
+  } catch {
+    printMsg.value = 'La venta se guardó, pero no se pudo imprimir. Usa "Imprimir ticket".'
   }
 }
 
@@ -426,11 +721,13 @@ onMounted(async () => {
         nom[x.id] = x.nombre
       })
       codMap.value = m; infoMap.value = info; nombreMap.value = nom
-    } catch { /* el escaneo por código quedará limitado, no es crítico */ }
+    } catch { /* Escaneo opcional */ }
   } catch (e) {
     if (e.response?.status === 404) sinCarga.value = true
-    else error.value = 'No se pudo cargar la información.'
-  } finally { cargando.value = false }
+    else error.value = 'No se pudo cargar la información de la carga.'
+  } finally {
+    cargando.value = false
+  }
 })
 </script>
 
@@ -439,31 +736,51 @@ onMounted(async () => {
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 8px 2px; }
 .muted { color: var(--muted); padding: 16px 2px; }
 .muted2 { color: var(--muted); font-size: 13px; padding: 8px 2px; }
-.bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; }
+
+/* Barra superior */
+.bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; background: var(--paper); }
 .iconbtn { width: 40px; height: 40px; border-radius: 13px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
 .iconbtn.ghost { border-color: transparent; background: transparent; }
 .iconbtn svg { width: 20px; height: 20px; stroke: var(--ink); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .ttl { flex: 1; }
 .ttl .s { font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--pine); }
-.ttl .n { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; margin-top: 1px; }
-.body { padding: 6px 18px 160px; }
+.ttl .n { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; margin-top: 1px; color: var(--ink); }
+
+/* Steps progress */
+.steps { display: flex; padding: 8px 18px 12px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.stepi { flex: 1; display: flex; align-items: center; gap: 8px; position: relative; }
+.stepi .num { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 12px; color: var(--muted); background: var(--surface); flex-shrink: 0; }
+.stepi .tx { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.stepi .ln { flex: 1; height: 2px; background: var(--line); margin: 0 4px; }
+.stepi.on .num { border-color: var(--pine); background: var(--pine); color: #fff; }
+.stepi.on .tx { color: var(--pine); font-weight: 800; }
+.stepi.done .num { border-color: var(--pine); background: var(--pine); color: #fff; }
+.stepi.done .ln { background: var(--pine); }
+
+.body { padding: 6px 18px 180px; }
 .vacio { text-align: center; padding: 50px 20px; }
 .emoji-big { margin-bottom: 14px; color: var(--muted); text-align: center; }
 .emoji-big svg { width: 52px; height: 52px; }
 .vacio p { color: var(--muted); font-weight: 500; line-height: 1.5; margin-bottom: 18px; }
 .cta-line { background: var(--pine); color: #fff; border: none; border-radius: 13px; padding: 13px 22px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
-.sec { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 20px 2px 10px; }
+.sec { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 18px 2px 10px; }
+
+/* Selector cliente */
+.modo-cli { display: flex; gap: 6px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
+.modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 9px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: .15s; }
+.modo-cli button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.ocasional-hint { font-size: 12px; color: var(--muted); font-weight: 500; margin: 8px 4px 0; line-height: 1.4; }
+
 .search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
 .search svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
 .search input { border: none; background: transparent; outline: none; font-size: 14.5px; font-weight: 500; color: var(--ink); width: 100%; }
-.cli-lista { margin-top: 8px; max-height: 230px; overflow: auto; }
+.cli-lista { margin-top: 8px; max-height: 220px; overflow: auto; }
 .cli-op { display: flex; align-items: center; gap: 11px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 11px 13px; margin-bottom: 7px; cursor: pointer; }
 .cli-sel { display: flex; align-items: center; gap: 12px; background: var(--pine-tint); border: 1px solid #BFD8CD; border-radius: 14px; padding: 13px; cursor: pointer; }
 .cli-sel ion-icon { font-size: 19px; color: var(--pine); }
 .av-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--amber-soft); display: grid; place-items: center; color: #B9781F; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; flex: 0 0 auto; }
 .cli-op .nm, .cli-sel .nm { font-weight: 700; font-size: 14.5px; }
 .cli-sel .info { flex: 1; } .cli-sel .sub { font-size: 12px; color: var(--muted); }
-
 .cli-sel-wrap { margin-bottom: 8px; }
 .nm-wrap { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tag-deuda { font-size: 11px; font-weight: 700; color: var(--clay); background: #FEF2F2; border: 1px solid #FECACA; padding: 2px 7px; border-radius: 6px; }
@@ -476,16 +793,7 @@ onMounted(async () => {
 .deuda-txt b { font-variant-numeric: tabular-nums; }
 .deuda-txt small { display: block; font-size: 11.5px; font-weight: 600; margin-top: 1px; }
 
-/* feria / cash change */
-.tot-hint { font-size: 12px; color: var(--pine); text-transform: none; letter-spacing: 0; }
-.tot-hint b { font-variant-numeric: tabular-nums; }
-.feria-box { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--pine-tint); border: 1px solid #C8E0D6; }
-.feria-row { display: flex; align-items: center; justify-content: space-between; }
-.feria-row.falta { color: var(--clay); }
-.feria-lbl { font-size: 13px; font-weight: 700; color: var(--pine); }
-.feria-row.falta .feria-lbl { color: var(--clay); }
-.feria-val { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--pine); font-variant-numeric: tabular-nums; }
-.feria-row.falta .feria-val { color: var(--clay); }
+/* Productos */
 .prod { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 9px; box-shadow: var(--shadow); transition: background .3s, border-color .3s; }
 .prod.flash { background: var(--pine-tint); border-color: var(--pine); }
 .prod .top { display: flex; align-items: center; gap: 12px; }
@@ -501,33 +809,89 @@ onMounted(async () => {
 .stepper { display: flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex: 0 0 auto; }
 .stepper button { width: 38px; height: 40px; border: none; background: transparent; font-size: 20px; color: var(--pine); cursor: pointer; }
 .stepper button:disabled { color: #C7CFC9; }
-.stepper .q { min-width: 30px; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; }
 .stepper .q-input { width: 52px; border: none; background: transparent; text-align: center; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--ink); padding: 0 2px; outline: none; -moz-appearance: textfield; }
 .stepper .q-input::-webkit-outer-spin-button, .stepper .q-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Pago */
 .pagos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .pagos button { display: flex; flex-direction: column; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 12px 4px; font-family: "Hanken Grotesk"; font-weight: 700; font-size: 12px; cursor: pointer; }
 .pagos button ion-icon { font-size: 20px; }
 .pagos button.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .field { margin-top: 10px; }
+.field .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; }
 .inp { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.tot-hint { font-size: 12px; color: var(--pine); text-transform: none; letter-spacing: 0; }
+.tot-hint b { font-variant-numeric: tabular-nums; }
+.feria-box { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--pine-tint); border: 1px solid #C8E0D6; }
+.feria-row { display: flex; align-items: center; justify-content: space-between; }
+.feria-row.falta { color: var(--clay); }
+.feria-lbl { font-size: 13px; font-weight: 700; color: var(--pine); }
+.feria-row.falta .feria-lbl { color: var(--clay); }
+.feria-val { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--pine); font-variant-numeric: tabular-nums; }
+.feria-row.falta .feria-val { color: var(--clay); }
+
 .credito { background: var(--amber-soft); border: 1px solid #EAD9B8; border-radius: 14px; padding: 13px; }
-.credito .fl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8A6516; margin-bottom: 9px; }
+.credito .fl { color: #8A6516; margin-bottom: 9px; }
 .dias { display: flex; gap: 8px; }
 .dias button { flex: 1; border: 1px solid #EAD9B8; background: var(--surface); color: var(--ink-soft); border-radius: 10px; padding: 9px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
 .dias button.on { background: var(--amber); color: #fff; border-color: var(--amber); }
 .credito .hint { font-size: 12px; color: #8A6516; margin-top: 9px; font-weight: 600; }
-.footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 24px -16px rgba(0,0,0,.3); }
+
+.pend-toggle { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 13px; margin-top: 12px; cursor: pointer; transition: .18s; }
+.pend-toggle.on { border-color: var(--amber); background: var(--amber-soft); }
+.pt-check { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; flex: 0 0 auto; transition: .18s; }
+.pend-toggle.on .pt-check { background: var(--amber); border-color: var(--amber); }
+.pt-check svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pt-tx { flex: 1; }
+.pt-t { font-weight: 700; font-size: 14px; }
+.pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
+
+/* Ticket signature notice */
+.ticket-sig-notice { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px dashed var(--line); padding: 12px 14px; border-radius: 12px; margin-top: 12px; color: var(--ink); }
+.ticket-sig-notice svg { stroke: var(--pine); flex-shrink: 0; }
+.ts-txt { display: flex; flex-direction: column; gap: 2px; }
+.ts-txt b { font-size: 13px; color: var(--ink); }
+.ts-txt span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+
+/* Resumen (Paso 3) */
+.vsum { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px 14px; box-shadow: var(--shadow); }
+.vrow { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px dashed var(--line); font-size: 13px; color: var(--ink); }
+.vrow:last-child { border-bottom: none; }
+.vrow .l { display: flex; align-items: center; gap: 9px; color: var(--muted); font-weight: 500; }
+.vrow .l svg { width: 16px; height: 16px; stroke: var(--pine); fill: none; stroke-width: 2; flex-shrink: 0; }
+.vrow .r { font-weight: 700; text-align: right; }
+.vrow .r.bold { font-family: "Bricolage Grotesque"; font-size: 14px; }
+.vrow .r.cred { color: #8A6516; }
+.vrow.total-row { padding-top: 13px; margin-top: 2px; border-top: 1.5px solid var(--line); }
+.grand-total { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 20px; color: var(--pine); }
+
+.resumen-lista { display: flex; flex-direction: column; gap: 8px; }
+.res-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.res-nm { font-weight: 700; font-size: 13.5px; color: var(--ink); }
+.res-qty { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.res-sub { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 14px; color: var(--ink); }
+
+/* Footer */
+.footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 12px 18px calc(14px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 24px -16px rgba(0,0,0,.3); z-index: 40; }
 .tot { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .tot span { font-size: 13px; color: var(--muted); font-weight: 600; }
-.tot b { font-family: "Bricolage Grotesque"; font-size: 26px; font-variant-numeric: tabular-nums; }
-.cta { width: 100%; background: var(--pine); color: #fff; border: none; border-radius: 14px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(14,92,74,.8); }
-.cta:disabled { opacity: .5; }
-.iconbtn.scan svg { width: 21px; height: 21px; }
-.scanmsg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 4500; background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; box-shadow: 0 12px 24px -10px rgba(0,0,0,.5); max-width: 86vw; text-align: center; }
-.scanmsg.err { background: var(--clay); }
-.fadem-enter-active, .fadem-leave-active { transition: opacity .2s; } .fadem-enter-from, .fadem-leave-to { opacity: 0; }
+.tot b { font-family: "Bricolage Grotesque"; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ink); }
 
-/* éxito + ticket (igual que en la entrega) */
+.nav-acts { display: flex; gap: 10px; }
+.btn-prev { background: var(--paper-2); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.btn-prev svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+.cta { flex: 1; background: var(--pine); color: #fff; border: none; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(14,92,74,.8); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.cta.green { background: #059669; }
+.cta:disabled { opacity: .5; }
+
+/* Escáner */
+.iconbtn.scan svg { width: 21px; height: 21px; }
+.scanmsg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 100px; z-index: 4500; background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; box-shadow: 0 12px 24px -10px rgba(0,0,0,.5); max-width: 86vw; text-align: center; }
+.scanmsg.err { background: var(--clay); }
+.fadem-enter-active, .fadem-leave-active { transition: opacity .2s; }
+.fadem-enter-from, .fadem-leave-to { opacity: 0; }
+
+/* Éxito y Ticket */
 .done-view { position: fixed; inset: 0; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding: 60px 26px 26px; z-index: 50; overflow: auto; }
 .done-view.show { display: flex; animation: fadev .4s ease; }
 @keyframes fadev { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -538,7 +902,8 @@ onMounted(async () => {
 @keyframes draw { to { stroke-dashoffset: 0; } }
 .done-view h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; letter-spacing: -.01em; flex-shrink: 0; }
 .done-view p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; text-align: center; flex-shrink: 0; }
-.ticket { background: #fff; width: 240px; border-radius: 4px; margin-top: 24px; padding: 18px 18px 8px; font-family: "Hanken Grotesk"; color: #1c1c1c; position: relative; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); flex-shrink: 0; }
+
+.ticket { background: #fff; width: 250px; border-radius: 4px; margin-top: 24px; padding: 18px 18px 8px; font-family: "Hanken Grotesk"; color: #1c1c1c; position: relative; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5); flex-shrink: 0; }
 .ticket .th { text-align: center; border-bottom: 1.5px dashed #c9c9c9; padding-bottom: 11px; }
 .ticket .th .b { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 17px; letter-spacing: .02em; }
 .ticket .th small { font-size: 10.5px; color: #777; display: block; margin-top: 2px; }
@@ -546,6 +911,11 @@ onMounted(async () => {
 .ticket .tr.muted { color: #888; }
 .ticket .tt { border-top: 1.5px dashed #c9c9c9; margin-top: 9px; padding-top: 9px; display: flex; justify-content: space-between; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 14px; }
 .ticket .credit { background: #f0f6f3; border: 1px dashed #9cc5b6; border-radius: 6px; font-size: 10.5px; text-align: center; padding: 7px; margin-top: 10px; color: #0A3F33; font-weight: 600; }
+.ticket-sig-preview { margin-top: 16px; border-top: 1px dashed #bbb; padding-top: 10px; text-align: center; }
+.tsp-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; color: #666; }
+.tsp-line { border-bottom: 1px solid #333; margin: 24px auto 6px; width: 85%; }
+.tsp-nom { font-size: 10px; font-weight: 600; color: #444; }
+
 .done-actions { display: flex; gap: 10px; margin-top: 26px; width: 100%; max-width: 360px; }
 .da { flex: 1; border: none; border-radius: 14px; padding: 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .da.ghost { background: rgba(255,255,255,.12); color: #fff; }
@@ -553,19 +923,4 @@ onMounted(async () => {
 .da.solid { background: var(--amber); color: #3a2607; }
 .da svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .print-msg { color: #BFE0D5; font-size: 12.5px; margin-top: 14px; text-align: center; max-width: 320px; }
-
-.modo-cli { display: flex; gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
-.modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 9px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: .15s; }
-.modo-cli button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-.ocasional-hint { font-size: 12px; color: var(--muted); font-weight: 500; margin: 8px 4px 0; line-height: 1.4; }
-
-.pend-toggle { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 13px; margin-top: 12px; cursor: pointer; transition: .18s; }
-.pend-toggle.on { border-color: var(--amber); background: var(--amber-soft); }
-.pt-check { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; flex: 0 0 auto; transition: .18s; }
-.pend-toggle.on .pt-check { background: var(--amber); border-color: var(--amber); }
-.pt-check svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.pt-tx { flex: 1; }
-.pt-t { font-weight: 700; font-size: 14px; }
-.pt-s { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; line-height: 1.35; }
-.field .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
 </style>

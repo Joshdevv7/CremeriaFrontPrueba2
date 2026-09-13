@@ -132,7 +132,7 @@
           <!-- Tabs de Kardex -->
           <div class="kardex-tabs">
             <button :class="{ on: kardexTab === 'compras' }" @click="kardexTab = 'compras'">
-              Compras a crédito ({{ kardexData.compras?.length || 0 }})
+              Compras y adeudos ({{ kardexData.compras?.length || 0 }})
             </button>
             <button :class="{ on: kardexTab === 'abonos' }" @click="kardexTab = 'abonos'">
               Historial de abonos ({{ kardexData.abonos?.length || 0 }})
@@ -141,12 +141,13 @@
 
           <!-- Tab Compras -->
           <div v-if="kardexTab === 'compras'" class="kardex-tab-content">
-            <p v-if="!kardexData.compras?.length" class="muted2">No hay compras a crédito registradas.</p>
+            <p v-if="!kardexData.compras?.length" class="muted2">No hay compras ni adeudos registrados.</p>
             <div v-for="c in kardexData.compras" :key="c.cuentaId || c.cuentaPorCobrarId || c.pedidoId" class="compra-item">
               <div class="ci-head" @click="toggleCompra(c.cuentaId || c.cuentaPorCobrarId || c.pedidoId)">
                 <div>
                   <div class="ci-tit">
                     <b>Pedido #{{ c.pedidoId }}</b> · {{ fecha(c.fecha) }}
+                    <span v-if="c.esPagoPendiente" class="tag-pend-pago">Pendiente ({{ c.metodoPago || 'Pago' }})</span>
                     <span class="tag-est" :class="c.estado.toLowerCase()">{{ c.estado }}</span>
                   </div>
                   <div class="ci-sub">
@@ -402,11 +403,12 @@ function construirMensajeWhatsApp() {
     const pendientes = kd.compras.filter(c => c.estado !== 'Pagada' && (c.saldo == null || c.saldo > 0))
     const paraMostrar = pendientes.length ? pendientes.slice(0, 6) : kd.compras.slice(0, 5)
 
-    msg += `*Compras a crédito ${pendientes.length ? 'pendientes' : 'recientes'}:*\n`
+    msg += `*Compras y adeudos ${pendientes.length ? 'pendientes' : 'recientes'}:*\n`
     paraMostrar.forEach(c => {
       const saldoComp = c.saldo ?? (c.monto - (c.abonado || 0))
       const detalleSaldo = saldoComp < c.monto && saldoComp > 0 ? ` (Resta: ${money(saldoComp)})` : ''
-      msg += `• Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)}${detalleSaldo} [${c.estado}]\n`
+      const estadoTag = c.esPagoPendiente ? `[Pendiente - ${c.metodoPago || 'Pago'}]` : `[${c.estado}]`
+      msg += `• Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)}${detalleSaldo} ${estadoTag}\n`
     })
     msg += `\n`
   }
@@ -559,6 +561,7 @@ onMounted(() => {
 .tag-est.pendiente { background: var(--amber-soft); color: #B9781F; }
 .tag-est.vencida { background: var(--clay-soft); color: var(--clay); }
 .tag-est.pagada { background: var(--pine-tint); color: var(--pine); }
+.tag-pend-pago { font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 6px; background: #FFF7ED; color: #C2410C; border: 1px solid #FDBA74; }
 .ci-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .ci-det { border-top: 1px solid var(--line); background: var(--surface); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 .ci-linea { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-soft); }

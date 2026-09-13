@@ -283,7 +283,7 @@
             <!-- Pestañas internas: Compras vs Abonos -->
             <div class="ktabs">
               <button :class="{ on: ktab === 'compras' }" @click="ktab = 'compras'">
-                Compras a crédito ({{ kardexData.compras?.length || 0 }})
+                Compras y adeudos ({{ kardexData.compras?.length || 0 }})
               </button>
               <button :class="{ on: ktab === 'abonos' }" @click="ktab = 'abonos'">
                 Abonos realizados ({{ kardexData.abonos?.length || 0 }})
@@ -292,11 +292,14 @@
 
             <!-- Compras -->
             <div v-show="ktab === 'compras'" class="klist">
-              <div v-if="!kardexData.compras?.length" class="kempty">Sin compras a crédito registradas.</div>
+              <div v-if="!kardexData.compras?.length" class="kempty">Sin compras ni adeudos registrados.</div>
               <div v-for="c in kardexData.compras" :key="c.cuentaId" class="kitem-card" :class="c.estado.toLowerCase()">
                 <div class="kitem-top">
                   <div>
-                    <div class="kitem-title">Pedido #{{ c.pedidoId }}</div>
+                    <div class="kitem-title">
+                      Pedido #{{ c.pedidoId }}
+                      <span v-if="c.esPagoPendiente" class="kbadge pend-pago">Pendiente ({{ c.metodoPago || 'Pago' }})</span>
+                    </div>
                     <div class="kitem-date">Compra: {{ fecha(c.fecha) }} · Vence: {{ fecha(c.fechaLimite) }}</div>
                   </div>
                   <span class="kbadge" :class="c.estado.toLowerCase()">{{ c.estado }}</span>
@@ -547,9 +550,10 @@ function enviarEstadoCuentaWhatsapp() {
   if (kd.compras?.length) {
     const pendientes = kd.compras.filter(c => c.estado !== 'Pagada' && (c.saldo == null || c.saldo > 0))
     const paraMostrar = pendientes.length ? pendientes.slice(0, 5) : kd.compras.slice(0, 4)
-    msg += `*Compras a crédito pendientes / recientes:*\n`
+    msg += `*Compras y adeudos ${pendientes.length ? 'pendientes' : 'recientes'}:*\n`
     paraMostrar.forEach(c => {
-      msg += `• Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)} [${c.estado}]\n`
+      const estadoTag = c.esPagoPendiente ? `[Pendiente - ${c.metodoPago || 'Pago'}]` : `[${c.estado}]`
+      msg += `• Pedido #${c.pedidoId} (${fecha(c.fecha)}): ${money(c.monto)} ${estadoTag}\n`
     })
     msg += `\n`
   }
@@ -1340,6 +1344,7 @@ onMounted(() => {
 .kbadge.vencida { background: #FEE2E2; color: #DC2626; }
 .kbadge.pendiente { background: #FEF3C7; color: #D97706; }
 .kbadge.pagada { background: #D1FAE5; color: #059669; }
+.kbadge.pend-pago { background: #FFF7ED; color: #C2410C; border: 1px solid #FDBA74; }
 
 .kitem-bottom {
   display: flex;
