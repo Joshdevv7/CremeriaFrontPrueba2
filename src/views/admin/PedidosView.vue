@@ -56,19 +56,22 @@
 
     <!-- Grilla de pedidos -->
     <div class="grid" v-if="!cargando && itemsFiltrados.length">
-      <div v-for="p in itemsFiltrados" :key="p.id" class="card">
+      <div v-for="p in itemsFiltrados" :key="p.id" class="card" :class="{ 'card-canc': p.estado === 'Cancelado' }">
         <div class="info" :class="{ click: p.estado === 'Abierto' }" @click="p.estado === 'Abierto' && editar(p.id)">
           <div class="top">
-            <span class="cli">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
-            <span v-if="p.esVentaLibre" class="badge vr">Venta en ruta</span>
-            <span v-if="p.estadoPago === 'Pendiente'" class="badge pend">Pago pendiente</span>
+            <span class="cli" :class="{ tachado: p.estado === 'Cancelado' }">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
+            <span v-if="p.esVentaLibre" class="badge vr">Venta mostrador/ruta</span>
+            <span v-if="p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'" class="badge pend">Pago pendiente</span>
             <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
           </div>
           <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor asignado' }} · {{ fecha(p.fecha) }}</div>
+          <div v-if="p.estado === 'Cancelado'" class="sub-canc">
+            ⚠️ <b>Cancelada:</b> {{ p.canceladoPorNombre ? 'por ' + p.canceladoPorNombre : '' }} · Motivo: "{{ p.motivoCancelacion || 'No especificado' }}"
+          </div>
         </div>
         <div class="right">
-          <div class="total">{{ money(p.total) }}</div>
-          <button v-if="p.estadoPago === 'Pendiente'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago recibido">
+          <div class="total" :class="{ tachado: p.estado === 'Cancelado' }">{{ money(p.total) }}</div>
+          <button v-if="p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago recibido">
             <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </button>
           <button v-if="p.estado === 'Abierto'" class="del" @click.stop="eliminar(p)" title="Eliminar pedido"><ion-icon :icon="trashOutline" /></button>
@@ -199,7 +202,8 @@ const estados = [
   { v: 'EnRuta', t: 'En ruta' },
   { v: 'CerradoCompleto', t: 'Completos' },
   { v: 'CerradoParcial', t: 'Parciales' },
-  { v: 'CerradoNoEntregado', t: 'No entregado' }
+  { v: 'CerradoNoEntregado', t: 'No entregado' },
+  { v: 'Cancelado', t: 'Cancelados' }
 ]
 
 // paginación
@@ -217,9 +221,23 @@ const paginasVisibles = computed(() => {
 })
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
-const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
-const estadoTxt = (e) => ({ Abierto: 'Abierto', EnRuta: 'En ruta', CerradoCompleto: 'Completa', CerradoParcial: 'Parcial', CerradoNoEntregado: 'No entregado' }[e] || e)
-const badge = (e) => ({ Abierto: 'amber', EnRuta: 'sky', CerradoCompleto: 'pine', CerradoParcial: 'amber', CerradoNoEntregado: 'clay' }[e] || 'muted')
+const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—'
+const estadoTxt = (e) => ({
+  Abierto: 'Abierto',
+  EnRuta: 'En ruta',
+  CerradoCompleto: 'Completa',
+  CerradoParcial: 'Parcial',
+  CerradoNoEntregado: 'No entregado',
+  Cancelado: 'Cancelada'
+}[e] || e)
+const badge = (e) => ({
+  Abierto: 'amber',
+  EnRuta: 'sky',
+  CerradoCompleto: 'pine',
+  CerradoParcial: 'amber',
+  CerradoNoEntregado: 'clay',
+  Cancelado: 'clay'
+}[e] || 'muted')
 
 // Filtro rápido de texto en cliente
 const itemsFiltrados = computed(() => {
@@ -232,9 +250,9 @@ const itemsFiltrados = computed(() => {
   })
 })
 
-// KPIs
-const kpiMontoTotal = computed(() => items.value.reduce((s, p) => s + (p.total || 0), 0))
-const kpiPendientes = computed(() => items.value.filter(p => p.estadoPago === 'Pendiente'))
+// KPIs (las canceladas se descuentan del monto facturado)
+const kpiMontoTotal = computed(() => items.value.filter(p => p.estado !== 'Cancelado').reduce((s, p) => s + (p.total || 0), 0))
+const kpiPendientes = computed(() => items.value.filter(p => p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'))
 const kpiPendientesCount = computed(() => kpiPendientes.value.length)
 const kpiPendientesMonto = computed(() => kpiPendientes.value.reduce((s, p) => s + (p.total || 0), 0))
 const kpiCompletosCount = computed(() => items.value.filter(p => p.estado === 'CerradoCompleto').length)
@@ -366,6 +384,10 @@ onMounted(() => {
 .badge.muted { color: var(--muted); background: var(--paper-2); }
 .badge.vr { color: var(--sky); background: var(--sky-soft); }
 .badge.pend { color: #B9781F; background: var(--amber-soft); }
+
+.card.card-canc { background: #FCFAF9; border-color: #F0D5D0; opacity: .85; }
+.cli.tachado, .total.tachado { text-decoration: line-through; color: var(--muted); }
+.sub-canc { font-size: 11.5px; color: var(--clay); margin-top: 4px; line-height: 1.4; background: #FFF5F4; padding: 4px 8px; border-radius: 6px; display: inline-block; }
 
 .del { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--clay-soft); background: var(--clay-soft); display: grid; place-items: center; cursor: pointer; }
 .del ion-icon { font-size: 17px; color: var(--clay); }

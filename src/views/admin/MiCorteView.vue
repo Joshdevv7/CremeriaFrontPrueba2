@@ -38,6 +38,9 @@
             <div class="mv">{{ money(resumen.totalCredito) }}<small>MXN</small></div>
           </div>
           <p v-if="resumen.totalCredito > 0" class="cred-note">El crédito no se cobra hoy · pasa automáticamente a Cuentas por Cobrar</p>
+          <div v-if="ventasCanceladasTurno > 0" class="canc-note">
+            ⚠️ <b>{{ ventasCanceladasTurno }} venta(s) cancelada(s)</b> en este turno · excluidas de tu corte y de tu efectivo esperado.
+          </div>
 
           <!-- Botón y lista de ventas incluidas en este corte -->
           <button class="btn-desglose" @click="toggleVentasPorCortar()">
@@ -201,6 +204,7 @@ const printMsg = ref('')
 
 const mostrarVentas = ref(false)
 const ventasPorCortar = ref([])
+const ventasCanceladasTurno = ref(0)
 const cargandoVentas = ref(false)
 const mostrarGuia = ref(false)
 
@@ -245,7 +249,8 @@ async function toggleVentasPorCortar() {
       const { data } = await http.get('/pedidos', {
         params: { repartidorId: auth.usuarioId, esVentaLibre: true, tamano: 100 }
       })
-      ventasPorCortar.value = (data.items || []).filter(v => !v.corteCajaId)
+      ventasPorCortar.value = (data.items || []).filter(v => !v.corteCajaId && v.estado !== 'Cancelado')
+      ventasCanceladasTurno.value = (data.items || []).filter(v => !v.corteCajaId && v.estado === 'Cancelado').length
     } catch { /* continuar */ }
     finally { cargandoVentas.value = false }
   }
@@ -259,6 +264,13 @@ async function cargar() {
     if (data.hayCargaPorCortar) {
       cashStr.value = Number(data.efectivoEsperado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     }
+    // Verificar si hay canceladas en el turno
+    try {
+      const resP = await http.get('/pedidos', {
+        params: { repartidorId: auth.usuarioId, esVentaLibre: true, estado: 'Cancelado', tamano: 50 }
+      })
+      ventasCanceladasTurno.value = (resP.data.items || []).filter(v => !v.corteCajaId).length
+    } catch { /* continuar */ }
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo cargar el corte.'
   } finally { cargando.value = false }
@@ -376,6 +388,7 @@ onMounted(() => {
 .mrow .mv { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; text-align: right; }
 .mrow .mv small { display: block; font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
 .cred-note { font-size: 11.5px; color: var(--clay); font-weight: 600; margin: 2px 4px 0; }
+.canc-note { font-size: 11.5px; color: var(--clay); background: #FFF5F4; border: 1px solid #F0D5D0; padding: 6px 10px; border-radius: 8px; margin: 6px 2px 0; line-height: 1.4; }
 
 /* Botón y lista de tickets */
 .btn-desglose { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; color: var(--ink-soft); cursor: pointer; box-shadow: var(--shadow); }

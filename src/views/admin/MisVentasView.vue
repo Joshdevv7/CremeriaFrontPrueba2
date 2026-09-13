@@ -12,8 +12,8 @@
       <div class="kpi-card">
         <div class="kpi-icon sky"><ion-icon :icon="cartOutline" /></div>
         <div class="kpi-info">
-          <div class="kpi-l">Ventas registradas</div>
-          <div class="kpi-v">{{ items.length }} ticket(s)</div>
+          <div class="kpi-l">Ventas activas</div>
+          <div class="kpi-v">{{ itemsActivos.length }} ticket(s)</div>
         </div>
       </div>
       <div class="kpi-card">
@@ -30,6 +30,13 @@
           <div class="kpi-v">{{ kpiPendientesCount }} ({{ money(kpiPendientesMonto) }})</div>
         </div>
       </div>
+      <div class="kpi-card kpi-canc" v-if="kpiCanceladasCount > 0">
+        <div class="kpi-icon clay"><ion-icon :icon="closeCircleOutline" /></div>
+        <div class="kpi-info">
+          <div class="kpi-l">Canceladas</div>
+          <div class="kpi-v">{{ kpiCanceladasCount }} venta(s)</div>
+        </div>
+      </div>
     </div>
 
     <!-- Barra de filtros y búsqueda -->
@@ -40,11 +47,14 @@
       </div>
 
       <div class="periodos">
-        <button class="p-btn" :class="{ on: periodo === 'hoy' }" @click="setPeriodo('hoy')">Hoy</button>
-        <button class="p-btn" :class="{ on: periodo === 'semana' }" @click="setPeriodo('semana')">Esta semana</button>
-        <button class="p-btn" :class="{ on: periodo === 'todos' }" @click="setPeriodo('todos')">Todas</button>
-        <button class="p-btn tag-corte" :class="{ on: soloSinCorte }" @click="soloSinCorte = !soloSinCorte">
+        <button class="p-btn" :class="{ on: periodo === 'hoy' && !soloCanceladas }" @click="setPeriodo('hoy')">Hoy</button>
+        <button class="p-btn" :class="{ on: periodo === 'semana' && !soloCanceladas }" @click="setPeriodo('semana')">Esta semana</button>
+        <button class="p-btn" :class="{ on: periodo === 'todos' && !soloCanceladas && !soloSinCorte }" @click="setPeriodo('todos')">Todas</button>
+        <button class="p-btn tag-corte" :class="{ on: soloSinCorte && !soloCanceladas }" @click="toggleSinCorte()">
           Por cortar
+        </button>
+        <button v-if="kpiCanceladasCount > 0" class="p-btn tag-cancel" :class="{ on: soloCanceladas }" @click="toggleCanceladas()">
+          Canceladas ({{ kpiCanceladasCount }})
         </button>
       </div>
     </div>
@@ -55,71 +65,73 @@
 
     <!-- Lista de ventas -->
     <div class="grid" v-if="!cargando && itemsPaginados.length">
-      <div v-for="v in itemsPaginados" :key="v.id" class="card" :class="{ open: abierta === v.id }">
+      <div v-for="v in itemsPaginados" :key="v.id" class="card" :class="{ open: abierta === v.id, cancelada: v.estado === 'Cancelado' }">
         <div class="head" @click="toggle(v)">
-          <div class="chip"><ion-icon :icon="cartOutline" /></div>
+          <div class="chip" :class="{ chip_canc: v.estado === 'Cancelado' }">
+            <ion-icon :icon="v.estado === 'Cancelado' ? closeCircleOutline : cartOutline" />
+          </div>
           <div class="info">
             <div class="top-row">
-              <span class="cli">{{ v.clienteNombreMostrar }}</span>
-              <span v-if="!v.corteCajaId" class="badge-por-cortar">Por cortar</span>
-              <span v-else class="badge-cortado">Cortada #{{ v.corteCajaId }}</span>
+              <span class="cli" :class="{ tachado: v.estado === 'Cancelado' }">{{ v.clienteNombreMostrar }}</span>
+              <span v-if="v.estado === 'Cancelado'" class="badge-cancelada">CANCELADA</span>
+              <template v-else>
+                <span v-if="!v.corteCajaId" class="badge-por-cortar">Por cortar</span>
+                <span v-else class="badge-cortado">Cortada #{{ v.corteCajaId }}</span>
+              </template>
             </div>
             <div class="sub">
               #{{ v.id }} · {{ fecha(v.fecha) }} · {{ v.metodoPago || 'Efectivo' }}
-              <span v-if="v.estadoPago === 'Pendiente'" class="badge-pend">Pago pendiente</span>
-              <span v-if="v.editadoEn" class="badge-ed">Editada</span>
+              <span v-if="v.estadoPago === 'Pendiente' && v.estado !== 'Cancelado'" class="badge-pend">Pago pendiente</span>
             </div>
           </div>
-          <div class="total">{{ money(v.total) }}</div>
+          <div class="total" :class="{ tachado: v.estado === 'Cancelado' }">{{ money(v.total) }}</div>
           <ion-icon :icon="abierta === v.id ? chevronUp : chevronDown" class="arrow" />
         </div>
 
         <div class="detalle" v-if="abierta === v.id">
+          <!-- Banner de auditoría si la venta fue cancelada -->
+          <div v-if="v.estado === 'Cancelado'" class="banner-cancelada">
+            <div class="bc-head">
+              <ion-icon :icon="warningOutline" />
+              <b>Venta cancelada en su totalidad</b>
+            </div>
+            <div class="bc-meta">
+              <span><b>Fecha cancelación:</b> {{ fecha(v.canceladoEn) }}</span>
+              <span v-if="v.canceladoPorNombre"><b>Cancelada por:</b> {{ v.canceladoPorNombre }}</span>
+            </div>
+            <div class="bc-motivo">
+              <b>Motivo registrado:</b> {{ v.motivoCancelacion || 'No especificado' }}
+            </div>
+            <div class="bc-aviso">
+              ℹ️ Todos los productos de este ticket regresaron al inventario. Esta venta no suma a tus cortes ni a tu efectivo en mano.
+            </div>
+          </div>
+
           <p v-if="cargandoDetalle" class="muted2">Cargando productos del ticket…</p>
           <template v-else-if="detalle">
-            <template v-if="editando !== v.id">
-              <div class="linea" v-for="l in detalle.lineas" :key="l.id">
-                <span class="ln">{{ l.productoNombre }}</span>
-                <span class="lc">{{ cantMostrar(l) }} × {{ precioMostrar(l) }}</span>
-                <span class="ls">{{ money(l.subtotal) }}</span>
-              </div>
+            <div class="lineas-tit">Productos incluidos en el ticket original:</div>
+            <div class="linea" :class="{ 'linea-canc': v.estado === 'Cancelado' }" v-for="l in detalle.lineas" :key="l.id">
+              <span class="ln">{{ l.productoNombre }}</span>
+              <span class="lc">{{ cantMostrar(l) }} × {{ precioMostrar(l) }}</span>
+              <span class="ls">{{ money(l.subtotal) }}</span>
+            </div>
 
-              <div class="acciones">
-                <button class="pdf-b" :disabled="descargando === v.id" @click="descargarPdf(v)">
-                  <ion-icon :icon="documentTextOutline" />{{ descargando === v.id ? 'Generando…' : 'PDF' }}
-                </button>
-                <button class="print-b" :disabled="imprimiendo === v.id" @click="imprimirTermico(v, detalle)">
-                  <ion-icon :icon="printOutline" />{{ imprimiendo === v.id ? 'Imprimiendo…' : 'Ticket térmico' }}
-                </button>
-                <button v-if="puedeEditar(v)" class="edit-b" @click="iniciarEdicion(v)">
-                  <ion-icon :icon="createOutline" /> Corregir
-                </button>
-              </div>
-              <p v-if="printMsg && printId === v.id" class="print-status">{{ printMsg }}</p>
+            <div class="acciones" v-if="v.estado !== 'Cancelado'">
+              <button class="pdf-b" :disabled="descargando === v.id" @click="descargarPdf(v)">
+                <ion-icon :icon="documentTextOutline" />{{ descargando === v.id ? 'Generando…' : 'PDF' }}
+              </button>
+              <button class="print-b" :disabled="imprimiendo === v.id" @click="imprimirTermico(v, detalle)">
+                <ion-icon :icon="printOutline" />{{ imprimiendo === v.id ? 'Imprimiendo…' : 'Ticket térmico' }}
+              </button>
+              <button v-if="puedeCancelar(v)" class="cancel-sale-b" @click="abrirModalCancelar(v)">
+                <ion-icon :icon="closeCircleOutline" /> Cancelar venta
+              </button>
+            </div>
+            <p v-if="printMsg && printId === v.id" class="print-status">{{ printMsg }}</p>
 
-              <p v-if="!puedeEditar(v) && esLaMasReciente(v) && v.corteCajaId" class="hint-nc">
-                Ya no se puede corregir: quedó incluida y sellada en tu corte de caja #{{ v.corteCajaId }}.
-              </p>
-              <p v-else-if="!esLaMasReciente(v)" class="hint-nc">
-                Solo puedes corregir tu venta más reciente no cortada.
-              </p>
-            </template>
-
-            <template v-else>
-              <p class="hint-nc">Ajusta la cantidad entregada real al cliente para recalcular el ticket.</p>
-              <div class="linea edit" v-for="l in detalle.lineas" :key="l.id">
-                <span class="ln">{{ l.productoNombre }}<small v-if="esCajaLinea(l)"> (caja de {{ l.piezasPorCaja }})</small></span>
-                <input class="qty" type="number" min="0" :step="esCajaLinea(l) ? 1 : 0.001" v-model.number="cantEdit[l.id]">
-                <span class="unit" v-if="esCajaLinea(l)">caja(s)</span>
-                <span class="ls">{{ money(piezasDe(l) * l.precioUnitario) }}</span>
-              </div>
-              <div class="tot-edit">Nuevo total: <b>{{ money(totalEdit) }}</b></div>
-              <p v-if="errorEdit" class="err">{{ errorEdit }}</p>
-              <div class="acciones">
-                <button class="cancel-b" @click="cancelarEdicion()">Cancelar</button>
-                <button class="save-b" :disabled="guardando" @click="guardarEdicion(v)">{{ guardando ? 'Guardando…' : 'Guardar corrección' }}</button>
-              </div>
-            </template>
+            <p v-if="!puedeCancelar(v) && v.corteCajaId && v.estado !== 'Cancelado'" class="hint-nc">
+              Ya no se puede cancelar: quedó incluida y sellada en tu corte de caja #{{ v.corteCajaId }}.
+            </p>
           </template>
         </div>
       </div>
@@ -139,30 +151,87 @@
       {{ totalItems }} venta(s) filtrada(s) · página {{ pagina }} de {{ totalPaginas }}
     </p>
 
+    <!-- Modal: Cancelar venta completa -->
+    <div v-if="cancelarModal" class="modal-bg" @click.self="cerrarModalCancelar()">
+      <div class="modal">
+        <div class="m-head m-head-warn">
+          <div>
+            <div class="m-title">Cancelar venta #{{ cancelarModal.id }}</div>
+            <div class="m-sub">{{ cancelarModal.clienteNombreMostrar }} · Total: {{ money(cancelarModal.total) }}</div>
+          </div>
+          <button class="m-x" @click="cerrarModalCancelar()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="m-body">
+          <div class="aviso-seguridad">
+            <div class="as-icon"><ion-icon :icon="shieldCheckmarkOutline" /></div>
+            <div class="as-txt">
+              <b>Cancelación total segura:</b>
+              <p>Al cancelar, <b>el 100% de los productos regresará al inventario</b> de inmediato y la venta quedará registrada como cancelada con tu nombre y motivo para la supervisión del administrador.</p>
+            </div>
+          </div>
+
+          <div class="m-field">
+            <div class="m-fl">Selecciona o escribe el motivo de la cancelación *</div>
+            <div class="motivos-chips">
+              <button
+                v-for="m in motivosRapidos"
+                :key="m"
+                type="button"
+                class="chip-motivo"
+                :class="{ on: motivoCancelacion === m }"
+                @click="motivoCancelacion = m"
+              >
+                {{ m }}
+              </button>
+            </div>
+            <textarea
+              class="m-textarea"
+              v-model="motivoCancelacion"
+              placeholder="Escribe el motivo detallado de la cancelación…"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <p v-if="errorCancelar" class="m-err">{{ errorCancelar }}</p>
+        </div>
+        <div class="m-foot">
+          <button class="m-cancel" @click="cerrarModalCancelar()">Regresar</button>
+          <button
+            class="m-btn-danger"
+            :disabled="cancelando || !motivoCancelacion.trim() || motivoCancelacion.trim().length < 4"
+            @click="confirmarCancelacion()"
+          >
+            <ion-icon :icon="closeCircleOutline" />
+            {{ cancelando ? 'Cancelando venta…' : 'Confirmar cancelación total' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Guía interactiva -->
     <div class="guia-card">
       <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
         <div class="guia-icon">💡</div>
-        <div class="guia-tit">¿Cómo funciona el Historial y Corrección de Ventas?</div>
+        <div class="guia-tit">¿Cómo funciona la Cancelación de Ventas y el Control de Caja?</div>
         <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
       </div>
       <div v-if="mostrarGuia" class="guia-content">
         <div class="guia-item">
           <div class="gi-num">1</div>
           <div class="gi-text">
-            <b>Regla de corrección de venta:</b> Solo la venta más reciente registrada por tu usuario y que aún <b>no</b> haya sido cerrada en un corte de caja puede corregirse. Si hubo un error en cantidades, usa el botón "Corregir".
+            <b>Cancelación completa por seguridad:</b> Si el cliente cambia de parecer o desea llevar otros productos, pulsa <b>"Cancelar venta"</b> indicando el motivo. El inventario se restablece íntegramente al momento y el administrador recibe una notificación con la auditoría. Para entregar los nuevos productos, simplemente registra una nueva venta en el mostrador.
           </div>
         </div>
         <div class="guia-item">
           <div class="gi-num">2</div>
           <div class="gi-text">
-            <b>Inclusión en el Corte de caja:</b> Todas las ventas marcadas como "Por cortar" se integrarán automáticamente en tu siguiente corte de caja en el módulo <i>Mi corte</i>. Al cerrar el corte, quedan selladas contablemente.
+            <b>Inclusión en el Corte de caja:</b> Solo las ventas activas marcadas como "Por cortar" se integran en tu corte de caja en <i>Mi corte</i>. Las ventas canceladas quedan excluidas del corte y de tu efectivo esperado.
           </div>
         </div>
         <div class="guia-item">
           <div class="gi-num">3</div>
           <div class="gi-text">
-            <b>Impresión Térmica y PDF:</b> Puedes reimprimir cualquier comprobante en cualquier momento. El botón "Ticket térmico" manda la orden directamente a tu impresora portátil Bluetooth MUNBYN 58mm.
+            <b>Impresión Térmica y PDF:</b> Puedes reimprimir cualquier comprobante de tus ventas activas mediante el botón "Ticket térmico". Las ventas canceladas quedan anuladas y deshabilitadas para reimpresión.
           </div>
         </div>
       </div>
@@ -171,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import {
   cartOutline,
@@ -181,7 +250,9 @@ import {
   chevronDown,
   chevronUp,
   documentTextOutline,
-  createOutline,
+  closeCircleOutline,
+  warningOutline,
+  shieldCheckmarkOutline,
   printOutline
 } from 'ionicons/icons'
 import http from '@/api/http'
@@ -200,16 +271,25 @@ const descargando = ref(null)
 const imprimiendo = ref(null)
 const printId = ref(null)
 const printMsg = ref('')
-const editando = ref(null)
-const cantEdit = reactive({})
-const guardando = ref(false)
-const errorEdit = ref('')
 const mostrarGuia = ref(false)
+
+// Cancelación de venta
+const cancelarModal = ref(null)
+const motivoCancelacion = ref('')
+const cancelando = ref(false)
+const errorCancelar = ref('')
+const motivosRapidos = [
+  'Cliente cambió de productos / llevará otra cosa',
+  'Error de captura / productos equivocados',
+  'Cliente canceló la compra / no completó el pago',
+  'Error en precio o método de pago'
+]
 
 // Filtros y búsqueda
 const buscar = ref('')
 const periodo = ref('todos') // 'hoy' | 'semana' | 'todos'
 const soloSinCorte = ref(false)
+const soloCanceladas = ref(false)
 let timerBusqueda = null
 
 // Paginación local
@@ -218,10 +298,23 @@ const tamano = ref(18)
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
-const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
 function setPeriodo(p) {
   periodo.value = p
+  soloCanceladas.value = false
+  pagina.value = 1
+}
+
+function toggleSinCorte() {
+  soloSinCorte.value = !soloSinCorte.value
+  soloCanceladas.value = false
+  pagina.value = 1
+}
+
+function toggleCanceladas() {
+  soloCanceladas.value = !soloCanceladas.value
+  if (soloCanceladas.value) soloSinCorte.value = false
   pagina.value = 1
 }
 
@@ -256,20 +349,27 @@ const itemsFiltrados = computed(() => {
     list = list.filter((v) => new Date(v.fecha) >= inicioSemana)
   }
 
-  // Filtro sin corte
-  if (soloSinCorte.value) {
-    list = list.filter((v) => !v.corteCajaId)
+  // Filtros especiales
+  if (soloCanceladas.value) {
+    list = list.filter((v) => v.estado === 'Cancelado')
+  } else if (soloSinCorte.value) {
+    list = list.filter((v) => !v.corteCajaId && v.estado !== 'Cancelado')
   }
 
   return list
 })
 
-// KPIs reactivos al conjunto filtrado
-const kpiTotalVendido = computed(() => itemsFiltrados.value.reduce((s, v) => s + (v.total || 0), 0))
-const kpiTicketPromedio = computed(() => itemsFiltrados.value.length ? kpiTotalVendido.value / itemsFiltrados.value.length : 0)
-const kpiPendientes = computed(() => itemsFiltrados.value.filter(v => v.estadoPago === 'Pendiente'))
+// Ventas activas vs canceladas para KPIs
+const itemsActivos = computed(() => itemsFiltrados.value.filter(v => v.estado !== 'Cancelado'))
+const itemsCancelados = computed(() => itemsFiltrados.value.filter(v => v.estado === 'Cancelado'))
+
+// KPIs calculados sobre ventas activas (las canceladas se descuentan contablemente)
+const kpiTotalVendido = computed(() => itemsActivos.value.reduce((s, v) => s + (v.total || 0), 0))
+const kpiTicketPromedio = computed(() => itemsActivos.value.length ? kpiTotalVendido.value / itemsActivos.value.length : 0)
+const kpiPendientes = computed(() => itemsActivos.value.filter(v => v.estadoPago === 'Pendiente'))
 const kpiPendientesCount = computed(() => kpiPendientes.value.length)
 const kpiPendientesMonto = computed(() => kpiPendientes.value.reduce((s, v) => s + (v.total || 0), 0))
+const kpiCanceladasCount = computed(() => itemsCancelados.value.length)
 
 // Paginación
 const totalItems = computed(() => itemsFiltrados.value.length)
@@ -294,52 +394,77 @@ function irPagina(n) {
 function esCajaLinea(l) { return !!l.esCaja && l.piezasPorCaja > 0 }
 function cantMostrar(l) { return esCajaLinea(l) ? `${fmt(l.cantidadEntregada / l.piezasPorCaja)} caja(s)` : fmt(l.cantidadEntregada) }
 function precioMostrar(l) { return esCajaLinea(l) ? money(l.precioUnitario * l.piezasPorCaja) : money(l.precioUnitario) }
-function piezasDe(l) { const cant = Number(cantEdit[l.id]) || 0; return esCajaLinea(l) ? cant * l.piezasPorCaja : cant }
 
-function esLaMasReciente(v) { return items.value[0]?.id === v.id }
-function puedeEditar(v) { return esLaMasReciente(v) && !v.corteCajaId }
+function puedeCancelar(v) {
+  return v.estado !== 'Cancelado' && !v.corteCajaId
+}
 
 async function toggle(v) {
   if (abierta.value === v.id) { abierta.value = null; return }
   abierta.value = v.id
-  editando.value = null
   printMsg.value = ''
   await cargarDetalle(v.id)
 }
 
 async function cargarDetalle(id) {
   cargandoDetalle.value = true; detalle.value = null
-  try { const { data } = await http.get(`/pedidos/${id}`); detalle.value = data }
-  catch { /* reintento manual */ }
-  finally { cargandoDetalle.value = false }
-}
-
-function iniciarEdicion(v) {
-  editando.value = v.id
-  errorEdit.value = ''
-  Object.keys(cantEdit).forEach((k) => delete cantEdit[k])
-  detalle.value.lineas.forEach((l) => {
-    cantEdit[l.id] = esCajaLinea(l) ? l.cantidadEntregada / l.piezasPorCaja : l.cantidadEntregada
-  })
-}
-function cancelarEdicion() { editando.value = null; errorEdit.value = '' }
-const totalEdit = computed(() => detalle.value ? detalle.value.lineas.reduce((s, l) => s + piezasDe(l) * l.precioUnitario, 0) : 0)
-
-async function guardarEdicion(v) {
-  guardando.value = true; errorEdit.value = ''
   try {
-    const lineas = detalle.value.lineas
-      .map((l) => ({ pedidoLineaId: l.id, nuevaCantidad: piezasDe(l), original: l.cantidadEntregada }))
-      .filter((l) => l.nuevaCantidad !== l.original)
-      .map(({ pedidoLineaId, nuevaCantidad }) => ({ pedidoLineaId, nuevaCantidad }))
-    if (!lineas.length) { errorEdit.value = 'No hay cambios que guardar.'; guardando.value = false; return }
-    const { data } = await http.put(`/pedidos/${v.id}/editar-venta`, { lineas })
+    const { data } = await http.get(`/pedidos/${id}`)
     detalle.value = data
-    const idx = items.value.findIndex((x) => x.id === v.id)
-    if (idx >= 0) items.value[idx] = { ...items.value[idx], total: data.total, editadoEn: data.editadoEn }
-    editando.value = null
-  } catch (e) { errorEdit.value = e.response?.data?.mensaje || 'No se pudo guardar la corrección.' }
-  finally { guardando.value = false }
+  } catch {
+    /* reintento manual */
+  } finally {
+    cargandoDetalle.value = false
+  }
+}
+
+function abrirModalCancelar(v) {
+  cancelarModal.value = v
+  motivoCancelacion.value = 'Cliente cambió de productos / llevará otra cosa'
+  errorCancelar.value = ''
+}
+
+function cerrarModalCancelar() {
+  cancelarModal.value = null
+  motivoCancelacion.value = ''
+  errorCancelar.value = ''
+}
+
+async function confirmarCancelacion() {
+  if (!cancelarModal.value) return
+  if (!motivoCancelacion.value.trim() || motivoCancelacion.value.trim().length < 4) {
+    errorCancelar.value = 'Por favor escribe un motivo claro de la cancelación (mínimo 4 letras).'
+    return
+  }
+
+  cancelando.value = true
+  errorCancelar.value = ''
+  try {
+    const id = cancelarModal.value.id
+    const { data } = await http.post(`/pedidos/${id}/cancelar-venta`, {
+      motivo: motivoCancelacion.value.trim()
+    })
+
+    // Actualizar elemento en lista local
+    const idx = items.value.findIndex(x => x.id === id)
+    if (idx >= 0) {
+      items.value[idx] = {
+        ...items.value[idx],
+        estado: 'Cancelado',
+        canceladoEn: data.canceladoEn,
+        canceladoPorNombre: data.canceladoPorNombre,
+        motivoCancelacion: data.motivoCancelacion
+      }
+    }
+    if (detalle.value && detalle.value.id === id) {
+      detalle.value = data
+    }
+    cerrarModalCancelar()
+  } catch (e) {
+    errorCancelar.value = e.response?.data?.mensaje || 'No se pudo cancelar la venta.'
+  } finally {
+    cancelando.value = false
+  }
 }
 
 async function descargarPdf(v) {
@@ -351,8 +476,11 @@ async function descargarPdf(v) {
     a.href = url; a.download = `ticket-venta-${v.id}.pdf`
     document.body.appendChild(a); a.click(); a.remove()
     setTimeout(() => window.URL.revokeObjectURL(url), 4000)
-  } catch { error.value = 'No se pudo generar el ticket PDF.' }
-  finally { descargando.value = null }
+  } catch {
+    error.value = 'No se pudo generar el ticket PDF.'
+  } finally {
+    descargando.value = null
+  }
 }
 
 async function imprimirTermico(v, det) {
@@ -393,8 +521,11 @@ async function cargar() {
   try {
     const { data } = await http.get('/pedidos', { params: { repartidorId: auth.usuarioId, esVentaLibre: true, tamano: 200 } })
     items.value = data.items || []
-  } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudieron cargar tus ventas.' }
-  finally { cargando.value = false }
+  } catch (e) {
+    error.value = e.response?.data?.mensaje || 'No se pudieron cargar tus ventas.'
+  } finally {
+    cargando.value = false
+  }
 }
 
 onMounted(() => {
@@ -409,7 +540,7 @@ onMounted(() => {
 .err { color: var(--clay); font-weight: 600; margin-top: 16px; font-size: 13px; }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .kpi-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 15px; box-shadow: var(--shadow); }
 .kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .kpi-icon ion-icon { font-size: 20px; }
@@ -417,6 +548,7 @@ onMounted(() => {
 .kpi-icon.sky { background: var(--sky-soft); color: var(--sky); }
 .kpi-icon.amber { background: var(--amber-soft); color: #B9781F; }
 .kpi-icon.clay { background: var(--clay-soft); color: var(--clay); }
+.kpi-card.kpi-canc { border-color: #F0D5D0; background: #FAF6F5; }
 .kpi-info { flex: 1; min-width: 0; }
 .kpi-l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .kpi-v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; color: var(--ink); margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -430,44 +562,57 @@ onMounted(() => {
 .p-btn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 8px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; cursor: pointer; transition: .15s; }
 .p-btn.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .p-btn.tag-corte.on { background: var(--amber); color: #fff; border-color: var(--amber); }
+.p-btn.tag-cancel.on { background: var(--clay); color: #fff; border-color: var(--clay); }
 
 /* Grid de ventas */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; transition: border-color .15s; }
+.card.cancelada { background: #FCFAF9; border-color: #F0D5D0; }
 .head { display: flex; align-items: center; gap: 13px; padding: 14px; cursor: pointer; }
 .chip { width: 42px; height: 42px; border-radius: 11px; background: var(--pine-tint); display: grid; place-items: center; flex: 0 0 auto; }
 .chip ion-icon { font-size: 21px; color: var(--pine); }
+.chip.chip_canc { background: #FDE8E4; }
+.chip.chip_canc ion-icon { color: var(--clay); }
 .info { flex: 1; min-width: 0; }
 .top-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cli { font-weight: 700; font-size: 15px; }
+.cli.tachado { text-decoration: line-through; color: var(--muted); }
 .sub { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .badge-por-cortar { background: var(--amber-soft); color: #9A6512; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 6px; text-transform: uppercase; }
 .badge-cortado { background: var(--paper-2); color: var(--muted); font-weight: 600; font-size: 10px; padding: 2px 7px; border-radius: 6px; }
 .badge-pend { background: #FDE8E4; color: var(--clay); font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 6px; }
-.badge-ed { background: var(--amber-soft); color: #B9781F; font-weight: 700; font-size: 10px; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; }
+.badge-cancelada { background: #FDE8E4; color: var(--clay); font-weight: 800; font-size: 10px; letter-spacing: .04em; padding: 2px 7px; border-radius: 6px; }
 .total { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.total.tachado { text-decoration: line-through; color: var(--clay); }
 .arrow { color: var(--muted); font-size: 18px; flex: 0 0 auto; }
 
-.detalle { border-top: 1px solid var(--line); padding: 12px 14px; background: var(--paper); }
+.detalle { border-top: 1px solid var(--line); padding: 14px; background: var(--paper); }
+.lineas-tit { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 8px; }
 .linea { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 6px 0; }
+.linea.linea-canc { opacity: .75; }
 .linea .ln { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .linea .lc { color: var(--muted); flex: 0 0 auto; }
 .linea .ls { font-weight: 700; flex: 0 0 auto; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
-.linea.edit .qty { width: 70px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 7px; font-weight: 700; text-align: center; }
-.linea.edit .ln small { color: var(--muted); font-weight: 500; }
-.linea .unit { color: var(--muted); font-size: 11px; font-weight: 600; flex: 0 0 auto; }
 
-.acciones { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
-.pdf-b, .print-b, .edit-b, .cancel-b, .save-b { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 100px; background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft); border-radius: 11px; padding: 9px 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; cursor: pointer; justify-content: center; }
+/* Banner de cancelación */
+.banner-cancelada { background: #FFF5F4; border: 1px solid #F0D5D0; border-radius: 13px; padding: 12px 14px; margin-bottom: 12px; }
+.bc-head { display: flex; align-items: center; gap: 6px; color: var(--clay); font-size: 13px; margin-bottom: 6px; }
+.bc-head ion-icon { font-size: 17px; }
+.bc-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.bc-motivo { font-size: 12.5px; color: var(--ink); margin-top: 6px; padding: 6px 9px; background: rgba(217, 83, 79, .06); border-radius: 8px; }
+.bc-motivo b { color: var(--clay); }
+.bc-aviso { font-size: 11.5px; color: #9A6512; line-height: 1.4; margin-top: 8px; }
+
+.acciones { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; }
+.pdf-b, .print-b, .cancel-sale-b { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 110px; background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft); border-radius: 11px; padding: 9px 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; cursor: pointer; justify-content: center; }
 .pdf-b ion-icon { font-size: 16px; color: var(--sky); }
 .print-b ion-icon { font-size: 16px; color: var(--pine); }
-.edit-b ion-icon { font-size: 16px; color: #B9781F; }
-.pdf-b:disabled, .print-b:disabled, .save-b:disabled { opacity: .6; }
-.save-b { background: var(--pine); color: #fff; border-color: var(--pine); }
+.cancel-sale-b { color: var(--clay); border-color: #F0D5D0; background: #FFF7F6; }
+.cancel-sale-b ion-icon { font-size: 16px; color: var(--clay); }
+.cancel-sale-b:hover { background: #FDE8E4; }
+.pdf-b:disabled, .print-b:disabled, .cancel-sale-b:disabled { opacity: .6; }
 .print-status { font-size: 11.5px; font-weight: 600; color: var(--pine); margin-top: 6px; }
 .hint-nc { font-size: 11.5px; color: var(--muted); margin-top: 9px; line-height: 1.4; }
-.tot-edit { font-size: 13.5px; font-weight: 600; margin-top: 10px; text-align: right; }
-.tot-edit b { font-family: "Bricolage Grotesque"; font-size: 16px; }
 
 /* Paginación */
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; }
@@ -476,6 +621,35 @@ onMounted(() => {
 .pg:disabled { opacity: .4; cursor: default; }
 .pg.num.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .cuenta { text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; margin-top: 10px; }
+
+/* Modales */
+.modal-bg { position: fixed; inset: 0; background: rgba(14,24,20,.5); backdrop-filter: blur(4px); z-index: 999; display: grid; place-items: center; padding: 16px; }
+.modal { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; width: 100%; max-width: 480px; box-shadow: 0 24px 48px -12px rgba(0,0,0,.25); overflow: hidden; animation: pop .18s ease-out; }
+@keyframes pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+.m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.m-head.m-head-warn { background: #FFF5F4; border-bottom-color: #F0D5D0; }
+.m-title { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16.5px; color: var(--ink); }
+.m-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.m-x { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.m-x svg { width: 15px; height: 15px; stroke: var(--muted); stroke-width: 2; }
+.m-body { padding: 20px; }
+.aviso-seguridad { display: flex; gap: 11px; background: #F4FAF7; border: 1px solid #D5EDE3; border-radius: 12px; padding: 11px 13px; margin-bottom: 16px; }
+.as-icon { font-size: 22px; color: var(--pine); flex: 0 0 auto; margin-top: 2px; }
+.as-txt { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+.as-txt b { color: var(--pine); }
+.as-txt p { margin: 4px 0 0; }
+.m-field { margin-bottom: 14px; }
+.m-fl { font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.motivos-chips { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.chip-motivo { text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: .15s; }
+.chip-motivo.on { background: #FDE8E4; border-color: var(--clay); color: var(--clay); font-weight: 700; }
+.m-textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 9px 12px; font-size: 13px; font-weight: 500; color: var(--ink); outline: none; font-family: inherit; resize: vertical; }
+.m-textarea:focus { border-color: var(--clay); }
+.m-err { color: var(--clay); font-size: 12.5px; font-weight: 600; margin-top: 8px; }
+.m-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--paper); }
+.m-cancel { background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--muted); }
+.m-btn-danger { display: flex; align-items: center; gap: 6px; background: var(--clay); border: 1px solid var(--clay); border-radius: 10px; padding: 9px 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; color: #fff; cursor: pointer; }
+.m-btn-danger:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Guía interactiva */
 .guia-card { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
