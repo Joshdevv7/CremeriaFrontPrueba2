@@ -170,10 +170,20 @@
 
     <ExitoOverlay :show="exito" titulo="Venta registrada con éxito" :subtitulo="nombreMostrar" :detalle="exitoDet" cta-texto="Nueva venta" @done="nuevaVenta">
       <div class="exito-extra-acts">
-        <button class="btn-ticket" :disabled="imprimiendoTicket" @click="imprimirTicket()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          {{ imprimiendoTicket ? 'Imprimiendo ticket…' : 'Imprimir ticket térmico' }}
-        </button>
+        <div class="comprobante-grid">
+          <button class="btn-act btn-ticket" :disabled="imprimiendoTicket" @click="imprimirTicket()">
+            <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            <span>{{ imprimiendoTicket ? 'Imprimiendo…' : 'Ticket térmico' }}</span>
+          </button>
+          <button class="btn-act btn-pdf" :disabled="descargandoPdf" @click="descargarPdf()">
+            <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+            <span>{{ descargandoPdf ? 'Generando…' : 'Descargar PDF' }}</span>
+          </button>
+        </div>
         <p v-if="ticketMsg" class="ticket-status" :class="{ ok: ticketMsg.includes('correctamente') }">{{ ticketMsg }}</p>
       </div>
     </ExitoOverlay>
@@ -260,6 +270,7 @@ const puede = computed(() => total.value > 0 && (ocasional.value ? nombreOcasion
 
 const ultimaVenta = ref(null)
 const imprimiendoTicket = ref(false)
+const descargandoPdf = ref(false)
 const ticketMsg = ref('')
 
 async function vender() {
@@ -326,10 +337,33 @@ async function imprimirTicket() {
   }
 }
 
+async function descargarPdf() {
+  if (!ultimaVenta.value?.id) return
+  descargandoPdf.value = true
+  ticketMsg.value = ''
+  try {
+    const res = await http.get(`/pedidos/${ultimaVenta.value.id}/pdf`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Venta_${ultimaVenta.value.id}.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    ticketMsg.value = 'PDF descargado correctamente.'
+  } catch {
+    ticketMsg.value = 'No se pudo generar el PDF de la venta.'
+  } finally {
+    descargandoPdf.value = false
+  }
+}
+
 function nuevaVenta() {
   exito.value = false
   ultimaVenta.value = null
   ticketMsg.value = ''
+  descargandoPdf.value = false
   Object.keys(cant).forEach((k) => delete cant[k])
   Object.keys(unidad).forEach((k) => delete unidad[k])
   cliente.value = null; nombreOcasional.value = ''; ocasional.value = false
@@ -434,12 +468,69 @@ onMounted(async () => {
 .pf-chip.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 
 /* Acciones en modal de éxito */
-.exito-extra-acts { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-bottom: 12px; }
-.btn-ticket { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface); border: 1.5px solid var(--line); color: var(--ink); border-radius: 14px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; transition: background .15s; }
-.btn-ticket:hover { background: var(--paper-2); }
-.btn-ticket:disabled { opacity: .5; }
-.ticket-status { font-size: 12px; font-weight: 600; color: var(--amber); text-align: center; }
-.ticket-status.ok { color: var(--pine); }
+.exito-extra-acts {
+  width: 100%;
+  max-width: 340px;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comprobante-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+.btn-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 10px 8px;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .18s ease;
+  user-select: none;
+}
+.btn-act:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.38);
+  transform: translateY(-1px);
+}
+.btn-act:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn-act:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.btn-ic {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  flex: 0 0 18px !important;
+  stroke: currentColor;
+}
+.ticket-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: #FDE68A;
+  text-align: center;
+  margin-top: 2px;
+}
+.ticket-status.ok {
+  color: #A7F3D0;
+}
 
 /* Guía interactiva */
 .guia-card { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }

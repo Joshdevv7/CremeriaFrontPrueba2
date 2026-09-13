@@ -50,7 +50,7 @@ defineEmits(['done'])
 h2 { color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 25px; letter-spacing: -.01em; }
 p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; }
 
-.panel { background: #fff; border-radius: 16px; width: 100%; max-width: 340px; margin-top: 24px; padding: 16px; box-shadow: 0 20px 40px -16px rgba(0,0,0,.45); text-align: left; }
+.panel { background: #fff; border-radius: 16px; width: 100%; max-width: 340px; margin-top: 20px; padding: 16px; box-shadow: 0 20px 40px -16px rgba(0,0,0,.45); text-align: left; }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); background: var(--paper-2); border: 1px solid var(--line); padding: 6px 11px; border-radius: 10px; }
 .rows { margin-top: 4px; }
@@ -59,7 +59,8 @@ p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; }
 .row .k { color: var(--muted); font-weight: 600; }
 .row .v { font-family: "Bricolage Grotesque"; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-.cta { margin-top: 26px; width: 100%; max-width: 340px; background: var(--amber); color: #3a2607; border: none; border-radius: 15px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; }
+.cta { margin-top: 18px; width: 100%; max-width: 340px; background: var(--amber); color: #3a2607; border: none; border-radius: 15px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; transition: filter .15s; }
+.cta:hover { filter: brightness(1.06); }
 
 /* Escritorio: card centrada sobre fondo atenuado */
 @media (min-width: 768px) {
