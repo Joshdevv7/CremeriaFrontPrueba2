@@ -46,7 +46,7 @@
             <div class="sec">Cliente</div>
             <div class="modo-cli">
               <button :class="{ on: !ocasional }" @click="setOcasional(false)">Cliente registrado</button>
-              <button :class="{ on: ocasional }" @click="setOcasional(true)">Cliente ocasional</button>
+              <button :class="{ on: ocasional }" @click="setOcasional(true)">Clientes varios</button>
             </div>
 
             <!-- Modo: cliente registrado -->
@@ -86,12 +86,12 @@
               </template>
             </template>
 
-            <!-- Modo: cliente ocasional -->
+            <!-- Modo: clientes varios -->
             <template v-else>
               <div class="field">
-                <input class="inp" v-model="nombreOcasional" placeholder="Nombre y apellido del comprador" maxlength="80">
+                <input class="inp" v-model="nombreOcasional" placeholder="Nombre del comprador (opcional)" maxlength="80">
               </div>
-              <p class="ocasional-hint">Esta persona no se guardará como cliente. Solo queda registrada en esta venta.</p>
+              <p class="ocasional-hint">Venta libre a clientes varios sin registro previo en catálogo.</p>
             </template>
 
             <!-- Catálogo de productos de la carga -->
@@ -354,7 +354,7 @@ function setOcasional(v) {
 }
 
 const nombreMostrar = computed(() =>
-  ocasional.value ? (nombreOcasional.value.trim() || 'Cliente ocasional') : (cliente.value?.nombre || ''))
+  ocasional.value ? (nombreOcasional.value.trim() || 'Clientes varios') : (cliente.value?.nombre || ''))
 
 const cant = reactive({})
 const metodo = ref(0)
@@ -484,7 +484,7 @@ const lineasSeleccionadas = computed(() => {
 })
 
 const validoCliente = computed(() =>
-  ocasional.value ? nombreOcasional.value.trim().length > 1 : !!cliente.value)
+  ocasional.value ? true : !!cliente.value)
 
 const puedeAvanzar = computed(() => {
   if (step.value === 1) return validoCliente.value && lineasSeleccionadas.value.length > 0 && total.value > 0
@@ -513,7 +513,7 @@ async function next() {
   error.value = ''
   if (step.value === 1) {
     if (!validoCliente.value) {
-      error.value = 'Selecciona un cliente registrado o escribe el nombre del comprador.'
+      error.value = 'Selecciona un cliente registrado.'
       return
     }
     if (!lineasSeleccionadas.value.length) {
@@ -585,7 +585,7 @@ async function vender() {
   
   if (ocasional.value) {
     body.clienteId = 0
-    body.nombreOcasional = nombreOcasional.value.trim()
+    body.nombreOcasional = nombreOcasional.value.trim() || 'Clientes varios'
   } else {
     body.clienteId = cliente.value.id
   }

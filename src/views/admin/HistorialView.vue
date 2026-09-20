@@ -91,7 +91,7 @@
         >
           <div class="idx">{{ i + 1 }}</div>
           <div class="info">
-            <div class="n">{{ p.clienteNombre || (p.nombreOcasional ? `${p.nombreOcasional} (Ocasional)` : 'Público General') }}</div>
+            <div class="n">{{ p.clienteNombre || (p.nombreOcasional ? `${p.nombreOcasional} (Clientes varios)` : 'Clientes varios') }}</div>
             <div class="meta">
               <span class="time">{{ hora(p.fechaEntrega || p.fecha) }}</span>
               <span class="dot-sep">·</span>
@@ -288,7 +288,7 @@ function pintar() {
   // 3) Pines de entrega encima
   paradas.value.forEach((p, i) => {
     const ll = [p.latitudEntrega, p.longitudEntrega]
-    const cliNom = p.clienteNombre || (p.nombreOcasional ? `${p.nombreOcasional} (Ocasional)` : 'Público General')
+    const cliNom = p.clienteNombre || (p.nombreOcasional ? `${p.nombreOcasional} (Clientes varios)` : 'Clientes varios')
     const popHtml = `
       <div style="font-family:'Hanken Grotesk',sans-serif; min-width:160px; padding:2px;">
         <div style="font-size:11px; font-weight:800; color:#0E5C4A; text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px;">Parada #${i + 1}</div>

@@ -8,7 +8,7 @@
             <div class="fl">Cliente</div>
             <div class="modo-cli">
               <button :class="{ on: !ocasional }" @click="setOcasional(false)">Registrado</button>
-              <button :class="{ on: ocasional }" @click="setOcasional(true)">Ocasional</button>
+              <button :class="{ on: ocasional }" @click="setOcasional(true)">Clientes varios</button>
             </div>
             <template v-if="!ocasional">
               <div v-if="cliente" class="cli-sel" @click="cliente = null">
@@ -33,8 +33,8 @@
               </template>
             </template>
             <template v-else>
-              <input class="inp" v-model="nombreOcasional" placeholder="Nombre del comprador" maxlength="80" style="margin-top:9px">
-              <p class="hint2">Venta de mostrador rápida. No genera historial de cliente ni admite venta a crédito.</p>
+              <input class="inp" v-model="nombreOcasional" placeholder="Nombre del comprador (opcional)" maxlength="80" style="margin-top:9px">
+              <p class="hint2">Venta de mostrador a clientes varios. No genera historial de cliente ni admite venta a crédito.</p>
             </template>
           </div>
 
@@ -139,8 +139,8 @@
           <div class="guia-item">
             <div class="gi-num">1</div>
             <div class="gi-text">
-              <b>Clientes Registrados vs Ocasionales:</b>
-              Los clientes registrados permiten acumular historial, controlar geolocalización y autorizar venta a crédito. Los clientes ocasionales son para despachos rápidos de paso y no admiten crédito.
+              <b>Clientes Registrados vs Clientes Varios:</b>
+              Los clientes registrados permiten acumular historial, controlar geolocalización y autorizar venta a crédito. Las ventas a clientes varios son para despachos rápidos de paso y no admiten crédito.
             </div>
           </div>
           <div class="guia-item">
@@ -215,7 +215,7 @@ function setOcasional(v) {
     nombreOcasional.value = ''
   }
 }
-const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.trim() || 'Cliente ocasional') : (cliente.value?.nombre || ''))
+const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.trim() || 'Clientes varios') : (cliente.value?.nombre || ''))
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 const clientesFiltrados = computed(() => {
   const t = buscarCli.value.trim().toLowerCase()
@@ -266,7 +266,7 @@ const fechaLimiteTxt = computed(() => fechaLimite.value.toLocaleDateString('es-M
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
-const puede = computed(() => total.value > 0 && (ocasional.value ? nombreOcasional.value.trim().length > 1 : !!cliente.value))
+const puede = computed(() => total.value > 0 && (ocasional.value ? true : !!cliente.value))
 
 const ultimaVenta = ref(null)
 const imprimiendoTicket = ref(false)
@@ -278,7 +278,7 @@ async function vender() {
   enviando.value = true; error.value = ''; ticketMsg.value = ''
   const lineas = lineasActivas.value.map((id) => ({ productoId: id, cantidad: cant[id], esCaja: esCaja(id) }))
   const body = { metodoPago: metodo.value, pagoPendiente: metodo.value === 3 ? false : pagoPendiente.value, lineas }
-  if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() }
+  if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() || 'Clientes varios' }
   else body.clienteId = cliente.value.id
   if (!body.pagoPendiente && (metodo.value === 1 || metodo.value === 2) && referencia.value.trim()) body.referenciaPago = referencia.value.trim()
   if (metodo.value === 3) body.fechaLimiteCredito = fechaLimite.value.toISOString()
