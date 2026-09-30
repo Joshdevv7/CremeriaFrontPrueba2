@@ -3,7 +3,56 @@
     <p v-if="cargando" class="muted">Cargando…</p>
     <template v-else>
       <div class="form" v-show="!exito">
-        <div class="col selects">
+        <!-- COLUMNA 1: CATÁLOGO DE PRODUCTOS (PRIMERO EN EL FLUJO Y EN CELULAR) -->
+        <div class="col prods-col">
+          <div class="eyebrow-bar">
+            <span class="eyebrow">Catálogo de Almacén</span>
+            <span v-if="lineasActivas.length" class="badge-activos">
+              🛒 {{ lineasActivas.length }} en ticket · {{ money(total) }}
+            </span>
+          </div>
+
+          <div class="search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input v-model="buscar" placeholder="Buscar por nombre de producto…">
+          </div>
+
+          <div class="prod-filtros">
+            <button class="pf-chip" :class="{ on: filtroProd === 'todos' }" @click="filtroProd = 'todos'">Todos ({{ productos.length }})</button>
+            <button class="pf-chip" :class="{ on: filtroProd === 'stock' }" @click="filtroProd = 'stock'">Con existencia</button>
+            <button class="pf-chip" :class="{ on: filtroProd === 'cajas' }" @click="filtroProd = 'cajas'">Venta por caja</button>
+          </div>
+
+          <div v-for="p in filtrados" :key="p.id" class="prod" :class="{ act: (cant[p.id]||0)>0 }">
+            <div class="top">
+              <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
+              <div class="meta">
+                <div class="nm">{{ p.nombre }}</div>
+                <div class="pr">
+                  <template v-if="esCaja(p.id)">
+                    {{ money(p.precioCaja) }} / caja · disponible <b>{{ Math.floor((p.stockAlmacen||0) / (p.piezasPorCaja||1)) }}</b> caja(s)
+                  </template>
+                  <template v-else>
+                    {{ money(p.precioVenta) }} · disponible <b>{{ fmt(p.stockAlmacen) }}</b> pzas
+                  </template>
+                </div>
+              </div>
+              <div class="stepper">
+                <button @click="dec(p)" :disabled="(cant[p.id]||0)<=0">−</button>
+                <span class="q">{{ cant[p.id] || 0 }}</span>
+                <button @click="inc(p)" :disabled="(cant[p.id]||0) >= maxUnidad(p)">+</button>
+              </div>
+            </div>
+            <div v-if="p.vendePorCaja" class="uni">
+              <button :class="{ on: !esCaja(p.id) }" @click="setUnidad(p, 'pza')">Pieza</button>
+              <button :class="{ on: esCaja(p.id) }" @click="setUnidad(p, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
+            </div>
+          </div>
+          <p v-if="!filtrados.length" class="muted">No hay productos que coincidan con la búsqueda o filtro.</p>
+        </div>
+
+        <!-- COLUMNA 2: CLIENTE Y COBRO (DESPUÉS DE ESCOGER PRODUCTOS) -->
+        <div class="col selects-col" id="seccion-cobro">
           <div class="field">
             <div class="fl">Cliente</div>
             <div class="modo-cli">
@@ -51,11 +100,32 @@
             </div>
 
             <div v-if="metodo === 0" class="sub-field">
-              <div class="fl2">¿Con cuánto paga? (opcional)</div>
-              <input class="inp" type="number" min="0" step="0.01" v-model.number="pagaCon" placeholder="Ej. 200">
+              <div class="fl2">
+                <span>¿Con cuánto paga?</span>
+                <span class="tot-hint" v-if="total > 0">A cobrar: <b>{{ money(total) }}</b></span>
+              </div>
+              <input class="inp" type="number" min="0" step="0.01" v-model.number="pagaCon" placeholder="¿Con cuánto paga el cliente?" @input="onPagaConInput">
+
+              <!-- Atajos de billetes para agilizar en mostrador -->
+              <div class="billetes-grid" v-if="total > 0">
+                <button type="button" class="btn-bill" :class="{ on: pagaCon === total && !pagaConEditado }" @click="fijarExacto()">
+                  Exacto ({{ money(total) }})
+                </button>
+                <button v-for="b in billetesSugeridos" :key="b" type="button" class="btn-bill" :class="{ on: pagaCon === b }" @click="fijarPagaCon(b)">
+                  ${{ b }}
+                </button>
+              </div>
+
               <div v-if="pagaCon > 0" class="feria" :class="{ falta: pagaCon < total }">
-                <template v-if="pagaCon >= total">Feria / Cambio a entregar: <b>{{ money(pagaCon - total) }}</b></template>
-                <template v-else>Faltan {{ money(total - pagaCon) }} para cubrir el total.</template>
+                <template v-if="pagaCon === total">
+                  <span class="tag-exacto">✓ Importe exacto (sin cambio)</span>
+                </template>
+                <template v-else-if="pagaCon > total">
+                  Feria / Cambio a entregar: <b>{{ money(pagaCon - total) }}</b>
+                </template>
+                <template v-else>
+                  Faltan {{ money(total - pagaCon) }} para cubrir el total.
+                </template>
               </div>
             </div>
             <div v-if="metodo === 1 || metodo === 2" class="sub-field">
@@ -85,47 +155,18 @@
             <p v-if="error" class="err">{{ error }}</p>
           </div>
         </div>
+      </div>
 
-        <div class="col">
-          <div class="eyebrow"><span>Catálogo de Almacén</span></div>
-          <div class="search">
-            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input v-model="buscar" placeholder="Buscar por nombre de producto…">
-          </div>
-
-          <div class="prod-filtros">
-            <button class="pf-chip" :class="{ on: filtroProd === 'todos' }" @click="filtroProd = 'todos'">Todos ({{ productos.length }})</button>
-            <button class="pf-chip" :class="{ on: filtroProd === 'stock' }" @click="filtroProd = 'stock'">Con existencia</button>
-            <button class="pf-chip" :class="{ on: filtroProd === 'cajas' }" @click="filtroProd = 'cajas'">Venta por caja</button>
-          </div>
-
-          <div v-for="p in filtrados" :key="p.id" class="prod" :class="{ act: (cant[p.id]||0)>0 }">
-            <div class="top">
-              <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
-              <div class="meta">
-                <div class="nm">{{ p.nombre }}</div>
-                <div class="pr">
-                  <template v-if="esCaja(p.id)">
-                    {{ money(p.precioCaja) }} / caja · disponible <b>{{ Math.floor((p.stockAlmacen||0) / (p.piezasPorCaja||1)) }}</b> caja(s)
-                  </template>
-                  <template v-else>
-                    {{ money(p.precioVenta) }} · disponible <b>{{ fmt(p.stockAlmacen) }}</b> pzas
-                  </template>
-                </div>
-              </div>
-              <div class="stepper">
-                <button @click="dec(p)" :disabled="(cant[p.id]||0)<=0">−</button>
-                <span class="q">{{ cant[p.id] || 0 }}</span>
-                <button @click="inc(p)" :disabled="(cant[p.id]||0) >= maxUnidad(p)">+</button>
-              </div>
-            </div>
-            <div v-if="p.vendePorCaja" class="uni">
-              <button :class="{ on: !esCaja(p.id) }" @click="setUnidad(p, 'pza')">Pieza</button>
-              <button :class="{ on: esCaja(p.id) }" @click="setUnidad(p, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
-            </div>
-          </div>
-          <p v-if="!filtrados.length" class="muted">No hay productos que coincidan con la búsqueda o filtro.</p>
+      <!-- Barra flotante de cobro rápido para móvil (responsive) -->
+      <div class="mobile-float-bar" v-if="lineasActivas.length > 0 && !exito">
+        <div class="mf-info">
+          <span class="mf-items">{{ lineasActivas.length }} producto(s) en carrito</span>
+          <span class="mf-tot">{{ money(total) }}</span>
         </div>
+        <button type="button" class="mf-btn" @click="irAlCobro()">
+          <span>Ir al cobro</span>
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </button>
       </div>
 
       <!-- Guía educativa interactiva -->
@@ -191,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import http from '@/api/http'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import { imprimirTicketVenta } from '@/services/printer'
@@ -259,6 +300,58 @@ const metodosDisponibles = computed(() => ocasional.value ? metodosBase.filter(m
 const metodo = ref(0)
 const referencia = ref('')
 const pagaCon = ref(null)
+const pagaConEditado = ref(false)
+let anteriorTotal = 0
+
+// Precargar automáticamente pagaCon con el total exacto a menos que se haya modificado manualmente
+watch(total, (nuevoTotal) => {
+  if (!pagaConEditado.value || pagaCon.value === anteriorTotal || !pagaCon.value) {
+    pagaCon.value = nuevoTotal > 0 ? nuevoTotal : null
+    pagaConEditado.value = false
+  }
+  anteriorTotal = nuevoTotal
+})
+
+watch(metodo, (m) => {
+  if (m === 0 && (!pagaCon.value || !pagaConEditado.value)) {
+    pagaCon.value = total.value > 0 ? total.value : null
+  }
+})
+
+function onPagaConInput() {
+  pagaConEditado.value = true
+}
+
+function fijarPagaCon(monto) {
+  pagaCon.value = monto
+  pagaConEditado.value = true
+}
+
+function fijarExacto() {
+  pagaCon.value = total.value > 0 ? total.value : null
+  pagaConEditado.value = false
+}
+
+const billetesSugeridos = computed(() => {
+  const t = total.value
+  if (!t || t <= 0) return []
+  const denominaciones = [50, 100, 200, 500, 1000]
+  const mayores = denominaciones.filter(d => d > t)
+  if (mayores.length > 0) return mayores.slice(0, 3)
+  const sig500 = Math.ceil((t + 1) / 500) * 500
+  const sig1000 = Math.ceil((t + 1) / 1000) * 1000
+  const res = [sig500]
+  if (sig1000 !== sig500) res.push(sig1000)
+  return res
+})
+
+function irAlCobro() {
+  const el = document.getElementById('seccion-cobro')
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
 const pagoPendiente = ref(false)
 const diasCredito = ref(7)
 const fechaLimite = computed(() => { const d = new Date(); d.setDate(d.getDate() + diasCredito.value); return d })
@@ -367,7 +460,7 @@ function nuevaVenta() {
   Object.keys(cant).forEach((k) => delete cant[k])
   Object.keys(unidad).forEach((k) => delete unidad[k])
   cliente.value = null; nombreOcasional.value = ''; ocasional.value = false
-  metodo.value = 0; referencia.value = ''; pagaCon.value = null; pagoPendiente.value = false; diasCredito.value = 7
+  metodo.value = 0; referencia.value = ''; pagaCon.value = null; pagaConEditado.value = false; anteriorTotal = 0; pagoPendiente.value = false; diasCredito.value = 7
   cargarCatalogos()
 }
 
@@ -395,12 +488,17 @@ onMounted(async () => {
 .muted { color: var(--muted); margin-top: 24px; }
 .muted2 { color: var(--muted); font-size: 13px; padding: 6px 2px; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
-.form { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; align-items: start; }
+.form { display: grid; grid-template-columns: minmax(0, 1.25fr) 380px; gap: 20px; align-items: start; }
 .col { display: flex; flex-direction: column; gap: 11px; }
+.selects-col { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.eyebrow-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.badge-activos { font-size: 11.5px; font-weight: 700; color: var(--pine); background: var(--pine-tint); padding: 4px 10px; border-radius: 999px; }
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 4px 2px; }
 .field { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
 .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
-.fl2 { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.fl2 { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.tot-hint { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.tot-hint b { color: var(--pine); }
 .inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
 .modo-cli { display: flex; gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
 .modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 8px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
@@ -415,6 +513,11 @@ onMounted(async () => {
 .pagos button { border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); border-radius: 11px; padding: 10px 4px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; cursor: pointer; }
 .pagos button.on { background: var(--pine); color: #fff; border-color: var(--pine); }
 .sub-field { margin-top: 11px; }
+.billetes-grid { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.btn-bill { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 9px; padding: 6px 10px; font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 12px; cursor: pointer; transition: all .15s ease; }
+.btn-bill:hover { border-color: var(--pine); color: var(--pine); background: var(--pine-tint); }
+.btn-bill.on { background: var(--pine); color: #fff; border-color: var(--pine); }
+.tag-exacto { color: var(--pine); font-weight: 700; font-size: 12.5px; }
 .feria { margin-top: 9px; font-size: 13.5px; font-weight: 700; color: var(--pine); }
 .feria b { font-variant-numeric: tabular-nums; }
 .feria.falta { color: var(--clay); font-weight: 600; }
@@ -544,5 +647,54 @@ onMounted(async () => {
 .gi-text { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
 .gi-text b { color: var(--ink); font-weight: 700; }
 
-@media (max-width: 860px) { .form { grid-template-columns: 1fr; } .totcard { position: static; } }
+/* Responsive celular / tablet */
+.mobile-float-bar { display: none; }
+
+@media (max-width: 900px) {
+  .form { grid-template-columns: 1fr; gap: 18px; padding-bottom: 74px; }
+  .selects-col { position: static; }
+  .totcard { position: static; }
+
+  .mobile-float-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    bottom: 16px;
+    left: 14px;
+    right: 14px;
+    background: #0E5C4A;
+    color: #ffffff;
+    border-radius: 16px;
+    padding: 12px 18px;
+    box-shadow: 0 12px 28px -6px rgba(14,92,74,.6);
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    animation: slideUp .2s ease-out;
+  }
+  .mf-info { display: flex; flex-direction: column; }
+  .mf-items { font-size: 11px; opacity: .85; font-weight: 600; }
+  .mf-tot { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
+  .mf-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    color: #0E5C4A;
+    border: none;
+    border-radius: 11px;
+    padding: 10px 16px;
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 800;
+    font-size: 13.5px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  }
+  .mf-btn svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2.5; fill: none; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 </style>
