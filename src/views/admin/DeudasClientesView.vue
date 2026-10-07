@@ -179,6 +179,7 @@
             <div v-for="a in kardexData.abonos" :key="a.id || a.abonoId" class="abono-item">
               <div class="ai-left">
                 <div class="ai-m">{{ money(a.monto) }}</div>
+                <div class="ai-metodo">{{ metodoPagoTxt(a) }}</div>
                 <div class="ai-n">{{ a.nota || 'Abono general a cuenta' }}</div>
               </div>
               <div class="ai-date">{{ fechaHora(a.fecha) }}</div>
@@ -228,11 +229,17 @@
             </div>
           </div>
           <div class="campo">
-            <div class="fl2">Nota o concepto del abono (opcional)</div>
-            <input class="inp" v-model="notaAbono" placeholder="Ej. Pago en efectivo recibido en bodega">
+            <div class="fl2">Método de cobro</div>
+            <div class="metodos-abono">
+              <button type="button" :class="{ on: metodoAbono === 0 }" :aria-pressed="metodoAbono === 0" @click="metodoAbono = 0">Efectivo</button>
+              <button type="button" :class="{ on: metodoAbono === 1 }" :aria-pressed="metodoAbono === 1" @click="metodoAbono = 1">Transferencia</button>
+            </div>
+          </div>
+          <div class="campo">
+            <div class="fl2">Nota o referencia del abono (opcional)</div>
+            <input class="inp" v-model="notaAbono" :placeholder="metodoAbono === 1 ? 'Ej. Folio de rastreo / Banco' : 'Ej. Pago en efectivo recibido en bodega'">
             <div class="quick-notas">
-              <button type="button" @click="notaAbono = 'Abono en efectivo en mostrador'">En mostrador</button>
-              <button type="button" @click="notaAbono = 'Abono vía transferencia bancaria'">Transferencia</button>
+              <button type="button" @click="notaAbono = 'Abono recibido en mostrador'">En mostrador</button>
               <button type="button" @click="notaAbono = 'Liquidación total de adeudo'">Liquidación total</button>
             </div>
           </div>
@@ -276,6 +283,7 @@ const copiado = ref(false)
 // Modales
 const modalAbono = ref(null)
 const montoAbono = ref(null)
+const metodoAbono = ref(0)
 const notaAbono = ref('')
 const modalError = ref('')
 const procesando = ref(false)
@@ -290,6 +298,9 @@ const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFract
 const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fechaHora = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+const metodoPagoTxt = (abono) => abono.metodo || ({
+  0: 'Efectivo', 1: 'Transferencia', 2: 'Tarjeta', 3: 'Crédito'
+}[abono.metodoPago] ?? abono.metodoPago ?? 'Sin especificar')
 
 const conDeuda = computed(() => deudas.value.filter((d) => d.saldo > 0))
 const sinDeuda = computed(() => deudas.value.filter((d) => d.saldo <= 0))
@@ -333,6 +344,7 @@ async function cargar() {
 function abrirAbono(d) {
   modalAbono.value = d
   montoAbono.value = d.saldo
+  metodoAbono.value = 0
   notaAbono.value = ''
   modalError.value = ''
 }
@@ -344,6 +356,7 @@ async function guardarAbono() {
     await http.post('/creditos/abonos-cliente', {
       clienteId: modalAbono.value.clienteId,
       monto: Number(montoAbono.value),
+      metodoPago: metodoAbono.value,
       nota: notaAbono.value.trim() || null
     })
     cerrarAbono()
@@ -416,7 +429,7 @@ function construirMensajeWhatsApp() {
   if (kd.abonos?.length) {
     msg += `*Últimos abonos registrados:*\n`
     kd.abonos.slice(0, 4).forEach(a => {
-      msg += `• ${fecha(a.fecha)}: ${money(a.monto)} - ${a.nota || 'Abono general'}\n`
+      msg += `• ${fecha(a.fecha)}: ${money(a.monto)} - ${metodoPagoTxt(a)} - ${a.nota || 'Abono general'}\n`
     })
     msg += `\n`
   }
@@ -524,6 +537,9 @@ onMounted(() => {
 .quick-abonos, .quick-notas { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .quick-abonos button, .quick-notas button { background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; font-weight: 700; border-radius: 8px; padding: 5px 9px; cursor: pointer; }
 .quick-notas button:hover { background: var(--pine-tint); color: var(--pine); }
+.metodos-abono { display: flex; gap: 8px; }
+.metodos-abono button { flex: 1; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink-soft); border-radius: 11px; padding: 11px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.metodos-abono button.on { border-color: var(--pine); background: var(--pine-tint); color: var(--pine); }
 .m-err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
 .m-foot { display: flex; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--line); flex: 0 0 auto; flex-wrap: wrap; }
 .m-cancel { flex: 1; min-width: 80px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 12px; padding: 11px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
@@ -571,6 +587,7 @@ onMounted(() => {
 
 .abono-item { display: flex; justify-content: space-between; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 6px; }
 .ai-m { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15px; color: var(--pine); font-variant-numeric: tabular-nums; }
+.ai-metodo { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); margin-top: 2px; }
 .ai-n { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .ai-date { font-size: 11px; color: var(--muted); font-weight: 600; }
 

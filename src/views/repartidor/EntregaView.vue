@@ -143,7 +143,7 @@
                   <span>Efectivo recibido</span>
                   <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
                 </div>
-                <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
+                <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" @input="marcarEfectivoEditado" :disabled="pagoPendiente" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
                 
                 <div class="feria-box" v-if="efectivoRecibido > 0">
                   <template v-if="cambioCalculado >= 0">
@@ -399,6 +399,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { usePrecargaEfectivo } from '@/composables/usePrecargaEfectivo'
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
@@ -533,7 +534,6 @@ const step = ref(1)
 const pay = ref('credito')
 const referencia = ref('')
 const pagoPendiente = ref(false)
-const efectivoRecibido = ref('')
 
 const sigRef = ref(null)
 const bodyRef = ref(null)
@@ -569,6 +569,10 @@ const fechaLimiteTexto = computed(() =>
   fechaLimite.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
 
 const total = computed(() => lineas.reduce((s, l) => s + l.entregado * l.precioUnitario, 0))
+const { efectivoRecibido, marcarEfectivoEditado } = usePrecargaEfectivo(
+  total,
+  computed(() => pay.value === 'efectivo' && !pagoPendiente.value)
+)
 const totalEntregado = computed(() => lineas.reduce((s, l) => s + l.entregado, 0))
 const totalPedido = computed(() => lineas.reduce((s, l) => s + l.cantidadPedida, 0))
 const payLabel = computed(() => ({ credito: 'Crédito · 7 días', tarjeta: 'Tarjeta', efectivo: 'Efectivo', transferencia: 'Transferencia' }[pay.value]))

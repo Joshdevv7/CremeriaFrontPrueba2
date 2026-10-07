@@ -135,7 +135,7 @@
                 <span>Efectivo recibido</span>
                 <span class="tot-hint">A cobrar: <b>{{ money2(total) }}</b></span>
               </div>
-              <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
+              <input class="inp" type="number" step="any" v-model.number="efectivoRecibido" @input="marcarEfectivoEditado" :disabled="pagoPendiente" placeholder="¿Con cuánto paga el cliente?" inputmode="decimal">
               <div class="feria-box" v-if="efectivoRecibido > 0">
                 <template v-if="cambioCalculado >= 0">
                   <div class="feria-row">
@@ -325,6 +325,7 @@ import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import { usePrecargaEfectivo } from '@/composables/usePrecargaEfectivo'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import { imprimirTicketVenta } from '@/services/printer'
 import { obtenerUbicacion } from '@/composables/useNativo'
@@ -360,7 +361,6 @@ const cant = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
 const pagoPendiente = ref(false)
-const efectivoRecibido = ref('')
 
 const cambioCalculado = computed(() => {
   const rec = parseFloat(efectivoRecibido.value) || 0
@@ -370,7 +370,6 @@ const cambioCalculado = computed(() => {
 watch(() => metodo.value, (m) => {
   if (m === 3) pagoPendiente.value = false
   referencia.value = ''
-  efectivoRecibido.value = ''
 })
 
 const diasCredito = ref(7)
@@ -468,6 +467,10 @@ function dec(l) {
 }
 
 const total = computed(() => lineasCarga.value.reduce((s, l) => s + (cant[l.productoId] || 0) * precioL(l), 0))
+const { efectivoRecibido, marcarEfectivoEditado } = usePrecargaEfectivo(
+  total,
+  computed(() => metodo.value === 0 && !pagoPendiente.value)
+)
 
 const lineasSeleccionadas = computed(() => {
   return lineasCarga.value
