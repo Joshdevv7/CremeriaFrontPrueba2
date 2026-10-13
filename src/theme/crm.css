@@ -1,0 +1,12 @@
+.crm-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 15px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink-soft);font:inherit;font-weight:700;cursor:pointer;text-decoration:none}
+.crm-button.primary{background:var(--pine);color:#fff;border-color:var(--pine)}
+.crm-button:disabled{opacity:.5;cursor:default}.crm-button.danger{color:var(--clay)}
+.crm-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;font-size:11px;font-weight:700;line-height:1.35;white-space:nowrap}
+.crm-badge::before{content:"";width:6px;height:6px;flex:none;border-radius:50%;background:currentColor}
+.crm-badge.pine{color:var(--pine-deep);background:var(--pine-tint)}.crm-badge.amber{color:#754C0F;background:var(--amber-soft)}.crm-badge.sky{color:#215671;background:var(--sky-soft)}.crm-badge.clay{color:#A54830;background:var(--clay-soft)}.crm-badge.neutral{color:var(--ink-soft);background:#EDECE5}
+.crm-field label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}.crm-field input,.crm-field select{width:100%;height:44px;min-width:0;border:1px solid #D4D3C6;border-radius:9px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;padding:0 11px}
+.crm-page :focus-visible,.crm-button:focus-visible,.crm-field :focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+.crm-state{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:30px 20px;text-align:center;color:var(--ink-soft)}.crm-state h2{font-size:18px;margin:0 0 6px;color:var(--ink)}.crm-state p{font-size:13px;margin:0 0 14px}.crm-state.error{border-color:#D8B3A5}
+.crm-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.crm-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:20px}.crm-dialog-head h2{font-size:22px;margin:0;font-weight:750;color:var(--ink)}.crm-dialog-head p{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:5px 0 0}.crm-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:24px}.crm-close{width:44px;min-width:44px;padding:0}
+@media(prefers-reduced-motion:reduce){.crm-page *{transition:none!important;animation:none!important}}

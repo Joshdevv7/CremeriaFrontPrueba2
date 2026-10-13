@@ -1,472 +1,99 @@
 <template>
-  <ion-page>
-    <ion-content :fullscreen="true" class="rt">
-      <ion-refresher slot="fixed" @ionRefresh="recargar($event)"><ion-refresher-content /></ion-refresher>
-
-      <div class="scroll">
-        <div class="head">
-          <div class="brand">
-            <div class="logo">D</div>
-            <div class="hello">Buen día,<b>{{ auth.usuario?.nombre }}</b></div>
-          </div>
-          <div class="head-r"><CampanaNotif /><div class="avatar">{{ iniciales }}</div></div>
-        </div>
-
-        <!-- Aviso: sin carga abierta -->
-        <div class="sincarga" v-if="!cargando && !tieneCarga">
-          <div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
-          <div class="sc-tx">
-            <b>No has levantado tu carga</b>
-            <span>Levanta tu carga del día para poder iniciar entregas.</span>
-          </div>
-          <button class="sc-btn" @click="irACargar()">Ir a cargar</button>
-        </div>
-
-        <!-- HERO: ESTADÍSTICAS Y AVANCE DE LA JORNADA -->
-        <div class="hero">
-          <div class="hero-top">
-            <span class="t">Ruta de hoy</span>
-            <span class="date">{{ hoy }}</span>
-          </div>
-          <div class="count">
-            <span class="big">{{ pendientes.length }}</span>
-            <span class="lbl">{{ pendientes.length === 1 ? 'parada por entregar' : 'paradas por entregar' }}</span>
-          </div>
-          <div class="track" v-if="totalTurno > 0">
-            <div class="track-bar">
-              <div class="track-fill" :style="{ width: pctProgreso + '%' }"></div>
-            </div>
-          </div>
-          <div class="hero-stats">
-            <div class="stat">
-              <span class="k"><span class="dot" style="background:var(--amber)"></span>Por entregar</span>
-              <div class="v">{{ money(totalRuta) }}</div>
-            </div>
-            <div class="stat">
-              <span class="k"><span class="dot" style="background:var(--pine)"></span>Avance</span>
-              <div class="v">{{ entregadasHoy }}<small> / {{ totalTurno }} entregadas</small></div>
-            </div>
-            <div class="stat">
-              <span class="k"><span class="dot" style="background:#7FD3BD"></span>Con ubicación</span>
-              <div class="v">{{ conCoords }}<small> / {{ pendientes.length }}</small></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- BUSCADOR DE PARADAS EN RUTA -->
-        <div class="search-wrap" v-if="pendientes.length > 2">
-          <svg class="s-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input v-model="buscar" placeholder="Buscar cliente o dirección en ruta…" />
-          <button v-if="buscar" class="clear-b" @click="buscar = ''">✕</button>
-        </div>
-
+  <ion-page><ion-content :fullscreen="true" class="route-page"><ion-refresher slot="fixed" @ionRefresh="recargar($event)"><ion-refresher-content /></ion-refresher>
+    <div class="route-content crm-page">
+      <header class="route-header"><div class="brand"><div class="logo">D</div><div><strong>Distribuidora</strong><small>{{ auth.usuario?.nombre || 'Repartidor' }}</small></div></div><CampanaNotif /></header>
+      <p class="route-date">{{ hoy }}</p><h1>Mi ruta</h1>
+      <section class="route-summary" :aria-busy="cargando" aria-label="Resumen de pedidos consultados"><div class="summary-top"><span>Pedidos creados hoy</span><span v-if="!cargando && !error" class="load-status"><CrmIcon name="box" />{{ tieneCarga ? 'Carga abierta' : 'Sin carga abierta' }}</span></div><div class="progress-count"><strong>{{ cargando ? '—' : entregadosRecientes }}</strong><span>de {{ cargando ? '—' : pedidosRecientes.length }} consultados, entregados</span></div><div class="progress-track" role="progressbar" aria-label="Entregados entre los pedidos creados hoy consultados" :aria-valuemin="0" :aria-valuemax="Math.max(1,pedidosRecientes.length)" :aria-valuenow="entregadosRecientes"><span :style="{width:pctProgreso+'%'}"></span></div><p class="summary-scope">Hasta 100 pedidos · Fecha de creación, no de entrega</p><div class="summary-bottom"><span><strong>{{ cargando ? '—' : pendientes.length }}</strong> abiertos en esta lista</span><span>Por entregar <strong>{{ cargando ? '—' : money(totalRuta) }}</strong></span></div></section>
+      <div v-if="cargando" class="crm-state route-state" role="status">Cargando ruta…</div>
+      <div v-else-if="error" class="crm-state error route-state" role="alert"><h2>No se pudo cargar la ruta</h2><p>{{ error }}</p><button class="crm-button" @click="cargar">Reintentar</button></div>
+      <template v-else>
+        <div v-if="!tieneCarga" class="no-load" role="status"><CrmIcon name="box" /><div><strong>Levanta tu carga para entregar</strong><p>Revisa y prepara los productos de tu jornada.</p></div><button class="crm-button" @click="irACargar">Ir a cargar</button></div>
         <template v-if="pendientes.length">
-          <!-- SIGUIENTE PARADA DESTACADA (si no hay filtro activo o coincide) -->
-          <template v-if="!buscar && siguiente.id">
-            <div class="eyebrow" style="margin-top:20px">Siguiente parada</div>
-            <div class="next-card">
-              <div class="mapwrap">
-                <div ref="mapRef" class="map"></div>
-                <div v-if="conCoords === 0" class="nogeo">Aún sin ubicaciones · captúralas en clientes</div>
-              </div>
-              <div class="next-body">
-                <div class="nb-header">
-                  <span class="stop-no">Parada 01</span>
-                  <!-- Botones directos de contacto -->
-                  <div class="direct-acts" v-if="siguiente.clienteTelefono">
-                    <a :href="`tel:${siguiente.clienteTelefono}`" class="circ-btn call" title="Llamar al cliente" @click.stop>
-                      <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                    </a>
-                    <a :href="whatsappUrl(siguiente)" target="_blank" class="circ-btn wa" title="Enviar WhatsApp" @click.stop>
-                      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>
-                    </a>
-                  </div>
-                </div>
-
-                <div class="nb-top">
-                  <div>
-                    <div class="cli">{{ siguiente.clienteNombre }}</div>
-                    <div class="addr">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C8A82" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                      {{ siguiente.direccion || 'Sin dirección registrada' }}
-                    </div>
-                  </div>
-                  <div class="amount">
-                    <div class="m">{{ money(siguiente.total) }}</div>
-                    <span class="c">Pendiente</span>
-                  </div>
-                </div>
-                <div class="items" v-if="itemsSiguiente.length">
-                  <span v-for="(it, i) in itemsSiguiente.slice(0, 2)" :key="i" class="chip"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg> <b>{{ fmtQty(it.cantidadPedida) }}</b> {{ it.productoNombre }}</span>
-                  <span v-if="itemsSiguiente.length > 2" class="chip more">+{{ itemsSiguiente.length - 2 }} más</span>
-                </div>
-                <div class="acts">
-                  <button class="cta" :class="{ lock: !tieneCarga }" @click="iniciar(siguiente.id)">
-                    {{ tieneCarga ? 'Iniciar entrega' : 'Levanta tu carga primero' }}
-                    <svg class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  </button>
-                  <button class="navbtn" @click="navegar(siguiente)" :disabled="!mapsUrl(siguiente)" title="Navegar con Google Maps">
-                    <svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2Z"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div class="crm-field route-search"><label for="route-search">Buscar en esta lista</label><div class="search-input"><CrmIcon name="search" /><input id="route-search" v-model="buscar" type="search" placeholder="Cliente, dirección o folio" /><button v-if="buscar" class="clear-search" aria-label="Limpiar búsqueda" @click="buscar = ''"><CrmIcon name="close" /></button></div></div>
+          <template v-if="!buscar.trim() && siguiente.id">
+            <div class="section-heading"><h2>Pedido destacado</h2><small>Primero en esta lista</small></div>
+            <section class="next-card" aria-labelledby="next-customer"><div class="map-wrap"><div ref="mapRef" class="route-map" role="region" aria-label="Mapa de los pedidos con ubicación"></div><div v-if="!conCoords" class="no-geo">Sin ubicaciones registradas</div></div><div class="next-body">
+              <div class="next-meta"><strong>Pedido #{{ siguiente.id }}</strong><span class="crm-badge neutral">Por entregar</span></div><div class="next-main"><h3 id="next-customer">{{ siguiente.clienteNombreMostrar || siguiente.clienteNombre }}</h3><strong class="amount">{{ money(siguiente.total) }}</strong></div><p class="address"><CrmIcon name="pin" />{{ siguiente.direccion || 'Sin dirección registrada' }}</p>
+              <div v-if="itemsSiguiente.length" class="product-preview"><div v-for="it in itemsSiguiente.slice(0,2)" :key="it.id"><span>{{ it.productoNombre }}</span><strong>{{ lineQuantity(it,productos[it.productoId]) }}</strong></div><p v-if="itemsSiguiente.length > 2">+{{ itemsSiguiente.length - 2 }} productos más</p></div><p v-if="detalleError" class="detail-error" role="status">{{ detalleError }}</p>
+              <div class="primary-actions"><button class="crm-button primary" :class="{ locked:!tieneCarga }" @click="iniciar(siguiente.id)">{{ tieneCarga ? 'Revisar entrega' : 'Levanta tu carga primero' }}<CrmIcon name="arrow" /></button><button class="crm-button map-button" :disabled="!mapsUrl(siguiente)" aria-label="Navegar al pedido destacado con Google Maps" @click="navegar(siguiente)"><CrmIcon name="nav" /></button></div>
+              <div v-if="siguiente.clienteTelefono" class="contact-actions"><a class="crm-button" :href="`tel:${siguiente.clienteTelefono}`"><CrmIcon name="phone" />Llamar</a><a class="crm-button" :href="whatsappUrl(siguiente)" target="_blank" rel="noopener noreferrer"><CrmIcon name="message" />WhatsApp</a></div>
+            </div></section>
           </template>
-
-          <!-- LISTA DE PARADAS (Filtradas o Restantes) -->
-          <div class="list-head" v-if="listaMostrar.length">
-            <div class="h">{{ buscar ? 'Resultados' : 'Pendientes' }} <span>· {{ listaMostrar.length }}</span></div>
-          </div>
-          <div v-for="(p, i) in listaMostrar" :key="p.id" class="stop" :class="{ lock: !tieneCarga }" @click="iniciar(p.id)">
-            <div class="idx">{{ String(buscar ? (i + 1) : (i + 2)).padStart(2, '0') }}</div>
-            <div class="info">
-              <div class="n">{{ p.clienteNombre }}</div>
-              <div class="meta">{{ p.direccion || 'Sin dirección' }}</div>
-            </div>
-            <div class="right">
-              <div class="mm">{{ money(p.total) }}</div>
-              <!-- Acciones rápidas de contacto en fila -->
-              <div class="row-acts" v-if="p.clienteTelefono">
-                <a :href="`tel:${p.clienteTelefono}`" class="mini-act call" title="Llamar" @click.stop>
-                  <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                </a>
-                <a :href="whatsappUrl(p)" target="_blank" class="mini-act wa" title="WhatsApp" @click.stop>
-                  <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>
-                </a>
-                <button class="mini-act nav" @click.stop="navegar(p)" :disabled="!mapsUrl(p)" title="Navegar">
-                  <svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2Z"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
+          <div class="section-heading"><h2>{{ buscar.trim() ? 'Resultados' : 'Otros pedidos' }}</h2><small>{{ listaMostrar.length }} en esta lista</small></div>
+          <div v-if="buscar.trim() && !listaMostrar.length" class="crm-state"><h2>Sin coincidencias</h2><p>Prueba otro cliente, dirección o folio.</p><button class="crm-button" @click="buscar = ''">Limpiar búsqueda</button></div>
+          <article v-for="p in listaMostrar" :key="p.id" class="stop-card"><button class="stop-open" @click="iniciar(p.id)"><span class="stop-number">#{{ p.id }}</span><span class="stop-info"><strong>{{ p.clienteNombreMostrar || p.clienteNombre }}</strong><small>{{ p.direccion || 'Sin dirección registrada' }}</small></span><strong class="amount">{{ money(p.total) }}</strong><CrmIcon name="arrow" /></button><div class="stop-contact" v-if="p.clienteTelefono || mapsUrl(p)"><a v-if="p.clienteTelefono" :href="`tel:${p.clienteTelefono}`" class="crm-button" :aria-label="`Llamar a ${p.clienteNombre}`"><CrmIcon name="phone" />Llamar</a><a v-if="p.clienteTelefono" :href="whatsappUrl(p)" class="crm-button" target="_blank" rel="noopener noreferrer" :aria-label="`WhatsApp de ${p.clienteNombre}`"><CrmIcon name="message" />WhatsApp</a><button v-if="mapsUrl(p)" class="crm-button" :aria-label="`Navegar a ${p.clienteNombre}`" @click="navegar(p)"><CrmIcon name="nav" />Navegar</button></div></article>
+          <p class="route-limit">Se muestran hasta 50 pedidos abiertos asignados. El orden de la lista no representa una prioridad ni una ruta optimizada.</p>
         </template>
-
-        <div v-else-if="!cargando" class="empty">
-          <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>
-          <div class="et">¡Ruta completada!</div>
-          <div class="es">No hay más pedidos abiertos pendientes de entrega.</div>
-        </div>
-        <p v-if="cargando" class="muted">Cargando ruta...</p>
-        <p v-if="error" class="err">{{ error }}</p>
-      </div>
-
-      <!-- Toast de aviso al tocar sin carga -->
-      <div class="toast" :class="{ show: toast }">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-        <div class="toast-tx">Primero levanta tu carga del día para poder entregar.</div>
-        <button class="toast-go" @click="irACargar()">Cargar</button>
-      </div>
-    </ion-content>
-  </ion-page>
+        <div v-else class="crm-state route-state"><CrmIcon name="check" /><h2>Sin pedidos abiertos en esta consulta</h2><p>Vuelve a consultar para comprobar nuevas asignaciones.</p><button class="crm-button" @click="cargar">Actualizar ruta</button></div>
+      </template>
+    </div>
+    <div v-if="toast" class="load-toast" role="status"><CrmIcon name="alert" /><span>Primero levanta tu carga para poder entregar.</span><button class="crm-button" @click="irACargar">Cargar</button></div>
+  </ion-content></ion-page>
 </template>
-
 <script setup>
-import CampanaNotif from '@/components/CampanaNotif.vue'
-import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { IonPage, IonContent, IonRefresher, IonRefresherContent, onIonViewWillEnter } from '@ionic/vue'
+import { IonPage, IonContent, IonRefresher, IonRefresherContent, onIonViewWillEnter, onIonViewDidEnter, onIonViewWillLeave } from '@ionic/vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
-
-const router = useRouter()
-const auth = useAuthStore()
-
-const pendientes = ref([])
-const itemsSiguiente = ref([])
-const cargando = ref(true)
-const error = ref('')
-const tieneCarga = ref(true)
-const toast = ref(false)
-const buscar = ref('')
-const entregadasHoy = ref(0)
-let toastTimer = null
-const mapRef = ref(null)
-let map = null
-let capaPines = null
-
-const CULIACAN = [24.8091, -107.394]
-const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
-const fmtQty = (n) => Number(n || 0).toLocaleString('es-MX')
-const hoy = new Date().toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' })
-const iniciales = computed(() => (auth.usuario?.nombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase())
-
-const siguiente = computed(() => pendientes.value[0] || {})
-const resto = computed(() => pendientes.value.slice(1))
-const totalRuta = computed(() => pendientes.value.reduce((s, p) => s + p.total, 0))
-const conCoords = computed(() => pendientes.value.filter((p) => p.latitud != null && p.longitud != null).length)
-const totalTurno = computed(() => entregadasHoy.value + pendientes.value.length)
-const pctProgreso = computed(() => totalTurno.value > 0 ? Math.round((entregadasHoy.value / totalTurno.value) * 100) : 0)
-
-const listaMostrar = computed(() => {
-  const q = buscar.value.trim().toLowerCase()
-  if (!q) return resto.value
-  return pendientes.value.filter(p =>
-    (p.clienteNombre || '').toLowerCase().includes(q) ||
-    (p.direccion || '').toLowerCase().includes(q)
-  )
-})
-
-function iniciar(id) {
-  if (!tieneCarga.value) { mostrarToast(); return }
-  router.push(`/entrega/${id}`)
+import CampanaNotif from '@/components/CampanaNotif.vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { formatMxn as money, lineQuantity } from '@/utils/crmPresentation'
+const router=useRouter(),auth=useAuthStore()
+const pendientes=ref([]),pedidosRecientes=ref([]),itemsSiguiente=ref([]),productos=ref({}),cargando=ref(true),error=ref(''),detalleError=ref(''),tieneCarga=ref(false),buscar=ref(''),toast=ref(false),mapRef=ref(null)
+let map=null,capaPines=null,mapTimer,toastTimer,controller,solicitud=0,activa=false
+const hoy=ref('')
+const siguiente=computed(()=>pendientes.value[0]||{})
+const totalRuta=computed(()=>pendientes.value.reduce((s,p)=>s+Number(p.total||0),0))
+const entregadosRecientes=computed(()=>pedidosRecientes.value.filter(p=>['CerradoCompleto','CerradoParcial'].includes(p.estado)).length)
+const pctProgreso=computed(()=>pedidosRecientes.value.length?Math.round(entregadosRecientes.value/pedidosRecientes.value.length*100):0)
+const coords=p=>p.latitud!=null&&p.longitud!=null&&Number.isFinite(Number(p.latitud))&&Number.isFinite(Number(p.longitud))&&Math.abs(Number(p.latitud))<=90&&Math.abs(Number(p.longitud))<=180
+const conCoords=computed(()=>pendientes.value.filter(coords).length)
+const listaMostrar=computed(()=>{const q=buscar.value.trim().toLocaleLowerCase('es-MX');return q?pendientes.value.filter(p=>`${p.id} ${p.clienteNombreMostrar||p.clienteNombre||''} ${p.direccion||''}`.toLocaleLowerCase('es-MX').includes(q)):pendientes.value.slice(1)})
+function iniciar(id){if(!tieneCarga.value){toast.value=true;clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.value=false,3500);return}router.push(`/entrega/${id}`)}
+function irACargar(){router.push('/app/inventario')}
+function mapsUrl(p){if(!p)return null;if(coords(p))return `https://www.google.com/maps/dir/?api=1&destination=${Number(p.latitud)},${Number(p.longitud)}`;return p.direccion?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.direccion)}`:null}
+function navegar(p){const url=mapsUrl(p);if(url)window.open(url,'_blank','noopener,noreferrer')}
+function whatsappUrl(p){const tel=String(p.clienteTelefono||'').replace(/\D/g,'');const num=tel.length===10?'52'+tel:tel;const text=encodeURIComponent(`Hola ${p.clienteNombreMostrar||p.clienteNombre}, le saludamos de Distribuidora. Vamos en camino con su pedido #${p.id} por ${money(p.total)}. ¿Se encuentra disponible para recibirlo?`);return `https://wa.me/${num}?text=${text}`}
+function limpiarMapa(){clearTimeout(mapTimer);if(map){map.remove();map=null;capaPines=null}}
+function pintarMapa(){
+  if(!activa||!mapRef.value||cargando.value||error.value)return
+  if(!conCoords.value){limpiarMapa();return}
+  if(map&&map.getContainer()!==mapRef.value)limpiarMapa()
+  if(!map){map=L.map(mapRef.value,{zoomControl:false}).setView([24.8091,-107.394],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map)}
+  capaPines?.remove();capaPines=L.layerGroup().addTo(map)
+  const puntos=[]
+  pendientes.value.filter(coords).forEach(p=>{const point=[Number(p.latitud),Number(p.longitud)];const content=document.createElement('div');const name=document.createElement('strong');name.textContent=p.clienteNombreMostrar||p.clienteNombre;content.append(name,document.createElement('br'),document.createTextNode(money(p.total)));const url=mapsUrl(p);if(url){const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Navegar con Google Maps';content.append(document.createElement('br'),a)}L.circleMarker(point,{radius:p.id===siguiente.value.id?9:6,color:'#0E5C4A',fillColor:p.id===siguiente.value.id?'#E8972E':'#0E5C4A',fillOpacity:1,weight:2}).bindPopup(content).addTo(capaPines);puntos.push(point)})
+  if(puntos.length)map.fitBounds(puntos,{padding:[22,22],maxZoom:15})
+  clearTimeout(mapTimer);mapTimer=setTimeout(()=>map?.invalidateSize(),200)
 }
-function irACargar() { router.push('/app/inventario') }
-function mostrarToast() {
-  toast.value = true
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toast.value = false }, 3500)
-}
-
-function mapsUrl(stop) {
-  if (!stop) return null
-  if (stop.latitud != null && stop.longitud != null)
-    return `https://www.google.com/maps/dir/?api=1&destination=${stop.latitud},${stop.longitud}`
-  if (stop.direccion)
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.direccion)}`
-  return null
-}
-function navegar(stop) { const u = mapsUrl(stop); if (u) window.open(u, '_blank') }
-
-function whatsappUrl(stop) {
-  const tel = (stop.clienteTelefono || '').replace(/\D/g, '')
-  if (!tel) return '#'
-  const num = tel.length === 10 ? '52' + tel : tel
-  const msg = encodeURIComponent(`Hola ${stop.clienteNombre}, le saludamos de Distribuidora. Vamos en camino con su pedido #${stop.id} por un total de ${money(stop.total)}. ¿Se encuentra disponible para recibirlo?`)
-  return `https://wa.me/${num}?text=${msg}`
-}
-
-function pinIcon(num, esSiguiente) {
-  const bg = esSiguiente ? '#E8972E' : '#0E5C4A'
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 2px;background:${bg};transform:rotate(45deg);box-shadow:0 6px 12px -4px rgba(0,0,0,.45);display:grid;place-items:center;"><span style="transform:rotate(-45deg);color:#fff;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;">${num}</span></div>`,
-    iconSize: [28, 28], iconAnchor: [14, 28]
-  })
-}
-
-function pintarMapa() {
-  if (!mapRef.value) return
-  if (!map) {
-    map = L.map(mapRef.value, { zoomControl: false, attributionControl: false }).setView(CULIACAN, 12)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
-  }
-  if (capaPines) { capaPines.remove(); capaPines = null }
-  const conGeo = pendientes.value.filter((p) => p.latitud != null && p.longitud != null)
-  if (conGeo.length) {
-    capaPines = L.layerGroup().addTo(map)
-    const puntos = []
-    conGeo.forEach((p) => {
-      const idx = pendientes.value.indexOf(p) + 1
-      const u = mapsUrl(p)
-      const nav = u ? `<br><a href="${u}" target="_blank" rel="noopener" style="color:#0E5C4A;font-weight:700;text-decoration:none;">Navegar aquí &#8599;</a>` : ''
-      const tel = p.clienteTelefono ? `<br><a href="tel:${p.clienteTelefono}" style="color:#2E6F8E;font-weight:700;text-decoration:none;">📞 Llamar al cliente</a>` : ''
-      L.marker([p.latitud, p.longitud], { icon: pinIcon(idx, idx === 1) })
-        .bindPopup(`<b>${p.clienteNombre}</b><br>${money(p.total)}${nav}${tel}`)
-        .addTo(capaPines)
-      puntos.push([p.latitud, p.longitud])
-    })
-    map.fitBounds(puntos, { padding: [30, 30], maxZoom: 15 })
-  } else {
-    map.setView(CULIACAN, 12)
-  }
-  setTimeout(() => map && map.invalidateSize(), 200)
-}
-
-async function verificarCarga() {
-  try {
-    const { data } = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
-    tieneCarga.value = !!(data && data.id)
-  } catch {
-    tieneCarga.value = false
-  }
-}
-
-async function cargar() {
-  cargando.value = true; error.value = ''
-  try {
-    await verificarCarga()
-    const hoyISO = new Date().toISOString().slice(0, 10)
-    const [pedidosResp, hoyResp] = await Promise.all([
-      http.get('/pedidos', { params: { estado: 'Abierto', repartidorId: auth.usuarioId, tamano: 50 } }),
-      http.get('/pedidos', { params: { repartidorId: auth.usuarioId, desde: hoyISO, tamano: 100 } })
-    ])
-    pendientes.value = pedidosResp.data.items || []
-    
-    // Contar entregadas hoy
-    const cerrados = (hoyResp.data.items || []).filter(p => p.estado === 'CerradoCompleto' || p.estado === 'CerradoParcial')
-    entregadasHoy.value = cerrados.length
-
-    if (pendientes.value.length) {
-      try {
-        const det = await http.get(`/pedidos/${pendientes.value[0].id}`)
-        itemsSiguiente.value = det.data.lineas
-      } catch { itemsSiguiente.value = [] }
-      await nextTick()
-      pintarMapa()
+watch(mapRef,()=>{if(!mapRef.value)limpiarMapa();else pintarMapa()},{flush:'post'})
+async function cargar(){
+  hoy.value=new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'})
+  const current=++solicitud;controller?.abort();controller=new AbortController();const signal=controller.signal;cargando.value=true;error.value='';detalleError.value='';itemsSiguiente.value=[];productos.value={}
+  try{
+    try{const {data}=await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`,{signal});if(current!==solicitud||!activa)return;tieneCarga.value=!!data?.id}catch(e){if(e.response?.status===404)tieneCarga.value=false;else throw e}
+    const date=new Date();const desde=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+    const [open,recent]=await Promise.all([http.get('/pedidos',{params:{estado:'Abierto',repartidorId:auth.usuarioId,tamano:50},signal}),http.get('/pedidos',{params:{repartidorId:auth.usuarioId,desde,tamano:100},signal})])
+    if(current!==solicitud||!activa)return;pendientes.value=open.data.items||[];pedidosRecientes.value=recent.data.items||[]
+    if(siguiente.value.id){
+      try{const detail=await http.get(`/pedidos/${siguiente.value.id}`,{signal});if(current!==solicitud||!activa)return;itemsSiguiente.value=detail.data.lineas||[];const ids=[...new Set(itemsSiguiente.value.slice(0,2).map(it=>it.productoId))];const catalog=await Promise.allSettled(ids.map(id=>http.get(`/productos/${id}`,{signal})));if(current!==solicitud||!activa)return;catalog.forEach((result,i)=>{if(result.status==='fulfilled')productos.value[ids[i]]=result.value.data;else if(result.reason.code!=='ERR_CANCELED')detalleError.value='Algunas unidades no se pudieron consultar. Revisa el detalle antes de entregar.'})}
+      catch(e){if(current===solicitud&&activa&&e.code!=='ERR_CANCELED')detalleError.value='No se pudo consultar el detalle de productos. Puedes volver a intentar actualizar.'}
     }
-  } catch (e) {
-    error.value = e.response?.data?.mensaje || 'No se pudo cargar la ruta.'
-  } finally { cargando.value = false }
+  }catch(e){if(current===solicitud&&activa&&e.code!=='ERR_CANCELED'){pendientes.value=[];pedidosRecientes.value=[];tieneCarga.value=false;error.value=e.response?.data?.mensaje||'No se pudo cargar la ruta.'}}
+  finally{if(current===solicitud&&activa){cargando.value=false;await nextTick();pintarMapa()}}
 }
-async function recargar(ev) { await cargar(); ev.target.complete() }
-
-onIonViewWillEnter(cargar)
-onUnmounted(() => { if (map) { map.remove(); map = null }; clearTimeout(toastTimer) })
+async function recargar(event){try{await cargar()}finally{event.target.complete()}}
+function salir(){activa=false;++solicitud;controller?.abort();limpiarMapa();clearTimeout(toastTimer);toast.value=false}
+onIonViewWillEnter(()=>{activa=true;cargar()});onIonViewDidEnter(pintarMapa);onIonViewWillLeave(salir);onUnmounted(salir)
 </script>
-
 <style scoped>
-.rt { --background: var(--paper); }
-.scroll { padding: 8px 18px 24px; }
-.muted { color: var(--muted); text-align: center; margin-top: 24px; }
-.err { color: var(--clay); text-align: center; margin-top: 16px; font-weight: 600; }
-
-.head { display: flex; align-items: flex-start; justify-content: space-between; padding: 6px 2px 14px; }
-.brand { display: flex; align-items: center; gap: 10px; }
-.logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(150deg,var(--pine),var(--pine-deep)); display: grid; place-items: center; color: #fff; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 20px; box-shadow: 0 6px 14px -6px rgba(14,92,74,.7); }
-.hello { font-size: 13px; color: var(--muted); font-weight: 600; }
-.hello b { display: block; color: var(--ink); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; letter-spacing: -.01em; margin-top: 1px; }
-.avatar { width: 42px; height: 42px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--amber-soft); display: grid; place-items: center; font-weight: 700; color: #B9781F; font-size: 15px; }
-
-/* aviso sin carga */
-.sincarga { display: flex; align-items: center; gap: 12px; background: var(--amber-soft); border: 1px solid #EAD9B8; border-radius: 18px; padding: 14px; margin-bottom: 14px; }
-.sc-ic { width: 40px; height: 40px; border-radius: 12px; background: #fff; display: grid; place-items: center; flex: 0 0 auto; color: var(--amber); }
-.sc-ic svg { width: 22px; height: 22px; }
-.sc-tx { flex: 1; font-size: 13px; }
-.sc-tx b { display: block; color: #5A3F0B; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14.5px; }
-.sc-tx span { color: #8A641B; font-size: 12px; font-weight: 500; }
-.sc-btn { flex: 0 0 auto; background: #B9781F; color: #fff; border: none; border-radius: 11px; padding: 9px 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
-
-/* hero */
-.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); position: relative; }
-.hero-top { display: flex; align-items: center; justify-content: space-between; }
-.hero-top .t { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.hero-top .date { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: capitalize; }
-.count { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 12px; }
-.count .big { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 42px; letter-spacing: -.03em; color: var(--ink); line-height: 1; }
-.count .lbl { font-size: 14px; color: var(--muted); font-weight: 600; }
-
-.track-bar { height: 7px; border-radius: 5px; background: var(--paper-2); overflow: hidden; margin-bottom: 12px; }
-.track-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--pine), #2E6F8E); transition: width 0.4s ease; }
-
-.hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
-.stat .k { font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 5px; }
-.stat .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.stat .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.stat .v small { font-size: 11px; color: var(--muted); font-weight: 600; }
-
-/* Buscador */
-.search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 14px;
-  margin-top: 16px;
-  box-shadow: var(--shadow);
-}
-.search-wrap .s-ic { width: 17px; height: 17px; stroke: var(--muted); fill: none; stroke-width: 2.2; flex: 0 0 auto; }
-.search-wrap input { border: none; background: transparent; font-family: "Hanken Grotesk"; font-size: 13.5px; font-weight: 600; color: var(--ink); flex: 1; outline: none; }
-.clear-b { border: none; background: var(--paper-2); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-size: 11px; color: var(--muted); cursor: pointer; }
-
-/* siguiente parada */
-.eyebrow { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-.next-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow); }
-.mapwrap { height: 160px; position: relative; background: #e5ece8; }
-.map { width: 100%; height: 100%; }
-.nogeo { position: absolute; inset: 0; display: grid; place-content: center; background: rgba(255,253,248,.88); color: var(--muted); font-size: 12.5px; font-weight: 600; text-align: center; padding: 14px; }
-.next-body { padding: 16px; }
-.nb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.stop-no { display: inline-block; font-family: "Bricolage Grotesque"; font-size: 11px; font-weight: 800; color: var(--amber); background: var(--amber-soft); padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .05em; }
-
-.direct-acts { display: flex; align-items: center; gap: 8px; }
-.circ-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  text-decoration: none;
-  transition: transform 0.15s;
-}
-.circ-btn:hover { transform: scale(1.05); }
-.circ-btn.call { background: var(--sky-soft); color: var(--sky); border-color: #BDE0EA; }
-.circ-btn.call svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
-.circ-btn.wa { background: #E4F7EB; color: #1AA75A; border-color: #BCE7CC; }
-.circ-btn.wa svg { width: 16px; height: 16px; fill: currentColor; }
-.circ-btn.nav { background: var(--pine-tint); color: var(--pine); border-color: #B2D8CE; }
-.circ-btn.nav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
-
-.nb-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.cli { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; letter-spacing: -.01em; color: var(--ink); }
-.addr { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); margin-top: 3px; font-weight: 500; }
-.amount { text-align: right; flex: 0 0 auto; }
-.amount .m { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.amount .c { display: block; font-size: 11px; font-weight: 700; color: var(--amber); }
-
-.items { display: flex; gap: 7px; flex-wrap: wrap; margin: 14px 0 16px; }
-.chip { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); background: var(--paper-2); border: 1px solid var(--line); padding: 6px 11px; border-radius: 10px; display: flex; align-items: center; gap: 6px; }
-.chip .pkg { width: 15px; height: 15px; stroke: var(--ink-soft); fill: none; flex: 0 0 auto; }
-.chip b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.chip.more { color: var(--muted); background: transparent; }
-.cta { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 15px; padding: 15px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(21,42,36,.7); }
-.cta.lock { background: #9AA6A0; box-shadow: none; }
-.acts { display: flex; gap: 10px; }
-.acts .cta { flex: 1; }
-.navbtn { flex: 0 0 auto; width: 54px; border: 1px solid var(--line); background: var(--surface); border-radius: 15px; display: grid; place-items: center; cursor: pointer; }
-.navbtn:disabled { opacity: .4; }
-.navbtn svg { width: 22px; height: 22px; fill: none; stroke: var(--pine); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.cta .arrow { transition: transform .2s; }
-.cta:hover .arrow { transform: translateX(3px); }
-
-.list-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 6px 12px; }
-.list-head .h { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
-.list-head .h span { color: var(--muted); font-weight: 600; }
-
-.stop { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow); cursor: pointer; transition: transform 0.15s; }
-.stop:hover { transform: translateY(-1px); }
-.stop.lock { opacity: .6; }
-.stop .idx { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; background: var(--paper-2); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 700; color: var(--ink-soft); font-size: 15px; }
-.stop .info { flex: 1; min-width: 0; }
-.stop .info .n { font-weight: 700; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stop .info .meta { font-size: 12.5px; color: var(--muted); font-weight: 500; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stop .right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 0 0 auto; }
-.stop .right .mm { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; font-variant-numeric: tabular-nums; }
-
-.row-acts { display: flex; align-items: center; gap: 6px; }
-.mini-act {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  text-decoration: none;
-}
-.mini-act.call { background: var(--sky-soft); color: var(--sky); border-color: #BDE0EA; }
-.mini-act.call svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; }
-.mini-act.wa { background: #E4F7EB; color: #1AA75A; border-color: #BCE7CC; }
-.mini-act.wa svg { width: 13px; height: 13px; fill: currentColor; }
-.mini-act.nav { background: var(--pine-tint); color: var(--pine); border-color: #B2D8CE; }
-.mini-act.nav svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; }
-
-.empty { text-align: center; padding: 50px 20px; }
-.empty .ico { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--pine-tint); }
-.empty .ico svg { width: 30px; height: 30px; stroke: var(--pine); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.empty .et { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; }
-.empty .es { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
-.head-r { display: flex; align-items: center; gap: 10px; }
-
-/* toast */
-.toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); background: var(--ink); color: #fff; border-radius: 15px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 16px 32px -12px rgba(0,0,0,.5); transform: translateY(140%); transition: transform .32s cubic-bezier(.2,.9,.3,1.2); z-index: 9999; }
-.toast.show { transform: translateY(0); }
-.toast svg { width: 22px; height: 22px; stroke: var(--amber); fill: none; flex: 0 0 auto; }
-.toast-tx { flex: 1; font-size: 13.5px; font-weight: 600; line-height: 1.35; }
-.toast-go { flex: 0 0 auto; background: var(--amber); color: #3a2607; border: none; border-radius: 10px; padding: 9px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; }
+.route-page{--background:var(--paper)}.route-content{max-width:640px;margin:0 auto;padding:19px 20px 30px}.route-header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.brand{display:flex;align-items:center;gap:11px}.logo{height:38px;width:38px;background:var(--pine);border-radius:11px;display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800}.brand strong{display:block;font-size:17px;letter-spacing:-.3px}.brand small{display:block;color:var(--ink-soft);font-size:11px;margin-top:2px}.route-date{color:var(--ink-soft);font-size:12px;margin:0 0 5px;text-transform:capitalize}h1{font-size:29px;font-weight:750;letter-spacing:-.7px;margin:0 0 17px}.route-summary{background:var(--pine);color:#fff;border-radius:17px;padding:17px 18px}.summary-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:700}.load-status{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:7px;background:#ffffff18;white-space:nowrap;font-size:10px}.load-status :deep(svg){width:16px;height:16px}.progress-count{display:flex;align-items:baseline;gap:7px;margin:10px 0}.progress-count strong{font-size:31px;line-height:1;font-variant-numeric:tabular-nums}.progress-count span{font-size:11px;color:#E1ECE6}.progress-track{height:5px;background:#ffffff24;border-radius:8px;overflow:hidden}.progress-track>span{height:100%;display:block;background:#EFBC6B;border-radius:8px}.summary-scope{font-size:9px;color:#E1ECE6;margin:8px 0 12px}.summary-bottom{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#E1ECE6}.summary-bottom strong{color:#fff;font-variant-numeric:tabular-nums}
+.route-state{margin-top:18px}.no-load{display:flex;align-items:center;gap:10px;background:var(--amber-soft);border:1px solid #D7BA82;border-radius:13px;padding:13px;margin-top:16px}.no-load>div{flex:1}.no-load strong{font-size:12px;color:#754C0F}.no-load p{font-size:11px;color:#754C0F;margin:4px 0 0}.no-load .crm-button{font-size:11px;padding:8px;flex-shrink:0}.route-search{margin-top:16px}.route-search label{font-size:11px}.search-input{position:relative}.search-input>:deep(svg){position:absolute;left:12px;top:13px;width:17px;height:17px;color:var(--ink-soft)}.search-input input{padding-left:36px;padding-right:44px}.clear-search{position:absolute;right:0;top:0;height:44px;width:44px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--ink-soft)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 11px}.section-heading h2{font-size:15px;font-weight:700;margin:0}.section-heading small{color:var(--ink-soft);font-size:10px}
+.next-card{border:1px solid #BCCFC1;border-radius:15px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}.map-wrap{height:108px;position:relative;background:var(--pine-tint)}.route-map{width:100%;height:100%;z-index:0}.no-geo{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:15px;font-size:12px;color:var(--ink-soft);background:var(--pine-tint);z-index:1}.next-body{padding:15px}.next-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px;margin-bottom:11px}.next-meta>strong{color:var(--pine)}.next-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.next-main h3{font-size:17px;font-weight:700;letter-spacing:-.2px;margin:0;overflow-wrap:anywhere}.amount{font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}.address{display:flex;align-items:flex-start;gap:5px;color:var(--ink-soft);font-size:11px;margin:6px 0 13px;overflow-wrap:anywhere}.address :deep(svg){width:13px;height:13px;margin-top:2px}.product-preview{padding:11px 0;border-block:1px solid var(--line);margin-bottom:13px}.product-preview>div{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;font-size:12px;margin-bottom:7px}.product-preview>div:last-child{margin:0}.product-preview>div>span{overflow-wrap:anywhere}.product-preview strong{font-size:11px;text-align:right;max-width:48%;font-variant-numeric:tabular-nums}.product-preview p{font-size:10px;color:var(--ink-soft);margin:7px 0 0}.detail-error{font-size:11px;color:#754C0F;line-height:1.6}.primary-actions{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px}.primary-actions .primary{font-size:12px;justify-content:space-between;padding:11px 13px}.primary-actions .locked{background:var(--ink-soft);border-color:var(--ink-soft)}.map-button{padding:0;background:var(--pine-tint);color:var(--pine);border-color:#C9D6CA}.contact-actions{display:flex;gap:8px;margin-top:10px}.contact-actions .crm-button{font-size:11px;flex:1;padding:8px}
+.stop-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:10px;box-shadow:var(--shadow)}.stop-open{display:flex;align-items:center;gap:10px;width:100%;min-height:72px;text-align:left;padding:12px;border:0;background:transparent;color:var(--ink);font:inherit;cursor:pointer}.stop-number{font-size:10px;background:var(--pine-tint);padding:8px 5px;border-radius:8px;color:var(--pine);font-weight:700}.stop-info{flex:1;min-width:0}.stop-info strong{display:block;font-size:12px;overflow-wrap:anywhere}.stop-info small{font-size:10px;color:var(--ink-soft);display:block;margin-top:3px;overflow-wrap:anywhere}.stop-open>.amount{font-size:13px}.stop-open :deep(svg){width:15px;height:15px;color:var(--ink-soft)}.stop-contact{display:flex;gap:6px;padding:0 12px 12px;flex-wrap:wrap}.stop-contact .crm-button{font-size:10px;flex:1;padding:8px;min-width:75px}.stop-contact :deep(svg){width:15px;height:15px}.route-limit{font-size:10px;line-height:1.7;color:var(--ink-soft);margin:16px 0 0}.load-toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px;z-index:1000;background:var(--ink);color:#fff;padding:13px;border-radius:12px;font-size:12px;box-shadow:var(--shadow)}.load-toast>span{flex:1}.load-toast .crm-button{font-size:11px;background:var(--amber-soft);color:#754C0F}
+@media(max-width:360px){.route-content{padding-inline:14px}.summary-bottom{flex-direction:column;gap:4px}.no-load{flex-wrap:wrap}.no-load .crm-button{margin-left:auto}.next-main{flex-wrap:wrap}.stop-open{flex-wrap:wrap}.stop-info{min-width:140px}.stop-open>.amount{margin-left:auto}}
+.route-header :deep(.bell){width:44px;height:44px}
 </style>

@@ -1,4 +1,4 @@
-const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 })
+import { formatMxn } from '../utils/crmPresentation.js'
 export function useCurrency() {
-  return { mxn: (n) => fmt.format(Number(n || 0)) }
+  return { mxn: formatMxn }
 }

@@ -15,6 +15,7 @@ import '@ionic/vue/css/flex-utils.css'
 
 /* Tema propio */
 import './theme/variables.css'
+import './theme/crm.css'
 
 const app = createApp(App)
   .use(IonicVue)

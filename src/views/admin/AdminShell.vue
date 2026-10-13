@@ -3,30 +3,30 @@
     <ion-content class="shell" :scroll-y="false">
       <div class="app">
         <!-- SIDEBAR -->
-        <aside class="side" :class="{ open: navAbierto }">
-          <div class="logo"><div class="mk">D</div><div class="nm">Distribuidora<small>Panel admin</small></div></div>
-          <template v-for="g in gruposVisibles" :key="g.titulo">
-            <div class="navlbl">{{ g.titulo }}</div>
-            <a v-for="n in g.items" :key="n.path" class="nav-a" :class="{ on: activo(n) }" @click="ir(n.path)">
-              <span v-html="n.icon"></span><span class="nav-txt">{{ n.label }}</span>
-              <span v-if="n.badge === 'cargasPendientes' && cargasPendientes > 0" class="nav-badge">{{ cargasPendientes }}</span>
-            </a>
-          </template>
+        <aside id="admin-navigation" ref="navPanel" class="side" :class="{ open: navAbierto }" :role="navAbierto ? 'dialog' : undefined" :aria-modal="navAbierto ? 'true' : undefined" aria-label="Navegación de operaciones" @keydown.esc.stop="cerrarNav" @keydown.tab="mantenerFoco">
+          <div class="logo"><div class="mk">D</div><div class="nm">Distribuidora<small>CRM de cremería</small></div><button ref="navClose" class="nav-close" aria-label="Cerrar menú" @click="cerrarNav">×</button></div>
+          <nav aria-label="Menú principal" class="navigation-groups">
+            <div class="navlbl">Espacio de trabajo</div>
+            <template v-for="g in gruposVisibles" :key="g.titulo">
+              <template v-if="g.titulo === 'Inicio'"><router-link v-for="n in g.items" :key="n.path" :to="n.path" class="nav-a" :class="{ on: activo(n) }" :aria-current="activo(n) ? 'page' : undefined" @click="cerrarNav"><span aria-hidden="true" v-html="n.icon"></span><span class="nav-txt">{{ n.label }}</span></router-link></template>
+              <details v-else class="nav-group" :open="abiertos[g.titulo]" @toggle="abiertos[g.titulo] = $event.target.open"><summary><span aria-hidden="true" v-html="g.items[0].icon"></span>{{ g.titulo }}<span class="group-count" v-if="g.titulo === 'Rutas y equipo' && cargasPendientes">{{ cargasPendientes }}</span><svg class="group-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="nav-children"><router-link v-for="n in g.items" :key="n.path" :to="n.path" class="nav-a" :class="{ on: activo(n) }" :aria-current="activo(n) ? 'page' : undefined" @click="cerrarNav"><span class="nav-txt">{{ n.label }}</span><span v-if="n.badge === 'cargasPendientes' && cargasPendientes > 0" class="nav-badge">{{ cargasPendientes }}</span></router-link></div></details>
+            </template>
+          </nav>
           <div class="spacer"></div>
-          <div class="profile" @click="salir()" title="Cerrar sesión">
+          <button class="profile" @click="salir()" aria-label="Cerrar sesión">
             <div class="av">{{ iniciales }}</div>
-            <div class="who"><div class="n">{{ auth.usuario?.nombre }}</div><div class="r">{{ auth.esVendedor ? 'Vendedor' : 'Dueño' }}</div></div>
-          </div>
+            <div class="who"><div class="n">{{ auth.usuario?.nombre }}</div><div class="r">{{ auth.esVendedor ? 'Vendedor' : 'Administrador' }}</div></div>
+          </button>
         </aside>
-        <div class="scrim" :class="{ show: navAbierto }" @click="navAbierto = false"></div>
+        <div class="scrim" :class="{ show: navAbierto }" @click="cerrarNav" aria-hidden="true"></div>
 
         <!-- MAIN -->
-        <main class="main">
+        <main class="main" :inert="navAbierto ? true : undefined">
           <div class="top">
             <div class="top-l">
-              <div class="hamb" @click="navAbierto = true"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div>
+              <button ref="navTrigger" class="hamb" aria-label="Abrir menú" aria-controls="admin-navigation" :aria-expanded="navAbierto" @click="abrirNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
               <div>
-                <button v-if="ctx.back" class="back" @click="router.replace(ctx.back)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <button v-if="ctx.back" class="back" aria-label="Volver a la lista" @click="router.replace(ctx.back)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
                 <h1>{{ ctx.titulo || 'Panel' }}</h1>
                 <div class="sub" v-if="ctx.sub">{{ ctx.sub }}</div>
               </div>
@@ -50,26 +50,42 @@
 
       <!-- bottom nav (móvil) -->
       <nav class="botnav" v-if="!navAbierto">
-        <a v-for="n in navMovil" :key="n.path" :class="{ on: activo(n) }" @click="ir(n.path)">
+        <router-link v-for="n in navMovil" :key="n.path" :to="n.path" :class="{ on: activo(n) }" :aria-current="activo(n) ? 'page' : undefined">
           <span v-html="n.icon"></span>{{ n.label }}
-        </a>
+        </router-link>
       </nav>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import { useAuthStore } from '@/stores/auth'
 import CampanaNotif from '@/components/CampanaNotif.vue'
 import http from '@/api/http'
+import { confirmar } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const navAbierto = ref(false)
+const navPanel = ref(null), navTrigger = ref(null), navClose = ref(null)
+const abiertos = reactive({})
+const mobileMenu = window.matchMedia('(max-width: 720px)')
+async function abrirNav() { navAbierto.value = true; await nextTick(); navClose.value?.focus() }
+function cerrarNav() { if (!navAbierto.value) return; navAbierto.value = false; nextTick(() => navTrigger.value?.focus()) }
+function mantenerFoco(event) {
+  if (!navAbierto.value) return
+  const controls = [...navPanel.value.querySelectorAll('a[href],button,summary')].filter(el => el.getClientRects().length && !el.disabled)
+  const first = controls[0], last = controls.at(-1)
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+}
+function ajustarMenu(event) { if (!event.matches) cerrarNav() }
+onMounted(() => mobileMenu.addEventListener('change', ajustarMenu))
+onBeforeUnmount(() => mobileMenu.removeEventListener('change', ajustarMenu))
 const cargasPendientes = ref(0)
 async function contarCargasPendientes() {
   if (!auth.esAdmin) return
@@ -140,11 +156,26 @@ const grupos = [
     { path: '/panel/proyecciones', label: 'Proyecciones', icon: ICN.proyecciones, match: ['/panel/proyecciones'], rol: ['Admin'] }
   ] }
 ]
+const gruposNavegacion = grupos.flatMap((g) => {
+  if (g.titulo === 'Ventas') {
+    const clientes = ['/panel/clientes', '/panel/creditos', '/panel/deudas-clientes']
+    const orden = ['/panel/ventas', '/panel/pedidos', '/panel/mis-ventas', '/panel/mi-corte']
+    return [
+      { ...g, items: g.items.filter(i => !clientes.includes(i.path)).sort((a,b) => orden.indexOf(a.path) - orden.indexOf(b.path)) },
+      { titulo: 'Clientes', items: g.items.filter(i => clientes.includes(i.path)) }
+    ]
+  }
+  return [{ ...g, titulo: g.titulo === 'Equipo y ruta' ? 'Rutas y equipo' : g.titulo }]
+})
 const gruposVisibles = computed(() =>
-  grupos
+  gruposNavegacion
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.rol || i.rol.includes(auth.rol)) }))
     .filter((g) => g.items.length > 0)
 )
+watch(() => route.path, () => {
+  gruposVisibles.value.forEach(g => { if (g.items.some(activo)) abiertos[g.titulo] = true })
+  if (navAbierto.value) cerrarNav()
+}, { immediate: true })
 const itemsPlanos = grupos.flatMap((g) => g.items)
 const navMovil = computed(() => {
   const base = auth.esVendedor
@@ -157,10 +188,9 @@ const ctx = reactive({ titulo: 'Resumen', sub: '', back: null, acciones: null })
 function setCtx(c) { ctx.titulo = c.titulo ?? ''; ctx.sub = c.sub ?? ''; ctx.back = c.back ?? null; ctx.acciones = c.acciones ?? null }
 
 const iniciales = computed(() => (auth.usuario?.nombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase())
-function activo(n) { return n.match.some((m) => route.path.startsWith(m)) }
-function ir(path) { navAbierto.value = false; if (route.path !== path) router.push(path) }
+function activo(n) { return n.match.some((m) => route.path === m || route.path.startsWith(m + '/')) }
 onMounted(contarCargasPendientes)
-function salir() { if (confirm('¿Cerrar sesión?')) { auth.logout(); router.replace('/login') } }
+async function salir() { if (await confirmar({ titulo: 'Cerrar sesión', mensaje: '¿Quieres salir de tu sesión?', textoConfirmar: 'Cerrar sesión' })) { auth.logout(); router.replace('/login') } }
 </script>
 
 <style scoped>
@@ -228,4 +258,9 @@ function salir() { if (confirm('¿Cerrar sesión?')) { auth.logout(); router.rep
 .nav-txt { flex: 1; }
 .nav-badge { background: var(--clay); color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11px; min-width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; padding: 0 6px; flex: 0 0 auto; }
 .nav-a.on .nav-badge { background: #fff; color: var(--pine); }
+.side{width:238px;padding:25px 17px;background:var(--surface);gap:22px}.logo{padding-bottom:4px}.logo .nm small{font-size:11px;color:var(--ink-soft)}.logo .mk{background:var(--pine);box-shadow:none}.navigation-groups{display:flex;flex-direction:column;gap:7px}.navigation-groups .navlbl{font-size:10px;color:var(--ink-soft);padding-bottom:8px}.nav-a{text-decoration:none;font-size:13px;min-height:44px}.nav-group summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;border-radius:10px;min-height:46px;padding:11px 12px;color:var(--ink-soft);font-weight:700;font-size:13px}.nav-group summary::-webkit-details-marker{display:none}.nav-group summary :deep(svg){width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.nav-group summary .group-chevron{width:14px;height:14px;margin-left:auto;fill:none;stroke:currentColor;stroke-width:2}.nav-group[open]>summary{background:var(--pine-tint);color:var(--pine)}.nav-children{border-left:1px solid #CADDD3;margin:7px 0 9px 22px;padding-left:10px;display:flex;flex-direction:column;gap:3px}.nav-children .nav-a{padding:9px 11px;font-size:12px;min-height:38px}.group-count{font-size:10px;padding:2px 5px;background:var(--amber-soft);border-radius:5px;color:#754C0F}.profile{width:100%;font:inherit;text-align:left}.profile .who .r{color:var(--ink-soft)}.nav-close{display:none;background:none;border:0;color:var(--pine);font-size:25px;width:44px;height:44px;flex:none;margin-left:auto;cursor:pointer}.main{padding:30px 32px 40px}.top h1{font-size:32px}.top .sub{color:var(--ink-soft);font-weight:500;font-size:13px;margin-top:6px}.btn-primary{background:var(--pine);min-height:44px;box-shadow:none}.side :focus-visible,.top :focus-visible,.botnav :focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+@media(max-width:1024px){.side{width:214px;padding:20px 13px}.side .logo .nm,.side .navlbl,.side .nav-a .nav-txt,.side .profile .who{display:block}.side .nav-a{justify-content:flex-start}.side .profile{justify-content:flex-start}.main{padding-inline:22px}.nav-badge{display:grid!important}}
+@media(max-width:720px){.side{display:none}.side.open{width:min(290px,calc(100vw - 30px));padding:20px 17px}.side.open .nav-close{display:block}.side.open .nav-a{min-height:44px}.main{padding:20px 16px 100px}.top h1{font-size:27px}.top .sub{max-width:245px;font-size:12px}.botnav a{min-height:44px;min-width:50px;color:var(--ink-soft)}.profile{min-height:50px}.hamb{flex:none}}
+.side,.main{font-family:"Hanken Grotesk",system-ui,sans-serif}.logo .mk,.logo .nm,.top h1,.btn-primary{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.hamb{width:44px;height:44px}.top-r :deep(.bell){width:44px;height:44px}
 </style>

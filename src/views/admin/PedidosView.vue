@@ -1,438 +1,117 @@
 <template>
-  <div>
-    <!-- KPIs de Pedidos -->
-    <div class="kpis" v-if="!cargando && items.length">
-      <div class="kpi-card">
-        <div class="kpi-icon sky"><ion-icon :icon="bagHandleOutline" /></div>
-        <div class="kpi-info">
-          <div class="kpi-l">Total pedidos</div>
-          <div class="kpi-v">{{ total }} pedido(s)</div>
-        </div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon pine"><ion-icon :icon="cashOutline" /></div>
-        <div class="kpi-info">
-          <div class="kpi-l">Monto en pedidos</div>
-          <div class="kpi-v">{{ money(kpiMontoTotal) }}</div>
-        </div>
-      </div>
-      <div class="kpi-card" v-if="kpiPendientesCount > 0">
-        <div class="kpi-icon amber"><ion-icon :icon="timeOutline" /></div>
-        <div class="kpi-info">
-          <div class="kpi-l">Pagos pendientes</div>
-          <div class="kpi-v">{{ kpiPendientesCount }} ({{ money(kpiPendientesMonto) }})</div>
-        </div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon pine"><ion-icon :icon="checkmarkCircleOutline" /></div>
-        <div class="kpi-info">
-          <div class="kpi-l">Completados</div>
-          <div class="kpi-v">{{ kpiCompletosCount }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Barra de filtros -->
-    <div class="filtros">
-      <div class="chips">
-        <button v-for="e in estados" :key="e.v || 'todos'" class="chip" :class="{ on: estado === e.v }" @click="setEstado(e.v)">{{ e.t }}</button>
-        <button class="chip vr" :class="{ on: soloVentaRuta }" @click="toggleVentaRuta()">Ventas en ruta</button>
-        <button class="chip pend" :class="{ on: soloPendiente }" @click="togglePendiente()">Pago pendiente</button>
-      </div>
-
-      <div class="selects">
-        <div class="search-wrap">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input v-model="buscarTexto" placeholder="Filtrar por cliente o # folio…">
-        </div>
-        <BuscadorSelect v-model="clienteId" :opciones="clientes" nombre="cliente" placeholder="Cliente" />
-        <BuscadorSelect v-model="repartidorId" :opciones="repartidores" nombre="repartidor" placeholder="Repartidor" />
-      </div>
-    </div>
-
-    <p v-if="cargando" class="muted">Cargando pedidos…</p>
-    <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!itemsFiltrados.length" class="muted">No hay pedidos con los filtros seleccionados.</p>
-
-    <!-- Grilla de pedidos -->
-    <div class="grid" v-if="!cargando && itemsFiltrados.length">
-      <div v-for="p in itemsFiltrados" :key="p.id" class="card" :class="{ 'card-canc': p.estado === 'Cancelado' }">
-        <div class="info" :class="{ click: p.estado === 'Abierto' }" @click="p.estado === 'Abierto' && editar(p.id)">
-          <div class="top">
-            <span class="cli" :class="{ tachado: p.estado === 'Cancelado' }">{{ p.clienteNombreMostrar || p.clienteNombre }}</span>
-            <span v-if="p.esVentaLibre" class="badge vr">Venta mostrador/ruta</span>
-            <span v-if="p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'" class="badge pend">Pago pendiente</span>
-            <span class="badge" :class="badge(p.estado)">{{ estadoTxt(p.estado) }}</span>
-          </div>
-          <div class="sub">#{{ p.id }} · {{ p.repartidorNombre || 'Sin repartidor asignado' }} · {{ fecha(p.fecha) }}</div>
-          <div v-if="p.estado === 'Cancelado'" class="sub-canc">
-            ⚠️ <b>Cancelada:</b> {{ p.canceladoPorNombre ? 'por ' + p.canceladoPorNombre : '' }} · Motivo: "{{ p.motivoCancelacion || 'No especificado' }}"
-          </div>
-        </div>
-        <div class="right">
-          <div class="total" :class="{ tachado: p.estado === 'Cancelado' }">{{ money(p.total) }}</div>
-          <button v-if="p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'" class="pay" @click.stop="abrirPago(p)" title="Registrar pago recibido">
-            <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </button>
-          <button v-if="p.estado === 'Abierto'" class="del" @click.stop="eliminar(p)" title="Eliminar pedido"><ion-icon :icon="trashOutline" /></button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Paginación -->
-    <div class="pager" v-if="!cargando && totalPaginas > 1">
-      <button class="pg" :disabled="pagina <= 1" @click="irPagina(pagina - 1)">
-        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <button v-for="n in paginasVisibles" :key="n" class="pg num" :class="{ on: n === pagina }" @click="irPagina(n)">{{ n }}</button>
-      <button class="pg" :disabled="pagina >= totalPaginas" @click="irPagina(pagina + 1)">
-        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-      </button>
-    </div>
-    <p v-if="!cargando && total" class="cuenta">{{ total }} pedido(s) · página {{ pagina }} de {{ totalPaginas }}</p>
-
-    <!-- Modal: registrar pago pendiente -->
-    <div v-if="pagoModal" class="modal-bg" @click.self="cerrarPago()">
-      <div class="modal">
-        <div class="m-head">
-          <div>
-            <div class="m-title">Registrar pago de pedido</div>
-            <div class="m-sub">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · Total: {{ money(pagoModal.total) }}</div>
-          </div>
-          <button class="m-x" @click="cerrarPago()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-        </div>
-        <div class="m-body">
-          <div class="m-field">
-            <div class="m-fl">Método de pago recibido</div>
-            <div class="m-metodos">
-              <button v-for="mp in metodosPago" :key="mp.v" class="m-metodo" :class="{ on: pagoMetodo === mp.v }" @click="pagoMetodo = mp.v">{{ mp.t }}</button>
-            </div>
-          </div>
-          <div class="m-field">
-            <div class="m-fl">Folio / Referencia (opcional)</div>
-            <input class="m-inp" v-model="pagoFolio" placeholder="Ej. 004821 · folio del comprobante" maxlength="60">
-          </div>
-          <p v-if="pagoError" class="m-err">{{ pagoError }}</p>
-        </div>
-        <div class="m-foot">
-          <button class="m-cancel" @click="cerrarPago()">Cancelar</button>
-          <button class="m-ok" :disabled="pagoGuardando" @click="guardarPago()">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Guía interactiva -->
-    <div class="guia-card">
-      <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-        <div class="guia-icon">💡</div>
-        <div class="guia-tit">¿Cómo funciona el ciclo y control de Pedidos?</div>
-        <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
-      </div>
-      <div v-if="mostrarGuia" class="guia-content">
-        <div class="guia-item">
-          <div class="gi-num">1</div>
-          <div class="gi-text">
-            <b>Estados del pedido:</b>
-            <code>Abierto</code> (recién capturado, haz clic en la tarjeta para editarlo o eliminarlo), <code>En ruta</code> (asignado al repartidor para entrega), <code>Completa</code> (entregado al 100%), <code>Parcial</code> (se devolvieron piezas) o <code>No entregado</code>.
-          </div>
-        </div>
-        <div class="guia-item">
-          <div class="gi-num">2</div>
-          <div class="gi-text">
-            <b>Venta en ruta vs Preventa:</b>
-            Las ventas en ruta son ventas libres capturadas directamente por el repartidor en el camino o mostrador. Los pedidos convencionales se generan antes de la salida para programar la carga.
-          </div>
-        </div>
-        <div class="gi-num">3</div>
-        <div class="gi-text">
-          <b>Liquidación de Pago Pendiente:</b>
-          Si un pedido fue entregado con pago pendiente, usa el botón con el icono <b>$</b> para asentar el cobro (efectivo, transferencia o tarjeta) y la referencia bancaria.
-        </div>
-      </div>
-    </div>
+  <div class="orders crm-page">
+    <div class="quick-action"><button class="crm-button" @click="pago = 'Pendiente'"><CrmIcon name="cash" />Ver pagos pendientes</button></div>
+    <section class="stats" aria-label="Resumen de los pedidos visibles" :aria-busy="cargando">
+      <div class="stat"><div class="stat-label">Pedidos visibles<CrmIcon name="bag" /></div><strong>{{ cargando ? '—' : itemsFiltrados.length }}</strong><small>Registros visibles en esta página</small></div>
+      <div class="stat"><div class="stat-label">Por entregar<CrmIcon name="truck" /></div><strong>{{ cargando ? '—' : porEntregar.length }}</strong><small>Abiertos y en ruta en esta página</small></div>
+      <div class="stat attention"><div class="stat-label">Pagos pendientes<CrmIcon name="clock" /></div><strong>{{ cargando ? '—' : pendientesPago.length }}</strong><small>Importe: {{ money(montoPendiente) }} MXN</small></div>
+      <div class="stat"><div class="stat-label">Importe visible<CrmIcon name="cash" /></div><strong class="stat-money">{{ cargando ? '—' : money(montoVisible) }}</strong><small>MXN · Sin pedidos cancelados</small></div>
+    </section>
+    <section class="orders-panel" aria-labelledby="orders-heading">
+      <div class="filters"><div class="filter-title"><h2><CrmIcon name="filter" />Filtros de pedidos</h2><button class="clear-filters" @click="limpiarFiltros">Limpiar filtros</button></div><div class="filter-grid">
+        <div class="crm-field"><label for="order-search">Cliente o folio</label><div class="search-field"><CrmIcon name="search" /><input id="order-search" v-model="buscarTexto" type="search" placeholder="Buscar en esta página" /></div></div>
+        <div class="crm-field"><label for="order-delivery">Entrega</label><select id="order-delivery" v-model="estado"><option :value="null">Todas</option><option v-for="e in estados" :key="e.v" :value="e.v">{{ e.t }}</option></select></div>
+        <div class="crm-field"><label for="order-payment">Pago del pedido</label><select id="order-payment" v-model="pago"><option :value="null">Todos</option><option value="Pendiente">Pendiente</option><option value="Pagado">Pagado / a crédito</option></select></div>
+        <div class="crm-field"><label for="order-origin">Origen</label><select id="order-origin" v-model="origen"><option :value="null">Todos</option><option :value="false">Preventa</option><option :value="true">Venta libre</option></select></div>
+        <div class="crm-field"><label for="order-driver">Repartidor</label><select id="order-driver" v-model="repartidorId"><option :value="null">Todos</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select></div>
+        <div class="crm-field"><label for="order-customer">Cliente</label><select id="order-customer" v-model="clienteId"><option :value="null">Todos</option><option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.nombre }}</option></select></div>
+      </div><p v-if="catalogoError" class="catalog-error" role="status">{{ catalogoError }} <button @click="cargarCatalogos">Reintentar catálogos</button></p></div>
+      <div class="table-heading"><h2 id="orders-heading">Lista de pedidos <span>{{ itemsFiltrados.length }}</span></h2><small>Importes en MXN · Alcance de esta página</small></div>
+      <div v-if="cargando" class="crm-state" role="status">Cargando pedidos…</div>
+      <div v-else-if="error" class="crm-state error" role="alert"><h2>No se pudieron cargar los pedidos</h2><p>{{ error }}</p><button class="crm-button" @click="cargar">Reintentar</button></div>
+      <div v-else-if="!itemsFiltrados.length" class="crm-state"><h2>{{ buscarTexto ? 'Sin coincidencias en esta página' : 'No hay pedidos con estos filtros' }}</h2><p>{{ buscarTexto ? 'Prueba otro cliente o folio. La búsqueda no incluye otras páginas.' : 'Cambia los filtros o vuelve a consultar.' }}</p><button class="crm-button" @click="limpiarFiltros">Limpiar filtros</button></div>
+      <div v-else class="table-wrap"><table><thead><tr><th>Pedido / cliente</th><th>Entrega</th><th>Pago del pedido</th><th>Origen</th><th>Repartidor</th><th class="money-col">Total</th><th><span class="crm-sr-only">Acciones</span></th></tr></thead><tbody><tr v-for="p in itemsFiltrados" :key="p.id" :class="{ canceled: p.estado === 'Cancelado' }">
+        <td data-label="Pedido / cliente"><div class="customer"><span class="folio">#{{ p.id }}</span> {{ p.clienteNombreMostrar || p.clienteNombre }}</div><small>{{ fecha(p.fecha) }}</small><p v-if="p.estado === 'Cancelado'" class="cancel-reason">{{ p.canceladoPorNombre ? `Cancelada por ${p.canceladoPorNombre}. ` : '' }}{{ p.motivoCancelacion || 'Sin motivo registrado' }}</p></td>
+        <td data-label="Entrega"><span class="crm-badge" :class="deliveryTone(p.estado)">{{ deliveryLabel(p.estado) }}</span></td>
+        <td data-label="Pago del pedido"><span v-if="sinCobro(p)" class="not-confirmed">{{ p.estado === 'Cancelado' || p.estado === 'CerradoNoEntregado' ? 'No aplica' : 'Por definir al entregar' }}</span><template v-else><span class="crm-badge" :class="p.estadoPago === 'Pendiente' ? 'amber' : 'pine'">{{ textoPago(p) }}</span><small v-if="p.metodoPago === 'Credito'" class="credit-note">Consultar saldo del cliente</small></template></td>
+        <td data-label="Origen">{{ p.esVentaLibre ? 'Venta libre' : 'Preventa' }}<small>{{ p.esVentaLibre ? 'Mostrador / ruta' : 'Pedido previo' }}</small></td>
+        <td data-label="Repartidor"><span :class="{ unassigned: !p.repartidorNombre }">{{ p.repartidorNombre || 'Sin asignar' }}</span></td>
+        <td data-label="Total" class="money-col"><strong>{{ money(p.total) }}</strong></td>
+        <td class="row-actions"><button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button><button v-if="p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /></button><button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /></button><button v-if="p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button></td>
+      </tr></tbody></table></div>
+      <div class="table-footer"><span aria-live="polite">{{ itemsFiltrados.length }} visibles · {{ total }} en la consulta · Página {{ pagina }} de {{ totalPaginas }}</span><nav aria-label="Páginas de pedidos" class="pager"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :class="{ current: pagina === n }" :aria-current="pagina === n ? 'page' : undefined" :disabled="cargando" :aria-label="`Página ${n}`" @click="irPagina(n)">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)"><CrmIcon name="arrow" /></button></nav></div>
+    </section>
+    <p class="scope-note">Indicadores de la página visible. En pedidos abiertos, el total es lo solicitado; en cerrados, lo entregado. El pago del pedido no indica el saldo de crédito del cliente.</p>
+    <details class="order-guide"><summary><CrmIcon name="help" />Entender estados de entrega y pago</summary><p>Entrega y pago son independientes. Los pedidos abiertos se pueden editar o eliminar. Venta libre incluye mostrador y ruta. Una venta a crédito puede conservar saldo por cobrar: revísalo en Clientes. Registrar pago conserva el método que ya tiene el pedido.</p></details>
+    <CrmDialog :open="!!detallePedido" labelledby="order-detail-title" @close="detallePedido = null"><template v-if="detallePedido"><div class="crm-dialog-head"><div><h2 id="order-detail-title">Pedido #{{ detallePedido.id }}</h2><p>{{ detallePedido.clienteNombreMostrar || detallePedido.clienteNombre }}</p></div><button class="crm-button crm-close" aria-label="Cerrar detalle" data-initial-focus @click="detallePedido = null"><CrmIcon name="close" /></button></div><dl class="order-details"><div><dt>Entrega</dt><dd>{{ deliveryLabel(detallePedido.estado) }}</dd></div><div><dt>Pago del pedido</dt><dd>{{ sinCobro(detallePedido) ? 'Sin cobro confirmado' : textoPago(detallePedido) }}</dd></div><div><dt>Método registrado</dt><dd>{{ metodoTexto(detallePedido.metodoPago) }}</dd></div><div><dt>Origen</dt><dd>{{ detallePedido.esVentaLibre ? 'Venta libre · mostrador / ruta' : 'Preventa' }}</dd></div><div><dt>Repartidor</dt><dd>{{ detallePedido.repartidorNombre || 'Sin asignar' }}</dd></div><div><dt>Total {{ detallePedido.estado === 'Abierto' ? 'solicitado' : 'del pedido' }}</dt><dd>{{ money(detallePedido.total) }} MXN</dd></div></dl><p v-if="detallePedido.metodoPago === 'Credito'" class="credit-explanation">Saldo de crédito no disponible en esta consulta. Revisa la cuenta del cliente.</p><div class="crm-dialog-actions"><button class="crm-button" @click="detallePedido = null">Volver</button></div></template></CrmDialog>
+    <CrmDialog :open="!!pagoModal" :dismissible="!pagoGuardando" labelledby="payment-title" describedby="payment-description" @close="cerrarPago"><template v-if="pagoModal"><div class="crm-dialog-head"><div><h2 id="payment-title">Registrar pago de pedido</h2><p id="payment-description">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }} MXN</p></div><button class="crm-button crm-close" :disabled="pagoGuardando" aria-label="Cerrar registro de pago" @click="cerrarPago"><CrmIcon name="close" /></button></div><form @submit.prevent="guardarPago"><p class="payment-method">Método registrado: <strong>{{ metodoTexto(pagoModal.metodoPago) }}</strong><small>El registro de pago conserva este método.</small></p><div class="crm-field"><label for="payment-reference">Folio o referencia (opcional)</label><input id="payment-reference" v-model="pagoFolio" data-initial-focus maxlength="60" :disabled="pagoGuardando" placeholder="Folio del comprobante" /></div><p v-if="pagoError" class="payment-error" role="alert">{{ pagoError }}</p><div class="crm-dialog-actions"><button class="crm-button" type="button" :disabled="pagoGuardando" @click="cerrarPago">Cancelar</button><button class="crm-button primary" type="submit" :disabled="pagoGuardando">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button></div></form></template></CrmDialog>
   </div>
 </template>
-
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { IonIcon } from '@ionic/vue'
-import {
-  trashOutline,
-  bagHandleOutline,
-  cashOutline,
-  timeOutline,
-  checkmarkCircleOutline
-} from 'ionicons/icons'
 import http from '@/api/http'
 import { confirmar } from '@/composables/useConfirm'
-import BuscadorSelect from '@/components/BuscadorSelect.vue'
-
+import CrmIcon from '@/components/CrmIcon.vue'
+import CrmDialog from '@/components/CrmDialog.vue'
+import { formatMxn as money, deliveryLabel, deliveryTone } from '@/utils/crmPresentation'
 const emit = defineEmits(['ctx'])
 const router = useRouter()
-const items = ref([])
-const cargando = ref(true)
-const error = ref('')
-
-// filtros
-const estado = ref(null)
-const clienteId = ref(null)
-const repartidorId = ref(null)
-const soloVentaRuta = ref(false)
-const soloPendiente = ref(false)
-const buscarTexto = ref('')
-const mostrarGuia = ref(false)
-
-// modal de pago
-const pagoModal = ref(null)
-const pagoFolio = ref('')
-const pagoMetodo = ref('Transferencia')
-const pagoGuardando = ref(false)
-const pagoError = ref('')
-const metodosPago = [
-  { v: 'Transferencia', t: 'Transferencia' },
-  { v: 'Efectivo', t: 'Efectivo' },
-  { v: 'Tarjeta', t: 'Tarjeta' }
-]
-const clientes = ref([])
-const repartidores = ref([])
-const estados = [
-  { v: null, t: 'Todos' },
-  { v: 'Abierto', t: 'Abiertos' },
-  { v: 'EnRuta', t: 'En ruta' },
-  { v: 'CerradoCompleto', t: 'Completos' },
-  { v: 'CerradoParcial', t: 'Parciales' },
-  { v: 'CerradoNoEntregado', t: 'No entregado' },
-  { v: 'Cancelado', t: 'Cancelados' }
-]
-
-// paginación
-const pagina = ref(1)
-const tamano = ref(20)
-const total = ref(0)
-const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano.value)))
-const paginasVisibles = computed(() => {
-  const tp = totalPaginas.value, actual = pagina.value
-  const rango = []
-  let ini = Math.max(1, actual - 2), fin = Math.min(tp, ini + 4)
-  ini = Math.max(1, fin - 4)
-  for (let i = ini; i <= fin; i++) rango.push(i)
-  return rango
-})
-
-const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
-const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—'
-const estadoTxt = (e) => ({
-  Abierto: 'Abierto',
-  EnRuta: 'En ruta',
-  CerradoCompleto: 'Completa',
-  CerradoParcial: 'Parcial',
-  CerradoNoEntregado: 'No entregado',
-  Cancelado: 'Cancelada'
-}[e] || e)
-const badge = (e) => ({
-  Abierto: 'amber',
-  EnRuta: 'sky',
-  CerradoCompleto: 'pine',
-  CerradoParcial: 'amber',
-  CerradoNoEntregado: 'clay',
-  Cancelado: 'clay'
-}[e] || 'muted')
-
-// Filtro rápido de texto en cliente
-const itemsFiltrados = computed(() => {
-  const q = buscarTexto.value.trim().toLowerCase()
-  if (!q) return items.value
-  return items.value.filter(p => {
-    const nom = (p.clienteNombreMostrar || p.clienteNombre || '').toLowerCase()
-    const id = String(p.id)
-    return nom.includes(q) || id.includes(q)
-  })
-})
-
-// KPIs (las canceladas se descuentan del monto facturado)
-const kpiMontoTotal = computed(() => items.value.filter(p => p.estado !== 'Cancelado').reduce((s, p) => s + (p.total || 0), 0))
-const kpiPendientes = computed(() => items.value.filter(p => p.estadoPago === 'Pendiente' && p.estado !== 'Cancelado'))
-const kpiPendientesCount = computed(() => kpiPendientes.value.length)
-const kpiPendientesMonto = computed(() => kpiPendientes.value.reduce((s, p) => s + (p.total || 0), 0))
-const kpiCompletosCount = computed(() => items.value.filter(p => p.estado === 'CerradoCompleto').length)
-
-function setEstado(v) { estado.value = v }
-function toggleVentaRuta() { soloVentaRuta.value = !soloVentaRuta.value }
-function togglePendiente() { soloPendiente.value = !soloPendiente.value }
-
-function abrirPago(p) {
-  pagoModal.value = p
-  pagoFolio.value = ''
-  pagoMetodo.value = p.metodoPago || 'Transferencia'
-  pagoError.value = ''
-}
-function cerrarPago() { pagoModal.value = null }
-async function guardarPago() {
-  pagoGuardando.value = true; pagoError.value = ''
-  const METODO_NUM = { Efectivo: 0, Transferencia: 1, Tarjeta: 2, Credito: 3 }
-  try {
-    await http.put(`/pedidos/${pagoModal.value.id}/registrar-pago`, {
-      referenciaPago: pagoFolio.value.trim() || null,
-      metodoPago: METODO_NUM[pagoMetodo.value]
-    })
-    cerrarPago()
-    await cargar()
-  } catch (e) {
-    pagoError.value = e.response?.data?.mensaje || 'No se pudo registrar el pago.'
-  } finally { pagoGuardando.value = false }
-}
-function irPagina(n) { if (n < 1 || n > totalPaginas.value) return; pagina.value = n }
-
+const items = ref([]), cargando = ref(true), error = ref(''), catalogoError = ref('')
+const estado = ref(null), pago = ref(null), origen = ref(null), clienteId = ref(null), repartidorId = ref(null), buscarTexto = ref('')
+const clientes = ref([]), repartidores = ref([]), pagina = ref(1), total = ref(0)
+const tamano = 20
+const pagoModal = ref(null), pagoFolio = ref(''), pagoGuardando = ref(false), pagoError = ref(''), detallePedido = ref(null)
+let solicitud = 0, controller, catalogController, disposed = false
+const estados = [{ v:'Abierto',t:'Abierto' },{ v:'EnRuta',t:'En ruta' },{ v:'CerradoCompleto',t:'Completa' },{ v:'CerradoParcial',t:'Parcial' },{ v:'CerradoNoEntregado',t:'No entregado' },{ v:'Cancelado',t:'Cancelada' }]
+const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano)))
+const paginasVisibles = computed(() => { const start = Math.max(1, Math.min(pagina.value - 2, totalPaginas.value - 4)); return Array.from({ length:Math.min(5,totalPaginas.value) },(_,i)=>start+i) })
+const itemsFiltrados = computed(() => { const q=buscarTexto.value.trim().toLocaleLowerCase('es-MX'); return items.value.filter(p => !q || `${p.id} ${p.clienteNombreMostrar || p.clienteNombre || ''}`.toLocaleLowerCase('es-MX').includes(q)) })
+const porEntregar = computed(() => itemsFiltrados.value.filter(p => ['Abierto','EnRuta'].includes(p.estado)))
+const sinCobro = p => ['Abierto','EnRuta','Cancelado','CerradoNoEntregado'].includes(p.estado)
+const puedeCobrar = p => !sinCobro(p) && p.estadoPago === 'Pendiente'
+const pendientesPago = computed(() => itemsFiltrados.value.filter(puedeCobrar))
+const montoVisible = computed(() => itemsFiltrados.value.filter(p=>p.estado!=='Cancelado').reduce((sum,p)=>sum+Number(p.total||0),0))
+const montoPendiente = computed(() => pendientesPago.value.reduce((sum,p)=>sum+Number(p.total||0),0))
+const fecha = value => value ? new Date(value).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : 'Sin fecha'
+const textoPago = p => p.estadoPago === 'Pendiente' ? 'Pendiente' : p.metodoPago === 'Credito' ? 'A crédito' : 'Pagado'
+const metodoTexto = value => value === 'Credito' ? 'Crédito' : value || 'Sin método registrado'
+function limpiarFiltros() { estado.value=null;pago.value=null;origen.value=null;clienteId.value=null;repartidorId.value=null;buscarTexto.value='' }
+function irPagina(n) { if(n>=1 && n<=totalPaginas.value) pagina.value=n }
 function editar(id) { router.push(`/panel/pedido/${id}`) }
+function abrirPago(p) { if(!puedeCobrar(p))return;pagoModal.value=p;pagoFolio.value='';pagoError.value='' }
+function cerrarPago() { if(!pagoGuardando.value)pagoModal.value=null }
+async function guardarPago() {
+  if(pagoGuardando.value || !pagoModal.value)return
+  pagoGuardando.value=true;pagoError.value=''
+  try { await http.put(`/pedidos/${pagoModal.value.id}/registrar-pago`,{referenciaPago:pagoFolio.value.trim()||null});if(!disposed){pagoModal.value=null;await cargar()} }
+  catch(e){if(!disposed)pagoError.value=e.response?.data?.mensaje||'No se pudo registrar el pago.'}
+  finally{pagoGuardando.value=false}
+}
 async function eliminar(p) {
-  const ok = await confirmar({
-    titulo: 'Eliminar pedido',
-    mensaje: `Se eliminará el pedido de ${p.clienteNombreMostrar || p.clienteNombre}. Esta acción no se puede deshacer.`,
-    tipo: 'eliminar'
-  })
-  if (!ok) return
-  try { await http.delete(`/pedidos/${p.id}`); await cargar() }
-  catch (e) { error.value = e.response?.data?.mensaje || 'No se pudo eliminar el pedido.' }
+  if(p.estado!=='Abierto')return
+  const ok=await confirmar({titulo:'Eliminar pedido',mensaje:`Se eliminará el pedido #${p.id} de ${p.clienteNombreMostrar||p.clienteNombre}. Esta acción no se puede deshacer.`,tipo:'eliminar'})
+  if(!ok || disposed)return
+  try{await http.delete(`/pedidos/${p.id}`);if(!disposed)await cargar()}
+  catch(e){if(!disposed)error.value=e.response?.data?.mensaje||'No se pudo eliminar el pedido.'}
 }
-
 async function cargar() {
-  cargando.value = true; error.value = ''
-  try {
-    const params = { pagina: pagina.value, tamano: tamano.value }
-    if (estado.value) params.estado = estado.value
-    if (clienteId.value) params.clienteId = clienteId.value
-    if (repartidorId.value) params.repartidorId = repartidorId.value
-    if (soloVentaRuta.value) params.esVentaLibre = true
-    if (soloPendiente.value) params.estadoPago = 'Pendiente' 
-    const { data } = await http.get('/pedidos', { params })
-    items.value = data.items || []
-    total.value = data.total ?? data.items.length
-  } catch (e) { error.value = e.response?.data?.mensaje || 'No se pudieron cargar los pedidos.' }
-  finally { cargando.value = false }
+  const current=++solicitud;controller?.abort();controller=new AbortController();cargando.value=true;error.value=''
+  const params={pagina:pagina.value,tamano}
+  if(estado.value)params.estado=estado.value
+  if(pago.value)params.estadoPago=pago.value
+  if(origen.value!==null)params.esVentaLibre=origen.value
+  if(clienteId.value)params.clienteId=clienteId.value
+  if(repartidorId.value)params.repartidorId=repartidorId.value
+  try{const {data}=await http.get('/pedidos',{params,signal:controller.signal});if(current!==solicitud||disposed)return;items.value=data.items||[];total.value=data.total??items.value.length;if(pagina.value>totalPaginas.value)pagina.value=totalPaginas.value}
+  catch(e){if(current===solicitud&&!disposed&&e.code!=='ERR_CANCELED'){items.value=[];total.value=0;error.value=e.response?.data?.mensaje||'No se pudieron cargar los pedidos.'}}
+  finally{if(current===solicitud&&!disposed)cargando.value=false}
 }
-
 async function cargarCatalogos() {
-  try {
-    const [cl, rp] = await Promise.all([
-      http.get('/clientes', { params: { tamano: 100 } }),
-      http.get('/usuarios/repartidores')
-    ])
-    clientes.value = cl.data.items || cl.data
-    repartidores.value = rp.data
-  } catch { /* continuar con lista vacía */ }
+  catalogController?.abort();catalogController=new AbortController();const signal=catalogController.signal;catalogoError.value=''
+  try{const [cl,rp]=await Promise.all([http.get('/clientes',{params:{tamano:100},signal}),http.get('/usuarios/repartidores',{signal})]);if(disposed||signal.aborted)return;clientes.value=cl.data.items||cl.data;repartidores.value=rp.data}
+  catch(e){if(!disposed&&!signal.aborted)catalogoError.value='No se pudieron cargar las opciones de cliente o repartidor.'}
 }
-
-// Al cambiar cualquier filtro: volver a página 1 y recargar
-watch([estado, clienteId, repartidorId, soloVentaRuta, soloPendiente], () => {
-  if (pagina.value !== 1) pagina.value = 1
-  else cargar()
-})
-watch(pagina, cargar)
-
-onMounted(() => {
-  emit('ctx', { titulo: 'Pedidos', sub: 'Gestión y control de pedidos y preventas', back: null, acciones: { boton: { texto: 'Nuevo pedido', to: '/panel/pedido/nuevo' } } })
-  cargarCatalogos()
-  cargar()
-})
+watch([estado,pago,origen,clienteId,repartidorId],()=>{if(pagina.value!==1)pagina.value=1;else cargar()})
+watch(pagina,cargar)
+onMounted(()=>{emit('ctx',{titulo:'Pedidos',sub:'Entrega, pago y origen: cada dato en su lugar.',back:null,acciones:{boton:{texto:'Nuevo pedido',to:'/panel/pedido/nuevo'}}});cargarCatalogos();cargar()})
+onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogController?.abort()})
 </script>
-
 <style scoped>
-.muted { color: var(--muted); margin-top: 24px; }
-.err { color: var(--clay); font-weight: 600; margin-top: 24px; }
-
-/* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
-.kpi-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
-.kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
-.kpi-icon ion-icon { font-size: 20px; }
-.kpi-icon.pine { background: var(--pine-tint); color: var(--pine); }
-.kpi-icon.sky { background: var(--sky-soft); color: var(--sky); }
-.kpi-icon.amber { background: var(--amber-soft); color: #B9781F; }
-.kpi-info { flex: 1; min-width: 0; }
-.kpi-l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.kpi-v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; color: var(--ink); margin-top: 2px; font-variant-numeric: tabular-nums; }
-
-/* Filtros */
-.filtros { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.chips { display: flex; flex-wrap: wrap; gap: 7px; }
-.chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 999px; padding: 8px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: .15s; }
-.chip.on { background: var(--pine); color: #fff; border-color: var(--pine); }
-.chip.vr.on { background: var(--sky); border-color: var(--sky); }
-.chip.pend.on { background: var(--amber); border-color: var(--amber); color: #3a2607; }
-
-.selects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.search-wrap { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 8px 12px; box-shadow: var(--shadow); }
-.search-wrap svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2; flex: 0 0 auto; }
-.search-wrap input { border: none; background: transparent; outline: none; font-size: 13.5px; font-weight: 500; color: var(--ink); width: 180px; }
-
-/* Grid de tarjetas */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-.card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
-.info { flex: 1; min-width: 0; }
-.info.click { cursor: pointer; }
-.top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.cli { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
-.right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.total { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
-.badge { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 3px 8px; border-radius: 7px; flex: 0 0 auto; }
-.badge.amber { color: #B9781F; background: var(--amber-soft); }
-.badge.sky { color: var(--sky); background: var(--sky-soft); }
-.badge.pine { color: var(--pine); background: var(--pine-tint); }
-.badge.clay { color: var(--clay); background: var(--clay-soft); }
-.badge.muted { color: var(--muted); background: var(--paper-2); }
-.badge.vr { color: var(--sky); background: var(--sky-soft); }
-.badge.pend { color: #B9781F; background: var(--amber-soft); }
-
-.card.card-canc { background: #FCFAF9; border-color: #F0D5D0; opacity: .85; }
-.cli.tachado, .total.tachado { text-decoration: line-through; color: var(--muted); }
-.sub-canc { font-size: 11.5px; color: var(--clay); margin-top: 4px; line-height: 1.4; background: #FFF5F4; padding: 4px 8px; border-radius: 6px; display: inline-block; }
-
-.del { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--clay-soft); background: var(--clay-soft); display: grid; place-items: center; cursor: pointer; }
-.del ion-icon { font-size: 17px; color: var(--clay); }
-.pay { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--amber-soft); background: var(--amber-soft); display: grid; place-items: center; cursor: pointer; }
-.pay svg { width: 17px; height: 17px; stroke: #B9781F; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-/* Paginación */
-.pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; }
-.pg { min-width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; color: var(--ink-soft); padding: 0 6px; }
-.pg svg { width: 17px; height: 17px; stroke: var(--ink-soft); fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.pg:disabled { opacity: .4; cursor: default; }
-.pg.num.on { background: var(--pine); color: #fff; border-color: var(--pine); }
-.cuenta { text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; margin-top: 10px; }
-
-/* Modal */
-.modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
-.modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 420px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; }
-.m-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
-.m-title { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; }
-.m-sub { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 2px; }
-.m-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
-.m-x svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 2.4; stroke-linecap: round; }
-.m-body { padding: 18px 20px; }
-.m-field { margin-bottom: 16px; }
-.m-fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
-.m-metodos { display: flex; gap: 7px; }
-.m-metodo { flex: 1; border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 10px; padding: 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
-.m-metodo.on { background: var(--pine); color: #fff; border-color: var(--pine); }
-.m-inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
-.m-err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
-.m-foot { display: flex; gap: 10px; padding: 4px 20px 20px; }
-.m-cancel { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
-.m-ok { flex: 1.4; border: none; background: var(--pine); color: #fff; border-radius: 13px; padding: 13px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14px; cursor: pointer; }
-.m-ok:disabled { opacity: .5; }
-
-/* Guía interactiva */
-.guia-card { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
-.guia-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; user-select: none; background: var(--paper); }
-.guia-icon { font-size: 19px; }
-.guia-tit { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13.5px; color: var(--ink); flex: 1; }
-.guia-badge { font-size: 11.5px; font-weight: 700; color: var(--pine); background: var(--pine-tint); padding: 4px 10px; border-radius: 999px; }
-.guia-content { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); }
-.guia-item { display: flex; gap: 12px; align-items: flex-start; }
-.gi-num { width: 22px; height: 22px; border-radius: 50%; background: var(--pine-tint); color: var(--pine); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 11.5px; flex: 0 0 auto; margin-top: 2px; }
-.gi-text { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
-.gi-text b { color: var(--ink); font-weight: 700; }
-.gi-text code { font-family: monospace; background: var(--paper-2); padding: 2px 5px; border-radius: 4px; font-size: 11.5px; }
+.quick-action{display:flex;justify-content:flex-end;margin-top:-12px;margin-bottom:18px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:var(--shadow)}.stat-label{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink-soft)}.stat-label :deep(svg){width:18px;height:18px}.stat strong{display:block;font-size:30px;line-height:1.25;margin:11px 0 5px;letter-spacing:-.7px;font-variant-numeric:tabular-nums}.stat strong.stat-money{font-size:25px}.stat small{font-size:11px;color:var(--ink-soft)}.stat.attention{background:#FCF5E7;border-color:#D7BA82}.stat.attention strong{color:#795316}
+.orders-panel{border:1px solid var(--line);background:var(--surface);border-radius:15px;overflow:hidden;box-shadow:var(--shadow)}.filters{padding:20px 22px 18px;border-bottom:1px solid var(--line)}.filter-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.filter-title h2{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;margin:0}.clear-filters{border:0;background:none;color:var(--pine);font:inherit;font-size:12px;font-weight:700;min-height:36px;cursor:pointer}.filter-grid{display:grid;grid-template-columns:1.35fr repeat(3,1fr) 1.2fr 1.2fr;gap:12px}.search-field{position:relative}.search-field :deep(svg){position:absolute;left:11px;top:13px;width:17px;height:17px;color:var(--ink-soft)}.search-field input{padding-left:35px}.catalog-error{color:var(--clay);font-size:12px;margin:12px 0 0}.catalog-error button{background:none;border:0;font:inherit;color:var(--pine);text-decoration:underline;cursor:pointer}
+.table-heading{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:20px 22px 16px}.table-heading h2{display:flex;gap:9px;align-items:center;margin:0;font-size:16px;font-weight:700}.table-heading h2 span{font-size:11px;background:var(--pine-tint);color:var(--pine);padding:3px 8px;border-radius:6px}.table-heading>small{font-size:11px;color:var(--ink-soft)}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.55px;color:var(--ink-soft);background:#F7F5EE;padding:11px 13px;border-block:1px solid var(--line)}td{padding:12px 13px;border-bottom:1px solid #EEE9DE;vertical-align:middle}th:first-child,td:first-child{padding-left:22px}th:last-child,td:last-child{padding-right:22px}tr:last-child td{border-bottom:0}.customer{font-weight:700;min-width:155px}.folio{color:var(--pine);margin-right:5px}td small{display:block;font-size:10px;color:var(--ink-soft);margin-top:4px}.money-col{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.row-actions{white-space:nowrap;text-align:right}.detail-button{border:0;background:transparent;color:var(--pine);font:inherit;font-size:11px;font-weight:700;min-height:40px;padding:6px;cursor:pointer}.icon-action{border:1px solid var(--line);background:var(--surface);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:34px;height:36px;color:var(--pine);margin-left:4px;cursor:pointer}.icon-action :deep(svg){width:16px;height:16px}.icon-action.danger{color:var(--clay)}.unassigned{color:#875519}.not-confirmed{font-size:11px;color:var(--ink-soft)}.canceled .customer,.canceled .money-col strong{text-decoration:line-through}.cancel-reason{font-size:10px;max-width:260px;color:var(--clay);margin:5px 0 0}.table-footer{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:14px 22px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}.pager{display:flex;gap:5px}.pager button{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--ink-soft)}.pager button:disabled{opacity:.45;cursor:default}.pager button.current{background:var(--pine);color:#fff;border-color:var(--pine)}.pager :deep(svg){width:16px;height:16px}.scope-note{font-size:11px;color:var(--ink-soft);line-height:1.7;margin:16px 2px}.order-guide{font-size:12px;color:var(--ink-soft)}.order-guide summary{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--pine);min-height:44px;font-weight:700}.order-guide p{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px;line-height:1.7}
+.payment-method{font-size:13px;margin:0 0 20px}.payment-method small{display:block;font-size:12px;margin-top:5px;color:var(--ink-soft)}.payment-error{color:var(--clay);font-size:13px;margin-top:12px}.order-details{margin:0}.order-details>div{display:flex;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}.order-details dt{color:var(--ink-soft)}.order-details dd{text-align:right;margin:0;font-weight:700}.credit-explanation{font-size:12px;background:var(--sky-soft);color:#215671;padding:12px;border-radius:9px}
+@media(max-width:1200px){.filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.stat strong.stat-money{font-size:22px}}@media(max-width:850px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.table-heading>small{display:none}}@media(max-width:720px){.quick-action{margin-top:0;justify-content:stretch}.quick-action .crm-button{width:100%}.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{padding:16px}.table-heading{padding:16px}table,tbody,tr,td{display:block}thead{display:none}tr{padding:16px;border-bottom:1px solid var(--line)}td,td:first-child,td:last-child{padding:7px 0;border:0;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right}td::before{content:attr(data-label);font-size:11px;color:var(--ink-soft);text-align:left;flex-shrink:0}.customer{min-width:0;text-align:left;overflow-wrap:anywhere}td:first-child{display:block;text-align:left;padding-bottom:10px}td:first-child::before{display:none}td small{font-size:11px}td:first-child small{text-align:left}.row-actions{justify-content:flex-end;flex-wrap:wrap;margin-top:10px}.row-actions::before{display:none}.detail-button,.icon-action{min-height:44px}.icon-action{width:44px}.table-footer{padding:14px 16px;flex-direction:column;align-items:stretch}.pager{justify-content:center}.pager button{width:40px;height:44px}.stat{padding:13px}.stat strong{font-size:27px}.stat strong.stat-money{font-size:22px}.stat-label{font-size:11px}.stat small{font-size:10px}}
+.clear-filters,.catalog-error button{min-height:44px}
 </style>
