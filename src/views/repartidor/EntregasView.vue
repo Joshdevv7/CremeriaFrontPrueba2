@@ -1,7 +1,7 @@
 <template>
   <ion-page><ion-content :fullscreen="true" class="route-page"><ion-refresher slot="fixed" @ionRefresh="recargar($event)"><ion-refresher-content /></ion-refresher>
     <div class="route-content crm-page">
-      <header class="route-header"><div class="brand"><div class="logo">D</div><div><strong>Distribuidora</strong><small>{{ auth.usuario?.nombre || 'Repartidor' }}</small></div></div><CampanaNotif /></header>
+      <header class="route-header"><div class="brand"><BrandLogo :size="48" /><div><strong>Productos Osuna</strong><small>{{ auth.usuario?.nombre || 'Repartidor' }}</small></div></div><CampanaNotif /></header>
       <p class="route-date">{{ hoy }}</p><h1>Mi ruta</h1>
       <section class="route-summary" :aria-busy="cargando" aria-label="Resumen de pedidos consultados"><div class="summary-top"><span>Pedidos creados hoy</span><span v-if="!cargando && !error" class="load-status"><CrmIcon name="box" />{{ tieneCarga ? 'Carga abierta' : 'Sin carga abierta' }}</span></div><div class="progress-count"><strong>{{ cargando ? '—' : entregadosRecientes }}</strong><span>de {{ cargando ? '—' : pedidosRecientes.length }} consultados, entregados</span></div><div class="progress-track" role="progressbar" aria-label="Entregados entre los pedidos creados hoy consultados" :aria-valuemin="0" :aria-valuemax="Math.max(1,pedidosRecientes.length)" :aria-valuenow="entregadosRecientes"><span :style="{width:pctProgreso+'%'}"></span></div><p class="summary-scope">Hasta 100 pedidos · Fecha de creación, no de entrega</p><div class="summary-bottom"><span><strong>{{ cargando ? '—' : pendientes.length }}</strong> abiertos en esta lista</span><span>Por entregar <strong>{{ cargando ? '—' : money(totalRuta) }}</strong></span></div></section>
       <div v-if="cargando" class="crm-state route-state" role="status">Cargando ruta…</div>
@@ -38,6 +38,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 import CampanaNotif from '@/components/CampanaNotif.vue'
 import CrmIcon from '@/components/CrmIcon.vue'
 import { formatMxn as money, lineQuantity } from '@/utils/crmPresentation'

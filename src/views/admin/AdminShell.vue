@@ -4,7 +4,7 @@
       <div class="app">
         <!-- SIDEBAR -->
         <aside id="admin-navigation" ref="navPanel" class="side" :class="{ open: navAbierto }" :role="navAbierto ? 'dialog' : undefined" :aria-modal="navAbierto ? 'true' : undefined" aria-label="Navegación de operaciones" @keydown.esc.stop="cerrarNav" @keydown.tab="mantenerFoco">
-          <div class="logo"><div class="mk">D</div><div class="nm">Distribuidora<small>CRM de cremería</small></div><button ref="navClose" class="nav-close" aria-label="Cerrar menú" @click="cerrarNav">×</button></div>
+          <div class="logo"><BrandLogo :size="40" /><div class="nm">Productos Osuna<small>CRM de cremería</small></div><button ref="navClose" class="nav-close" aria-label="Cerrar menú" @click="cerrarNav">×</button></div>
           <nav aria-label="Menú principal" class="navigation-groups">
             <div class="navlbl">Espacio de trabajo</div>
             <template v-for="g in gruposVisibles" :key="g.titulo">
@@ -63,6 +63,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } 
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 import CampanaNotif from '@/components/CampanaNotif.vue'
 import http from '@/api/http'
 import { confirmar } from '@/composables/useConfirm'

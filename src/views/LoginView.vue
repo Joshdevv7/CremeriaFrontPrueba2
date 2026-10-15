@@ -3,8 +3,8 @@
     <ion-content :scroll-y="true" class="login-bg">
       <div class="wrap">
         <div class="brand">
-          <div class="mk">D</div>
-          <h1>Distribuidor</h1>
+          <BrandLogo class="login-logo" :size="144" />
+          <h1>Productos Osuna</h1>
           <p>Control de ruta e inventario</p>
         </div>
 
@@ -65,6 +65,7 @@ import { useRouter } from 'vue-router'
 import { IonPage, IonContent, IonIcon, onIonViewWillEnter, alertController } from '@ionic/vue'
 import { eyeOutline, eyeOffOutline, fingerPrintOutline } from 'ionicons/icons'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 import {
   esAndroidNativo, estadoBiometria, activarBiometria, accederConBiometria,
   desactivarBiometria, mensajeBiometria
@@ -192,9 +193,7 @@ async function olvidarBiometria() {
 .login-bg { --background: var(--paper); }
 .wrap { min-height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 28px 22px; max-width: 460px; margin: 0 auto; }
 .brand { text-align: center; margin-bottom: 26px; }
-.brand .mk { width: 60px; height: 60px; border-radius: 17px; margin: 0 auto 14px; display: grid; place-items: center;
-  background: linear-gradient(150deg, var(--pine), var(--pine-deep)); color: #fff; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 30px;
-  box-shadow: 0 12px 24px -10px rgba(14,92,74,.6); }
+.login-logo { margin: 0 auto 14px; border-radius: 20px; box-shadow: 0 8px 24px -16px rgba(24,37,33,.4); }
 .brand h1 { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 26px; color: var(--ink); margin: 0; }
 .brand p { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: var(--shadow); }

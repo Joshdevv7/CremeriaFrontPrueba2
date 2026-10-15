@@ -253,7 +253,7 @@ public class BiometricLoginPlugin extends Plugin {
                 }
             });
         BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
-            .setTitle(enrolling ? "Activar acceso biométrico" : "Entrar a Distribuidora")
+            .setTitle(enrolling ? "Activar acceso biométrico" : "Entrar a Productos Osuna")
             .setSubtitle("Usa la huella o el rostro registrado en este teléfono")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .setNegativeButtonText(enrolling ? "Ahora no" : "Usar contraseña")

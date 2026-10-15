@@ -4,7 +4,7 @@
       <div class="app">
         <!-- SIDEBAR -->
         <aside class="side" :class="{ open: navAbierto }">
-          <div class="logo"><div class="mk">D</div><div class="nm">Distribuidora<small>Panel admin</small></div></div>
+          <div class="logo"><BrandLogo :size="40" /><div class="nm">Productos Osuna<small>Panel admin</small></div></div>
           <div class="navlbl">General</div>
           <a class="nav-a on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Resumen</span></a>
           <a class="nav-a" @click="ir('/app/pedidos')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>Pedidos</span></a>
@@ -145,6 +145,7 @@ import { useRouter } from 'vue-router'
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
