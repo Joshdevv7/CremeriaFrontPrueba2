@@ -29,7 +29,7 @@
             En mi ruta hoy ({{ deudoresRuta.length }})
           </button>
           <button class="seg-btn" :class="{ on: filtroRuta === 'todos' }" @click="filtroRuta = 'todos'">
-            Todos los clientes ({{ deudoresTodos.length }})
+            Todos los clientes ({{ clientesTodos.length }})
           </button>
         </div>
 
@@ -58,13 +58,13 @@
             </svg>
           </div>
           <div class="empty-t">
-            {{ filtroRuta === 'ruta' ? 'Ningún cliente de tu ruta tiene saldo pendiente' : 'No se encontraron clientes deudores' }}
+            {{ filtroRuta === 'ruta' ? 'Ningún cliente de tu ruta tiene saldo pendiente' : 'No se encontraron clientes' }}
           </div>
           <div class="empty-s">
             {{ filtroRuta === 'ruta' ? 'Todos los clientes con pedidos en tu ruta de hoy están al corriente.' : 'Revisa el término de búsqueda.' }}
           </div>
-          <button v-if="filtroRuta === 'ruta' && deudoresTodos.length > 0" class="btn-sec" @click="filtroRuta = 'todos'">
-            Ver todos los clientes con saldo
+          <button v-if="filtroRuta === 'ruta' && clientesTodos.length > 0" class="btn-sec" @click="filtroRuta = 'todos'">
+            Ver clientes e historial de pagos
           </button>
         </div>
 
@@ -75,6 +75,7 @@
               <div class="cc-info">
                 <div class="cc-name-row">
                   <span class="cc-name">{{ d.clienteNombre }}</span>
+                  <span v-if="d.saldo <= 0" class="tag-ruta">Al corriente</span>
                   <span v-if="estaEnRuta(d.clienteId)" class="tag-ruta">En ruta hoy</span>
                 </div>
                 <div class="cc-meta">
@@ -105,17 +106,21 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 <span>Estado de cuenta</span>
               </button>
-              <button class="btn-abonar" @click="abrirAbono(d)">
+              <button v-if="d.saldo > 0" class="btn-abonar" @click="abrirAbono(d)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
                 <span>Cobrar abono</span>
+              </button>
+              <button class="btn-kardex btn-historial" @click="abrirKardex(d, 'abonos')">
+                Historial de pagos
               </button>
             </div>
           </div>
         </div>
       </div>
 
+      <Teleport to="body" v-if="$route.path === '/app/cobranza'">
       <!-- MODAL DE CAPTURA DE ABONO -->
-      <div v-if="modalAbono" class="modal-backdrop" @click.self="cerrarAbono()">
+      <div v-if="modalAbono" class="modal-backdrop">
         <div class="modal-sheet">
           <div class="ms-handle"></div>
           <div class="ms-head">
@@ -123,7 +128,7 @@
               <div class="ms-title">Cobrar abono</div>
               <div class="ms-sub">{{ modalAbono.clienteNombre }}</div>
             </div>
-            <button class="ms-close" @click="cerrarAbono()">✕</button>
+            <button class="ms-close" :disabled="procesando" @click="cerrarAbono()" aria-label="Cancelar abono">✕</button>
           </div>
 
           <div class="ms-body">
@@ -189,7 +194,7 @@
           </div>
 
           <div class="ms-foot">
-            <button class="btn-cancel" @click="cerrarAbono()">Cancelar</button>
+            <button class="btn-cancel" :disabled="procesando" @click="cerrarAbono()">Cancelar</button>
             <button class="btn-submit" :disabled="procesando || !puedeGuardarAbono" @click="guardarAbono()">
               {{ procesando ? 'Guardando…' : `Cobrar ${money(montoAbono || 0)}` }}
             </button>
@@ -198,10 +203,10 @@
       </div>
 
       <!-- MODAL DE ÉXITO DE ABONO (RECIBO Y COMPROBANTES) -->
-      <div v-if="abonoExito" class="modal-backdrop" @click.self="abonoExito = null">
+      <div v-if="abonoExito" class="modal-backdrop">
         <div class="modal-sheet exito-sheet">
           <div class="exito-icon">✓</div>
-          <div class="exito-title">¡Abono registrado!</div>
+          <div class="exito-title">{{ abonoExito.reimpresion ? 'Comprobante de abono' : '¡Abono registrado!' }}</div>
           <div class="exito-sub">{{ abonoExito.clienteNombre }}</div>
 
           <div class="receipt-card">
@@ -215,13 +220,22 @@
             </div>
             <div class="rc-row">
               <span class="rc-k">Método</span>
-              <span class="rc-v">{{ abonoExito.metodoPagoTexto || 'Efectivo' }}</span>
+              <span class="rc-v">{{ metodoPagoAbono(abonoExito) }}</span>
             </div>
             <div class="rc-row">
+              <span class="rc-k">Fecha del pago</span>
+              <span class="rc-v">{{ fechaHora(abonoExito.fecha) }}</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-k">Recibió</span>
+              <span class="rc-v">{{ abonoExito.registradoPorNombre }}</span>
+            </div>
+            <div v-if="!abonoExito.reimpresion" class="rc-row">
               <span class="rc-k">Nuevo saldo cliente</span>
               <span class="rc-v green">{{ money(abonoExito.saldoRestante) }}</span>
             </div>
           </div>
+          <p v-if="abonoExito.reimpresion" class="receipt-note">Este comprobante corresponde a un pago ya registrado.</p>
 
           <div class="exito-acts">
             <button class="btn-ticket" :disabled="imprimiendoTicket" @click="imprimirTicketAbonoActual()">
@@ -237,12 +251,12 @@
           </div>
           <p v-if="ticketMsg" class="ticket-status" :class="{ ok: ticketMsg.includes('correctamente') }">{{ ticketMsg }}</p>
 
-          <button class="btn-close-exito" @click="abonoExito = null">Continuar en ruta</button>
+          <button class="btn-close-exito" :disabled="imprimiendoTicket" @click="abonoExito = null">Aceptar</button>
         </div>
       </div>
 
       <!-- MODAL DE KARDEX / ESTADO DE CUENTA -->
-      <div v-if="modalKardex" class="modal-backdrop" @click.self="cerrarKardex()">
+      <div v-if="modalKardex && !abonoExito" class="modal-backdrop">
         <div class="modal-sheet kardex-sheet">
           <div class="ms-handle"></div>
           <div class="ms-head">
@@ -315,14 +329,15 @@
             <!-- Abonos -->
             <div v-show="ktab === 'abonos'" class="klist">
               <div v-if="!kardexData.abonos?.length" class="kempty">Sin abonos registrados aún.</div>
-              <div v-for="a in kardexData.abonos" :key="a.id" class="kitem-card abono-card">
+              <div v-for="a in kardexData.abonos" :key="a.id ?? a.abonoId" class="kitem-card abono-card">
                 <div class="kitem-top">
                   <div>
-                    <div class="kitem-title">Abono #{{ a.id }}</div>
-                    <div class="kitem-date">{{ fechaHora(a.fecha) }} · {{ a.metodo || 'Efectivo' }}</div>
+                    <div class="kitem-title">Abono #{{ a.id ?? a.abonoId }}</div>
+                    <div class="kitem-date">{{ fechaHora(a.fecha) }} · {{ metodoPagoAbono(a) }}</div>
                   </div>
                   <span class="abono-amount">+{{ money(a.monto) }}</span>
                 </div>
+                <button class="btn-comprobante" @click="verComprobanteAbono(a)">Ver / reimprimir ticket</button>
                 <div class="abono-meta" v-if="a.nota || a.registradoPorNombre">
                   <span v-if="a.registradoPorNombre" class="abono-recibio">Recibió: {{ a.registradoPorNombre }}</span>
                   <span v-if="a.nota" class="abono-nota">"{{ a.nota }}"</span>
@@ -333,11 +348,12 @@
 
           <div class="ms-foot">
             <button class="btn-cancel" @click="cerrarKardex()">Cerrar</button>
-            <button class="btn-submit" @click="cerrarKardex(); abrirAbono(modalKardex)">Cobrar abono a este cliente</button>
+            <button v-if="kardexData?.saldo > 0" class="btn-submit" @click="abrirAbonoDesdeKardex()">Cobrar abono a este cliente</button>
           </div>
         </div>
       </div>
 
+      </Teleport>
     </ion-content>
   </ion-page>
 </template>
@@ -348,6 +364,7 @@ import { IonPage, IonContent, IonRefresher, IonRefresherContent } from '@ionic/v
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
 import { imprimirTicketAbono } from '@/services/printer'
+import { comprobanteAbonoHistorico, metodoPagoAbono } from '@/utils/abonoReceipt'
 
 const auth = useAuthStore()
 
@@ -377,7 +394,7 @@ const ktab = ref('compras')
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fecha = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
-const fechaHora = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
+const fechaHora = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
 // IDs de clientes en ruta hoy
@@ -386,10 +403,11 @@ function estaEnRuta(clienteId) { return idsClientesRuta.value.has(clienteId) }
 
 // Clientes con deuda
 const deudoresTodos = computed(() => deudas.value.filter(d => d.saldo > 0))
+const clientesTodos = computed(() => deudas.value.filter(d => d.saldo > 0 || d.totalAbonado > 0))
 const deudoresRuta = computed(() => deudoresTodos.value.filter(d => estaEnRuta(d.clienteId)))
 
 const listaFiltrada = computed(() => {
-  const base = filtroRuta.value === 'ruta' ? deudoresRuta.value : deudoresTodos.value
+  const base = filtroRuta.value === 'ruta' ? deudoresRuta.value : clientesTodos.value
   const q = buscar.value.trim().toLowerCase()
   if (!q) return base
   return base.filter(d => (d.clienteNombre || '').toLowerCase().includes(q) || (d.telefono || '').includes(q))
@@ -414,7 +432,7 @@ async function cargar() {
     pedidosRuta.value = pRes.data?.items || []
 
     // Si en ruta no hay clientes con saldo deudor, cambiar automáticamente a 'todos' para que el chofer no vea pantalla vacía
-    if (deudoresRuta.value.length === 0 && deudoresTodos.value.length > 0) {
+    if (deudoresRuta.value.length === 0 && clientesTodos.value.length > 0) {
       filtroRuta.value = 'todos'
     }
   } catch (e) {
@@ -431,16 +449,17 @@ async function recargar(event) {
 
 // ABONO
 function abrirAbono(d) {
+  if (!d || d.saldo <= 0 || procesando.value) return
   modalAbono.value = d
   montoAbono.value = d.saldo
   metodoAbono.value = 0
   notaAbono.value = ''
   modalError.value = ''
 }
-function cerrarAbono() { modalAbono.value = null }
+function cerrarAbono() { if (!procesando.value) modalAbono.value = null }
 
 async function guardarAbono() {
-  if (!puedeGuardarAbono.value) return
+  if (procesando.value || !puedeGuardarAbono.value) return
   procesando.value = true
   modalError.value = ''
   const cli = modalAbono.value
@@ -457,11 +476,13 @@ async function guardarAbono() {
       ...data,
       clienteNombre: cli.clienteNombre,
       clienteTelefono: cli.telefono || cli.clienteTelefono,
+      registradoPorNombre: data.registradoPorNombre || auth.usuario?.nombre || 'Repartidor',
       saldoAnterior: cli.saldo,
-      saldoRestante: Math.max(0, cli.saldo - monto)
+      saldoRestante: data.saldoRestante ?? Math.max(0, cli.saldo - monto)
     }
 
-    cerrarAbono()
+    ticketMsg.value = ''
+    modalAbono.value = null
     await cargar()
   } catch (e) {
     modalError.value = e.response?.data?.mensaje || 'Error al registrar el abono.'
@@ -471,7 +492,7 @@ async function guardarAbono() {
 }
 
 async function imprimirTicketAbonoActual() {
-  if (!abonoExito.value) return
+  if (!abonoExito.value || imprimiendoTicket.value) return
   imprimiendoTicket.value = true
   ticketMsg.value = ''
   try {
@@ -479,9 +500,10 @@ async function imprimirTicketAbonoActual() {
       abonoId: abonoExito.value.id,
       fecha: abonoExito.value.fecha || new Date(),
       cliente: abonoExito.value.clienteNombre,
-      repartidor: auth.usuario?.nombre || 'Repartidor',
+      repartidor: abonoExito.value.registradoPorNombre,
       monto: abonoExito.value.monto,
-      metodo: abonoExito.value.metodoPagoTexto || (abonoExito.value.metodoPago === 1 ? 'Transferencia' : 'Efectivo'),
+      metodo: metodoPagoAbono(abonoExito.value),
+      reimpresion: abonoExito.value.reimpresion,
       saldoAnterior: abonoExito.value.saldoAnterior,
       saldoRestante: abonoExito.value.saldoRestante,
       nota: abonoExito.value.nota
@@ -498,17 +520,18 @@ function compartirWhatsappAbono() {
   if (!abonoExito.value) return
   const a = abonoExito.value
   const tel = a.clienteTelefono ? a.clienteTelefono.replace(/\D/g, '') : ''
-  const fechaStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const fechaStr = fechaHora(a.fecha)
 
   let msg = `*COMPROBANTE DE ABONO - DISTRIBUIDORA*\n`
+  if (a.reimpresion) msg += `REIMPRESIÓN\n`
   msg += `Folio de abono: #${a.id}\n`
   msg += `Cliente: ${a.clienteNombre}\n`
   msg += `Fecha: ${fechaStr}\n`
-  msg += `Recibió: ${auth.usuario?.nombre || 'Repartidor'}\n\n`
+  msg += `Recibió: ${a.registradoPorNombre}\n\n`
   msg += `• Monto abonado: *${money(a.monto)}*\n`
-  msg += `• Método: ${a.metodoPagoTexto || 'Efectivo'}\n`
+  msg += `• Método: ${metodoPagoAbono(a)}\n`
   if (a.nota) msg += `• Referencia: ${a.nota}\n`
-  msg += `• Saldo restante: *${money(a.saldoRestante)}*\n\n`
+  if (!a.reimpresion) msg += `• Saldo restante: *${money(a.saldoRestante)}*\n\n`
   msg += `Agradecemos su pago puntual.`
 
   const url = tel ? `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
@@ -516,11 +539,24 @@ function compartirWhatsappAbono() {
 }
 
 // KARDEX
-async function abrirKardex(d) {
+function verComprobanteAbono(a) {
+  if (!kardexData.value) return
+  abonoExito.value = comprobanteAbonoHistorico(a, kardexData.value)
+  ticketMsg.value = ''
+}
+
+function abrirAbonoDesdeKardex() {
+  const cliente = { ...modalKardex.value, saldo: kardexData.value?.saldo }
+  if (!(cliente.saldo > 0)) return
+  cerrarKardex()
+  abrirAbono(cliente)
+}
+
+async function abrirKardex(d, tab = 'compras') {
   modalKardex.value = d
   kardexData.value = null
   cargandoKardex.value = true
-  ktab.value = 'compras'
+  ktab.value = tab
   try {
     const { data } = await http.get(`/creditos/kardex-cliente/${d.clienteId}`)
     kardexData.value = data
@@ -837,6 +873,8 @@ onMounted(() => {
   gap: 8px;
   margin-top: 10px;
 }
+.btn-historial { grid-column: 1 / -1; }
+.btn-comprobante { margin-top: 10px; padding: 9px 12px; border: 1px solid var(--pine); border-radius: 9px; background: var(--surface); color: var(--pine); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .btn-kardex, .btn-abonar {
   display: flex;
   align-items: center;
@@ -1155,6 +1193,7 @@ onMounted(() => {
 .exito-sheet {
   text-align: center;
   align-items: center;
+  overflow-y: auto;
 }
 .exito-icon {
   width: 52px;
@@ -1199,6 +1238,7 @@ onMounted(() => {
 .rc-v { font-family: "Bricolage Grotesque"; font-weight: 700; color: var(--ink); }
 .rc-v.bold { font-size: 15px; color: var(--amber); }
 .rc-v.green { color: var(--pine); }
+.receipt-note { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
 
 .exito-acts {
   display: flex;
@@ -1247,6 +1287,7 @@ onMounted(() => {
   font-size: 14px;
   cursor: pointer;
 }
+.btn-close-exito:disabled, .btn-cancel:disabled, .ms-close:disabled { opacity: .5; cursor: not-allowed; }
 
 /* KARDEX */
 .kardex-summary {

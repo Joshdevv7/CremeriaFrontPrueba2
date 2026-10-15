@@ -267,7 +267,7 @@
       </div>
 
       <!-- MODAL DE CAPTURA DE ABONO EN ENTREGA -->
-      <div v-if="modalAbonoVisible" class="modal-backdrop" @click.self="cerrarAbonoModal()">
+      <div v-if="modalAbonoVisible" class="modal-backdrop">
         <div class="modal-sheet">
           <div class="ms-handle"></div>
           <div class="ms-head">
@@ -275,7 +275,7 @@
               <div class="ms-title">Cobrar abono</div>
               <div class="ms-sub">{{ pedido?.clienteNombre }}</div>
             </div>
-            <button class="ms-close" @click="cerrarAbonoModal()">✕</button>
+            <button class="ms-close" :disabled="guardandoAbono" @click="cerrarAbonoModal()" aria-label="Cancelar abono">✕</button>
           </div>
 
           <div class="ms-body">
@@ -341,7 +341,7 @@
           </div>
 
           <div class="ms-foot">
-            <button class="btn-cancel" @click="cerrarAbonoModal()">Cancelar</button>
+            <button class="btn-cancel" :disabled="guardandoAbono" @click="cerrarAbonoModal()">Cancelar</button>
             <button class="btn-submit" :disabled="guardandoAbono || !puedeGuardarAbono" @click="confirmarAbono()">
               {{ guardandoAbono ? 'Guardando…' : `Cobrar ${money2(montoAbono || 0)}` }}
             </button>
@@ -350,7 +350,7 @@
       </div>
 
       <!-- MODAL DE ÉXITO DE ABONO (RECIBO Y COMPROBANTES) -->
-      <div v-if="abonoExito" class="modal-backdrop" @click.self="abonoExito = null">
+      <div v-if="abonoExito" class="modal-backdrop">
         <div class="modal-sheet exito-sheet">
           <div class="exito-icon">✓</div>
           <div class="exito-title">¡Abono registrado!</div>
@@ -389,7 +389,7 @@
           </div>
           <p v-if="ticketAbonoMsg" class="ticket-status" :class="{ ok: ticketAbonoMsg.includes('correctamente') }">{{ ticketAbonoMsg }}</p>
 
-          <button class="btn-close-exito" @click="abonoExito = null">Continuar con la entrega</button>
+          <button class="btn-close-exito" :disabled="imprimiendoTicketAbono" @click="abonoExito = null">Aceptar</button>
         </div>
       </div>
     </ion-content>
@@ -452,11 +452,12 @@ function abrirAbonoModal() {
 }
 
 function cerrarAbonoModal() {
+  if (guardandoAbono.value) return
   modalAbonoVisible.value = false
 }
 
 async function confirmarAbono() {
-  if (!puedeGuardarAbono.value) return
+  if (guardandoAbono.value || !puedeGuardarAbono.value) return
   guardandoAbono.value = true
   modalAbonoError.value = ''
   const monto = Number(montoAbono.value)
@@ -477,7 +478,7 @@ async function confirmarAbono() {
       saldoRestante
     }
     deudaCliente.value = saldoRestante
-    cerrarAbonoModal()
+    modalAbonoVisible.value = false
   } catch (e) {
     modalAbonoError.value = e.response?.data?.mensaje || 'Error al registrar el abono.'
   } finally {
@@ -486,7 +487,7 @@ async function confirmarAbono() {
 }
 
 async function imprimirTicketAbonoActual() {
-  if (!abonoExito.value) return
+  if (!abonoExito.value || imprimiendoTicketAbono.value) return
   imprimiendoTicketAbono.value = true
   ticketAbonoMsg.value = ''
   try {

@@ -180,6 +180,7 @@ export async function imprimirTicketEntrega(e) {
 export async function imprimirTicketAbono(a) {
   await asegurarConexion()
   let b = encabezado('COMPROBANTE DE ABONO')
+  if (a.reimpresion) b = b.align('center').text('REIMPRESION\n').align('left')
   if (a.abonoId) b = b.text(fila('Folio abono:', '#' + a.abonoId))
   b = b.text(fila('Fecha:', fechaCorta(a.fecha)))
   if (a.cliente) b = b.text(fila('Cliente:', corta(a.cliente, 19)))
