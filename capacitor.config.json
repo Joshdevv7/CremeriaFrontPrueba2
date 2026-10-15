@@ -1,5 +1,6 @@
 {
   "appId": "mx.distribuidora.app",
   "appName": "Distribuidora",
-  "webDir": "dist"
+  "webDir": "dist",
+  "loggingBehavior": "none"
 }

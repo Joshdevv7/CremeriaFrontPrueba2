@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import http from '@/api/http'
+import { session } from '@/services/session'
 
 function parseJwt(token) {
   try {
@@ -19,10 +20,7 @@ function idDesdeToken(token) {
 }
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    token: localStorage.getItem('token') || null,
-    usuario: JSON.parse(localStorage.getItem('usuario') || 'null')
-  }),
+  state: () => session.read(),
   getters: {
     autenticado: (s) => !!s.token,
     rol: (s) => s.usuario?.rol || null,
@@ -35,16 +33,14 @@ export const useAuthStore = defineStore('auth', {
     async login(email, password) {
       const { data } = await http.post('/auth/login', { email, password })
       this.token = data.token
-      this.usuario = { id: idDesdeToken(data.token), nombre: data.nombre, rol: data.rol }
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('usuario', JSON.stringify(this.usuario))
+      this.usuario = { id: idDesdeToken(data.token), nombre: data.nombre, rol: data.rol, email }
+      session.save(data.token, this.usuario)
       return this.usuario
     },
     logout() {
       this.token = null
       this.usuario = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('usuario')
+      session.clear()
     },
     rutaInicial() {
       if (this.esAdmin) return '/panel/resumen'
