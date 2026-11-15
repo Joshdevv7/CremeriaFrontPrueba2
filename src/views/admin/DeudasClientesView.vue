@@ -258,6 +258,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import {
   readerOutline,
@@ -273,10 +274,11 @@ import http from '@/api/http'
 import { imprimirEstadoCuentaPdf } from '@/services/estadoCuentaPdf'
 
 const emit = defineEmits(['ctx'])
+const route = useRoute()
 const deudas = ref([])
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref('')
+const buscar = ref(typeof route.query.buscar === 'string' ? route.query.buscar : '')
 const mostrarGuia = ref(false)
 const copiado = ref(false)
 

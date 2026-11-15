@@ -126,7 +126,7 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue'
 const emit = defineEmits(['ctx'])
 const route = useRoute()
 const router = useRouter()
-const esNuevo = computed(() => route.params.id === 'nuevo')
+const esNuevo = computed(() => route.name === 'producto-nuevo')
 const form = reactive({
   nombre: '',
   categoria: '',

@@ -331,6 +331,8 @@ function datosParaImprimir() {
     totalVentas: c.totalVentas,
     totalAbonos: c.totalAbonos ?? r.totalAbonos,
     totalAbonosEfectivo: c.totalAbonosEfectivo ?? r.totalAbonosEfectivo,
+    totalAbonosTransferencia: c.totalAbonosTransferencia ?? r.totalAbonosTransferencia,
+    totalAbonosTarjeta: c.totalAbonosTarjeta ?? r.totalAbonosTarjeta,
     efectivoEsperado: c.efectivoEsperado ?? r.efectivoEsperado,
     efectivoEntregado: c.efectivoEntregado,
     diferencia: c.diferencia,

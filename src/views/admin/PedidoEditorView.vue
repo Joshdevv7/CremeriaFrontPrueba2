@@ -64,6 +64,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import BuscadorSelect from '@/components/BuscadorSelect.vue'
@@ -71,7 +72,7 @@ import BuscadorSelect from '@/components/BuscadorSelect.vue'
 const emit = defineEmits(['ctx'])
 const route = useRoute()
 const router = useRouter()
-const esNuevo = computed(() => route.params.id === 'nuevo')
+const esNuevo = computed(() => route.name === 'pedido-nuevo')
 const clientes = ref([]), repartidores = ref([]), productos = ref([])
 const clienteId = ref(null), repartidorId = ref(null)
 const cant = reactive({})
@@ -146,8 +147,8 @@ async function guardar() {
 async function cargar() {
   cargando.value = true
   try {
-    const [cl, rp, pr] = await Promise.all([http.get('/clientes', { params: { tamano: 100 } }), http.get('/usuarios/repartidores'), http.get('/productos', { params: { tamano: 100 } })])
-    clientes.value = cl.data.items; repartidores.value = rp.data; productos.value = pr.data.items
+    const [cl, rp, pr] = await Promise.all([listarPaginas('/clientes'), http.get('/usuarios/repartidores'), listarPaginas('/productos')])
+    clientes.value = cl; repartidores.value = rp.data; productos.value = pr
     if (!esNuevo.value) {
       const { data } = await http.get(`/pedidos/${route.params.id}`)
       clienteId.value = data.clienteId; repartidorId.value = data.repartidorId

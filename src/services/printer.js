@@ -206,9 +206,9 @@ export async function imprimirCorte(c) {
     .text(fila('Transferencia', money(c.totalTransferencia)))
     .text(fila('Tarjeta', money(c.totalTarjeta)))
     .text(fila('Credito', money(c.totalCredito)))
-  if (c.totalAbonosEfectivo > 0 || c.totalAbonos > 0) {
-    b = b.text(fila('Abonos efvo', '+' + money(c.totalAbonosEfectivo || c.totalAbonos)))
-  }
+  if (c.totalAbonosEfectivo > 0) b = b.text(fila('Abonos efvo', '+' + money(c.totalAbonosEfectivo)))
+  if (c.totalAbonosTransferencia > 0) b = b.text(fila('Abonos transf.', '+' + money(c.totalAbonosTransferencia)))
+  if (c.totalAbonosTarjeta > 0) b = b.text(fila('Abonos tarjeta', '+' + money(c.totalAbonosTarjeta)))
   b = b.text(linea())
     .bold().text(fila('VENTAS', money(c.totalVentas))).clearFormatting()
     .text(linea())

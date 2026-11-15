@@ -5,7 +5,7 @@
     <div v-else-if="!resumen?.hayCargaPorCortar && !cerrado" class="vacio">
       <div class="v-ic"><ion-icon :icon="checkmarkDoneOutline" /></div>
       <div class="v-t">No hay corte pendiente</div>
-      <div class="v-s">Todas tus ventas de mostrador están al día o ya fueron cerradas en un corte previo.</div>
+      <div class="v-s">No tienes ventas ni abonos de mostrador pendientes de corte.</div>
     </div>
 
     <template v-else-if="!cerrado">
@@ -19,31 +19,38 @@
           <div class="eyebrow">Desglose por método de pago</div>
           <div class="mrow cash">
             <div class="mic"><ion-icon :icon="cashOutline" /></div>
-            <div class="ml"><div class="k">Efectivo</div><div class="c">{{ conteo('Efectivo') }} ventas</div></div>
-            <div class="mv">{{ money(resumen.totalEfectivo) }}<small>MXN</small></div>
+            <div class="ml"><div class="k">Efectivo</div><div class="c">{{ conteo('Efectivo') }} ventas · {{ conteoAbonos('Efectivo') }} abonos</div></div>
+            <div class="mv">{{ money2((resumen.totalEfectivo || 0) - (resumen.efectivoPendiente || 0) + (resumen.totalAbonosEfectivo || 0)) }}<small>MXN</small></div>
           </div>
           <div class="mrow trans">
             <div class="mic"><ion-icon :icon="swapHorizontalOutline" /></div>
-            <div class="ml"><div class="k">Transferencia</div><div class="c">{{ conteo('Transferencia') }} ventas</div></div>
-            <div class="mv">{{ money(resumen.totalTransferencia) }}<small>MXN</small></div>
+            <div class="ml"><div class="k">Transferencia</div><div class="c">{{ conteo('Transferencia') }} ventas · {{ conteoAbonos('Transferencia') }} abonos</div></div>
+            <div class="mv">{{ money2((resumen.totalTransferencia || 0) + (resumen.totalAbonosTransferencia || 0)) }}<small>MXN</small></div>
           </div>
           <div class="mrow card">
             <div class="mic"><ion-icon :icon="cardOutline" /></div>
-            <div class="ml"><div class="k">Tarjeta</div><div class="c">{{ conteo('Tarjeta') }} ventas</div></div>
-            <div class="mv">{{ money(resumen.totalTarjeta) }}<small>MXN</small></div>
+            <div class="ml"><div class="k">Tarjeta</div><div class="c">{{ conteo('Tarjeta') }} ventas · {{ conteoAbonos('Tarjeta') }} abonos</div></div>
+            <div class="mv">{{ money2((resumen.totalTarjeta || 0) + (resumen.totalAbonosTarjeta || 0)) }}<small>MXN</small></div>
           </div>
           <div class="mrow cred">
             <div class="mic"><ion-icon :icon="timeOutline" /></div>
-            <div class="ml"><div class="k">Crédito</div><div class="c">{{ conteo('Credito') }} ventas</div></div>
+            <div class="ml"><div class="k">Ventas registradas por cobrar</div><div class="c">{{ conteo('Credito') }} ventas</div></div>
             <div class="mv">{{ money(resumen.totalCredito) }}<small>MXN</small></div>
           </div>
-          <p v-if="resumen.totalCredito > 0" class="cred-note">El crédito no se cobra hoy · pasa automáticamente a Cuentas por Cobrar</p>
+          <p v-if="resumen.totalCredito > 0" class="cred-note">Importe original de Crédito y Pagar después. Los abonos se muestran por el método en que se recibieron.</p>
+          <div v-if="resumen.abonos?.length" class="lista-tickets" aria-label="Abonos cobrados en este corte">
+            <div class="eyebrow">Abonos cobrados · {{ money2(resumen.totalAbonos) }}</div>
+            <div v-for="a in resumen.abonos" :key="a.id" class="ticket-mini">
+              <div class="tm-info"><div class="tm-cli">{{ a.clienteNombre }}</div><div class="tm-sub">{{ a.metodoPago }} · {{ fechaHora(a.fecha) }}</div></div>
+              <div class="tm-tot">{{ money2(a.monto) }}</div>
+            </div>
+          </div>
           <div v-if="ventasCanceladasTurno > 0" class="canc-note">
             ⚠️ <b>{{ ventasCanceladasTurno }} venta(s) cancelada(s)</b> en este turno · excluidas de tu corte y de tu efectivo esperado.
           </div>
 
           <!-- Botón y lista de ventas incluidas en este corte -->
-          <button class="btn-desglose" @click="toggleVentasPorCortar()">
+          <button v-if="resumen.numeroPedidos > 0" class="btn-desglose" @click="toggleVentasPorCortar()">
             <ion-icon :icon="listOutline" />
             <span>{{ mostrarVentas ? 'Ocultar tickets por cortar' : 'Ver detalle de tickets por cortar (' + resumen.numeroPedidos + ')' }}</span>
             <ion-icon :icon="mostrarVentas ? chevronUp : chevronDown" />
@@ -66,7 +73,7 @@
           <div class="eyebrow">Cuadre de efectivo físico</div>
           <div class="recon">
             <div class="rrow" v-if="resumen.efectivoPendiente > 0">
-              <span class="l">Efectivo cobrado bruto</span>
+              <span class="l">Ventas con efectivo como método registrado</span>
               <span class="v">{{ money(resumen.totalEfectivo) }}</span>
             </div>
             <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
@@ -81,7 +88,7 @@
 
             <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
               <span class="l">Efectivo esperado en mano</span>
-              <span class="v">{{ money(resumen.efectivoEsperado) }}</span>
+              <span class="v">{{ money2(resumen.efectivoEsperado) }}</span>
             </div>
             <div class="declare">
               <div class="fl">Efectivo físico que entregas</div>
@@ -117,7 +124,7 @@
             <div class="gi-num">1</div>
             <div class="gi-text">
               <b>Fórmula del Efectivo Esperado:</b>
-              El monto esperado a entregar es exactamente el <code>Efectivo Total Cobrado − Efectivo con Pago Pendiente</code>.
+              Se suman las ventas cobradas en efectivo y los abonos en efectivo recibidos por esta caja.
             </div>
           </div>
           <div class="guia-item">
@@ -130,8 +137,8 @@
           <div class="guia-item">
             <div class="gi-num">3</div>
             <div class="gi-text">
-              <b>Ventas a Crédito:</b>
-              Quedan registradas formalmente en Cuentas por Cobrar y se liquidan mediante abonos en el módulo <i>Deudas de Clientes</i>.
+              <b>Crédito y Pagar después:</b>
+              Las ventas a clientes registrados se liquidan en <i>Deudas de Clientes</i>. Cada abono entra al corte de quien lo recibió, aunque la venta sea de un turno anterior.
             </div>
           </div>
           <div class="guia-item">
@@ -154,7 +161,10 @@
         <div class="r"><span>Efectivo cobrado</span><span>{{ money2(corte.totalEfectivo) }}</span></div>
         <div class="r"><span>Transferencia</span><span>{{ money2(corte.totalTransferencia) }}</span></div>
         <div class="r"><span>Tarjeta</span><span>{{ money2(corte.totalTarjeta) }}</span></div>
-        <div class="r"><span>Crédito (x cobrar)</span><span>{{ money2(corte.totalCredito) }}</span></div>
+        <div class="r"><span>Ventas registradas por cobrar</span><span>{{ money2(corte.totalCredito) }}</span></div>
+        <div v-if="corte.totalAbonosEfectivo > 0" class="r"><span>Abonos en efectivo</span><span>{{ money2(corte.totalAbonosEfectivo) }}</span></div>
+        <div v-if="corte.totalAbonosTransferencia > 0" class="r"><span>Abonos por transferencia</span><span>{{ money2(corte.totalAbonosTransferencia) }}</span></div>
+        <div v-if="corte.totalAbonosTarjeta > 0" class="r"><span>Abonos con tarjeta</span><span>{{ money2(corte.totalAbonosTarjeta) }}</span></div>
         <div class="r b"><span>VENTAS TOTALES</span><span>{{ money2(corte.totalVentas) }}</span></div>
         <div class="r" style="margin-top:9px"><span>Efectivo esperado</span><span>{{ money2(corte.efectivoEsperado) }}</span></div>
         <div class="r"><span>Efectivo entregado</span><span>{{ money2(corte.efectivoEntregado) }}</span></div>
@@ -220,6 +230,7 @@ function conteo(metodo) {
   const m = resumen.value?.metodos?.find((x) => x.metodo === metodo)
   return m ? m.conteo : 0
 }
+const conteoAbonos = (metodo) => (resumen.value?.abonos || []).filter(a => a.metodoPago === metodo).length
 const given = computed(() => {
   const n = parseFloat((cashStr.value || '').replace(/,/g, ''))
   return isNaN(n) ? 0 : n
@@ -305,6 +316,9 @@ async function imprimirTicket() {
       totalTarjeta: c.totalTarjeta,
       totalCredito: c.totalCredito,
       totalVentas: c.totalVentas,
+      totalAbonosEfectivo: c.totalAbonosEfectivo,
+      totalAbonosTransferencia: c.totalAbonosTransferencia,
+      totalAbonosTarjeta: c.totalAbonosTarjeta,
       efectivoEsperado: c.efectivoEsperado,
       efectivoEntregado: c.efectivoEntregado,
       diferencia: c.diferencia,
@@ -330,6 +344,9 @@ async function imprimirAuto() {
       totalTarjeta: c.totalTarjeta,
       totalCredito: c.totalCredito,
       totalVentas: c.totalVentas,
+      totalAbonosEfectivo: c.totalAbonosEfectivo,
+      totalAbonosTransferencia: c.totalAbonosTransferencia,
+      totalAbonosTarjeta: c.totalAbonosTarjeta,
       efectivoEsperado: c.efectivoEsperado,
       efectivoEntregado: c.efectivoEntregado,
       diferencia: c.diferencia,

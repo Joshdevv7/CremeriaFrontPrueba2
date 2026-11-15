@@ -147,7 +147,7 @@
               <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
               <div class="pt-tx">
                 <div class="pt-t">Pago pendiente</div>
-                <div class="pt-s">Se entrega la mercancía ahora; el cobro en efectivo/transferencia se registra después.</div>
+                <div class="pt-s">{{ ocasional ? 'Se entrega la mercancía ahora; el cobro se registra después.' : 'Sin cobro al entregar. Registra cada abono en Deudas de Clientes con el método que recibas.' }}</div>
               </div>
             </div>
           </div>
@@ -238,6 +238,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import { imprimirTicketVenta } from '@/services/printer'
 
@@ -469,28 +470,13 @@ function nuevaVenta() {
   cargarCatalogos()
 }
 
-async function cargarPaginas(ruta) {
-  const registros = []
-  for (let pagina = 1; ; pagina++) {
-    const { data } = await http.get(ruta, { params: { pagina, tamano: 100 } })
-    const { items, total, tamanoPagina } = data
-    if (!Array.isArray(items) || !Number.isInteger(total) || !Number.isInteger(tamanoPagina)
-      || tamanoPagina < 1 || data.pagina !== pagina) {
-      throw new Error('Respuesta de catálogo inválida')
-    }
-    registros.push(...items)
-    if (pagina * tamanoPagina >= total) return registros
-    if (items.length === 0) throw new Error('Página de catálogo incompleta')
-  }
-}
-
 async function cargarCatalogos() {
   cargando.value = true
   errorCatalogos.value = false
   try {
     const [pr, cl] = await Promise.all([
-      cargarPaginas('/productos'),
-      cargarPaginas('/clientes')
+      listarPaginas('/productos'),
+      listarPaginas('/clientes')
     ])
     productos.value = pr
     clientes.value = cl

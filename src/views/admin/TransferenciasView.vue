@@ -184,9 +184,11 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import http from '@/api/http'
 
 const emit = defineEmits(['ctx'])
+const router = useRouter()
 const items = ref([])
 const resumenPeriodo = ref({ total: 0, cantidad: 0, pendientes: 0 })
 const cargando = ref(true)
@@ -296,6 +298,7 @@ async function cargar() {
 
 // ── Capturar folio ──
 function abrir(t) {
+  if (t.cobroEnDeudasClientes) return router.push({ path: '/panel/deudas-clientes', query: { buscar: t.clienteNombre } })
   modal.value = t
   metodo.value = 'Transferencia'
   folio.value = ''

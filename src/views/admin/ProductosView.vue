@@ -162,7 +162,7 @@
             <span>Configurar WhatsApp de proveedor</span>
           </button>
 
-          <button class="btn-editar-prod" @click.stop="editar(p.id)">
+          <button v-if="auth.esAdmin" class="btn-editar-prod" @click.stop="editar(p.id)">
             <span>Editar</span>
             <ion-icon :icon="chevronForward" />
           </button>
@@ -175,6 +175,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { IonIcon } from '@ionic/vue'
 import { chevronForward } from 'ionicons/icons'
 import http from '@/api/http'
@@ -265,7 +266,8 @@ function margenClase(p) {
   return 'm-green'
 }
 
-function editar(id) { router.push(`/panel/producto/${id}`) }
+const auth = useAuthStore()
+function editar(id) { if (auth.esAdmin) router.push(`/panel/producto/${id}`) }
 function irAProveedor(p) {
   if (p.proveedorId) router.push(`/panel/proveedor/${p.proveedorId}`)
   else router.push(`/panel/producto/${p.id}`)

@@ -27,7 +27,7 @@
         <td data-label="Origen">{{ p.esVentaLibre ? 'Venta libre' : 'Preventa' }}<small>{{ p.esVentaLibre ? 'Mostrador / ruta' : 'Pedido previo' }}</small></td>
         <td data-label="Repartidor"><span :class="{ unassigned: !p.repartidorNombre }">{{ p.repartidorNombre || 'Sin asignar' }}</span></td>
         <td data-label="Total" class="money-col"><strong>{{ money(p.total) }}</strong></td>
-        <td class="row-actions"><button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button><button v-if="p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /></button><button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /></button><button v-if="p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button></td>
+        <td class="row-actions"><button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button><button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /></button><button v-if="auth.esVendedor && p.estado === 'Abierto' && !p.esVentaLibre" class="detail-button" @click="abrirAsignacion(p)">Asignar repartidor</button><button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /></button><button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button></td>
       </tr></tbody></table></div>
       <div class="table-footer"><span aria-live="polite">{{ itemsFiltrados.length }} visibles · {{ total }} en la consulta · Página {{ pagina }} de {{ totalPaginas }}</span><nav aria-label="Páginas de pedidos" class="pager"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :class="{ current: pagina === n }" :aria-current="pagina === n ? 'page' : undefined" :disabled="cargando" :aria-label="`Página ${n}`" @click="irPagina(n)">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)"><CrmIcon name="arrow" /></button></nav></div>
     </section>
@@ -35,11 +35,20 @@
     <details class="order-guide"><summary><CrmIcon name="help" />Entender estados de entrega y pago</summary><p>Entrega y pago son independientes. Los pedidos abiertos se pueden editar o eliminar. Venta libre incluye mostrador y ruta. Una venta a crédito puede conservar saldo por cobrar: revísalo en Clientes. Registrar pago conserva el método que ya tiene el pedido.</p></details>
     <CrmDialog :open="!!detallePedido" labelledby="order-detail-title" @close="detallePedido = null"><template v-if="detallePedido"><div class="crm-dialog-head"><div><h2 id="order-detail-title">Pedido #{{ detallePedido.id }}</h2><p>{{ detallePedido.clienteNombreMostrar || detallePedido.clienteNombre }}</p></div><button class="crm-button crm-close" aria-label="Cerrar detalle" data-initial-focus @click="detallePedido = null"><CrmIcon name="close" /></button></div><dl class="order-details"><div><dt>Entrega</dt><dd>{{ deliveryLabel(detallePedido.estado) }}</dd></div><div><dt>Pago del pedido</dt><dd>{{ sinCobro(detallePedido) ? 'Sin cobro confirmado' : textoPago(detallePedido) }}</dd></div><div><dt>Método registrado</dt><dd>{{ metodoTexto(detallePedido.metodoPago) }}</dd></div><div><dt>Origen</dt><dd>{{ detallePedido.esVentaLibre ? 'Venta libre · mostrador / ruta' : 'Preventa' }}</dd></div><div><dt>Repartidor</dt><dd>{{ detallePedido.repartidorNombre || 'Sin asignar' }}</dd></div><div><dt>Total {{ detallePedido.estado === 'Abierto' ? 'solicitado' : 'del pedido' }}</dt><dd>{{ money(detallePedido.total) }} MXN</dd></div></dl><p v-if="detallePedido.metodoPago === 'Credito'" class="credit-explanation">Saldo de crédito no disponible en esta consulta. Revisa la cuenta del cliente.</p><div class="crm-dialog-actions"><button class="crm-button" @click="detallePedido = null">Volver</button></div></template></CrmDialog>
     <CrmDialog :open="!!pagoModal" :dismissible="!pagoGuardando" labelledby="payment-title" describedby="payment-description" @close="cerrarPago"><template v-if="pagoModal"><div class="crm-dialog-head"><div><h2 id="payment-title">Registrar pago de pedido</h2><p id="payment-description">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }} MXN</p></div><button class="crm-button crm-close" :disabled="pagoGuardando" aria-label="Cerrar registro de pago" @click="cerrarPago"><CrmIcon name="close" /></button></div><form @submit.prevent="guardarPago"><p class="payment-method">Método registrado: <strong>{{ metodoTexto(pagoModal.metodoPago) }}</strong><small>El registro de pago conserva este método.</small></p><div class="crm-field"><label for="payment-reference">Folio o referencia (opcional)</label><input id="payment-reference" v-model="pagoFolio" data-initial-focus maxlength="60" :disabled="pagoGuardando" placeholder="Folio del comprobante" /></div><p v-if="pagoError" class="payment-error" role="alert">{{ pagoError }}</p><div class="crm-dialog-actions"><button class="crm-button" type="button" :disabled="pagoGuardando" @click="cerrarPago">Cancelar</button><button class="crm-button primary" type="submit" :disabled="pagoGuardando">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button></div></form></template></CrmDialog>
+    <CrmDialog :open="!!pedidoAsignacion" :dismissible="!asignando" labelledby="assignment-title" @close="cerrarAsignacion">
+      <form v-if="pedidoAsignacion" @submit.prevent="guardarAsignacion">
+        <div class="crm-dialog-head"><div><h2 id="assignment-title">Asignar repartidor</h2><p>Pedido #{{ pedidoAsignacion.id }} · {{ pedidoAsignacion.clienteNombre }}</p></div></div>
+        <div class="crm-field"><label for="assignment-driver">Repartidor</label><select id="assignment-driver" v-model="repartidorNuevo" :disabled="asignando" data-initial-focus><option :value="null">Selecciona un repartidor</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select></div>
+        <p v-if="asignacionError" class="payment-error" role="alert">{{ asignacionError }}</p>
+        <div class="crm-dialog-actions"><button type="button" class="crm-button" :disabled="asignando" @click="cerrarAsignacion">Cancelar</button><button type="submit" class="crm-button primary" :disabled="asignando || !repartidorNuevo || repartidorNuevo === pedidoAsignacion.repartidorId">{{ asignando ? 'Guardando…' : 'Asignar' }}</button></div>
+      </form>
+    </CrmDialog>
   </div>
 </template>
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
 import { confirmar } from '@/composables/useConfirm'
 import CrmIcon from '@/components/CrmIcon.vue'
@@ -47,6 +56,8 @@ import CrmDialog from '@/components/CrmDialog.vue'
 import { formatMxn as money, deliveryLabel, deliveryTone } from '@/utils/crmPresentation'
 const emit = defineEmits(['ctx'])
 const router = useRouter()
+const auth = useAuthStore()
+const pedidoAsignacion = ref(null), repartidorNuevo = ref(null), asignando = ref(false), asignacionError = ref('')
 const items = ref([]), cargando = ref(true), error = ref(''), catalogoError = ref('')
 const estado = ref(null), pago = ref(null), origen = ref(null), clienteId = ref(null), repartidorId = ref(null), buscarTexto = ref('')
 const clientes = ref([]), repartidores = ref([]), pagina = ref(1), total = ref(0)
@@ -69,7 +80,23 @@ const metodoTexto = value => value === 'Credito' ? 'Crédito' : value || 'Sin m�
 function limpiarFiltros() { estado.value=null;pago.value=null;origen.value=null;clienteId.value=null;repartidorId.value=null;buscarTexto.value='' }
 function irPagina(n) { if(n>=1 && n<=totalPaginas.value) pagina.value=n }
 function editar(id) { router.push(`/panel/pedido/${id}`) }
-function abrirPago(p) { if(!puedeCobrar(p))return;pagoModal.value=p;pagoFolio.value='';pagoError.value='' }
+function abrirAsignacion(p) { pedidoAsignacion.value = p; repartidorNuevo.value = p.repartidorId || null; asignacionError.value = '' }
+function cerrarAsignacion() { if (!asignando.value) pedidoAsignacion.value = null }
+async function guardarAsignacion() {
+  if (asignando.value || !pedidoAsignacion.value || !repartidorNuevo.value || repartidorNuevo.value === pedidoAsignacion.value.repartidorId) return
+  asignando.value = true; asignacionError.value = ''
+  try {
+    await http.put(`/pedidos/${pedidoAsignacion.value.id}/repartidor`, { repartidorId: repartidorNuevo.value })
+    pedidoAsignacion.value = null
+    await cargar()
+  } catch (e) { asignacionError.value = e.response?.data?.mensaje || 'No se pudo asignar el repartidor.' }
+  finally { asignando.value = false }
+}
+function abrirPago(p) {
+  if (!puedeCobrar(p)) return
+  if (p.cobroEnDeudasClientes) return router.push({ path: '/panel/deudas-clientes', query: { buscar: p.clienteNombre } })
+  pagoModal.value=p;pagoFolio.value='';pagoError.value=''
+}
 function cerrarPago() { if(!pagoGuardando.value)pagoModal.value=null }
 async function guardarPago() {
   if(pagoGuardando.value || !pagoModal.value)return

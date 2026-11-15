@@ -132,13 +132,13 @@ const grupos = [
     { path: '/panel/ventas', label: 'Ventas', icon: ICN.ventas, match: ['/panel/ventas'] },
     { path: '/panel/mis-ventas', label: 'Mis ventas', icon: ICN.misVentas, match: ['/panel/mis-ventas'], rol: ['Vendedor', 'Admin'] },
     { path: '/panel/mi-corte', label: 'Mi corte', icon: ICN.miCorte, match: ['/panel/mi-corte'], rol: ['Vendedor', 'Admin'] },
-    { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'], rol: ['Admin'] },
+    { path: '/panel/pedidos', label: 'Pedidos', icon: ICN.pedidos, match: ['/panel/pedidos', '/panel/pedido'], rol: ['Admin', 'Vendedor'] },
     { path: '/panel/clientes', label: 'Clientes', icon: ICN.clientes, match: ['/panel/clientes', '/panel/cliente'] },
     { path: '/panel/creditos', label: 'Créditos', icon: ICN.cred, match: ['/panel/creditos'] },
     { path: '/panel/deudas-clientes', label: 'Deudas de clientes', icon: ICN.deudas, match: ['/panel/deudas-clientes'] }
   ] },
   { titulo: 'Inventario y compras', items: [
-    { path: '/panel/productos', label: 'Inventario', icon: ICN.inv, match: ['/panel/productos'], rol: ['Admin'] },
+    { path: '/panel/productos', label: 'Inventario', icon: ICN.inv, match: ['/panel/productos', '/panel/producto'], rol: ['Admin', 'Vendedor'] },
     { path: '/panel/compras', label: 'Compras', icon: ICN.compras, match: ['/panel/compras', '/panel/compra'] },
     { path: '/panel/proveedores', label: 'Proveedores', icon: ICN.prov, match: ['/panel/proveedores', '/panel/proveedor'] },
     { path: '/panel/mermas', label: 'Mermas', icon: ICN.merma, match: ['/panel/mermas'], rol: ['Admin'] }

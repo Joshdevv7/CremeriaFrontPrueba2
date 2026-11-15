@@ -77,7 +77,7 @@
               <ion-icon :icon="logoWhatsapp" />
             </a>
             <button v-if="c.estado !== 'Pagada'" class="pagar" :disabled="ocupado === c.id" @click="pagar(c)">
-              {{ ocupado === c.id ? '…' : (c.abonado > 0 ? 'Liquidar saldo (' + money(c.saldo) + ')' : 'Marcar pagada') }}
+              {{ ocupado === c.id ? '…' : c.cobroEnDeudasClientes ? 'Registrar abono' : (c.abonado > 0 ? 'Liquidar saldo (' + money(c.saldo) + ')' : 'Marcar pagada') }}
             </button>
           </div>
         </div>
@@ -131,6 +131,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import {
   timeOutline,
@@ -142,6 +143,7 @@ import {
 import http from '@/api/http'
 
 const emit = defineEmits(['ctx'])
+const router = useRouter()
 const items = ref([])
 const resumen = ref(null)
 const cargando = ref(true)
@@ -230,6 +232,7 @@ async function cargar() {
 }
 
 async function pagar(c) {
+  if (c.cobroEnDeudasClientes) return router.push({ path: '/panel/deudas-clientes', query: { buscar: c.clienteNombre } })
   const montoALiquidar = (c.saldo != null && c.saldo > 0) ? c.saldo : c.monto
   const detalleExtra = c.abonado > 0 ? `\nYa se habían abonado previamente: ${money(c.abonado)}.` : ''
   if (!confirm(`¿Liquidar el saldo de ${c.clienteNombre} por ${money(montoALiquidar)}?${detalleExtra}\n\nEsto marcará la cuenta como pagada y actualizará en tiempo real el saldo en Deudas de Clientes.`)) return
