@@ -1,6 +1,10 @@
 <template>
   <div class="editor">
     <p v-if="cargando" class="muted">Cargando…</p>
+    <div v-else-if="errorCatalogos">
+      <p class="err" role="alert">No se pudo cargar el catálogo de Ventas. Revisa tu conexión e inténtalo de nuevo.</p>
+      <button type="button" class="pf-chip" @click="cargarCatalogos">Reintentar</button>
+    </div>
     <template v-else>
       <div class="form" v-show="!exito">
         <!-- COLUMNA 1: CATÁLOGO DE PRODUCTOS (PRIMERO EN EL FLUJO Y EN CELULAR) -->
@@ -240,6 +244,7 @@ import { imprimirTicketVenta } from '@/services/printer'
 const emit = defineEmits(['ctx'])
 const productos = ref([]), clientes = ref([])
 const cargando = ref(true), enviando = ref(false), error = ref('')
+const errorCatalogos = ref(false)
 const exito = ref(false), exitoDet = ref([])
 const mostrarGuia = ref(false)
 
@@ -464,23 +469,41 @@ function nuevaVenta() {
   cargarCatalogos()
 }
 
-async function cargarCatalogos() {
-  try {
-    const [pr, cl] = await Promise.all([
-      http.get('/productos', { params: { tamano: 200 } }),
-      http.get('/clientes', { params: { tamano: 200 } })
-    ])
-    productos.value = pr.data.items || []
-    clientes.value = cl.data.items || []
-  } catch { /* se conserva catálogo anterior */ }
+async function cargarPaginas(ruta) {
+  const registros = []
+  for (let pagina = 1; ; pagina++) {
+    const { data } = await http.get(ruta, { params: { pagina, tamano: 100 } })
+    const { items, total, tamanoPagina } = data
+    if (!Array.isArray(items) || !Number.isInteger(total) || !Number.isInteger(tamanoPagina)
+      || tamanoPagina < 1 || data.pagina !== pagina) {
+      throw new Error('Respuesta de catálogo inválida')
+    }
+    registros.push(...items)
+    if (pagina * tamanoPagina >= total) return registros
+    if (items.length === 0) throw new Error('Página de catálogo incompleta')
+  }
 }
 
-onMounted(async () => {
-  emit('ctx', { titulo: 'Ventas', sub: 'Venta directa a clientes en el local', back: null })
+async function cargarCatalogos() {
+  cargando.value = true
+  errorCatalogos.value = false
   try {
-    await cargarCatalogos()
-  } catch { error.value = 'No se pudieron cargar los datos.' }
-  finally { cargando.value = false }
+    const [pr, cl] = await Promise.all([
+      cargarPaginas('/productos'),
+      cargarPaginas('/clientes')
+    ])
+    productos.value = pr
+    clientes.value = cl
+  } catch {
+    errorCatalogos.value = true
+  } finally {
+    cargando.value = false
+  }
+}
+
+onMounted(() => {
+  emit('ctx', { titulo: 'Ventas', sub: 'Venta directa a clientes en el local', back: null })
+  cargarCatalogos()
 })
 </script>
 
