@@ -540,7 +540,7 @@ onMounted(() => {
 .err { color: var(--clay); font-weight: 600; margin-top: 16px; font-size: 13px; }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px; margin-bottom: 16px; }
 .kpi-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 15px; box-shadow: var(--shadow); }
 .kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .kpi-icon ion-icon { font-size: 20px; }
@@ -565,7 +565,7 @@ onMounted(() => {
 .p-btn.tag-cancel.on { background: var(--clay); color: #fff; border-color: var(--clay); }
 
 /* Grid de ventas */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 12px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; transition: border-color .15s; }
 .card.cancelada { background: #FCFAF9; border-color: #F0D5D0; }
 .head { display: flex; align-items: center; gap: 13px; padding: 14px; cursor: pointer; }
@@ -662,4 +662,12 @@ onMounted(() => {
 .gi-num { width: 22px; height: 22px; border-radius: 50%; background: var(--pine-tint); color: var(--pine); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 11.5px; flex: 0 0 auto; margin-top: 2px; }
 .gi-text { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
 .gi-text b { color: var(--ink); font-weight: 700; }
+
+@media (max-width: 430px) {
+  .head { gap: 8px; }
+  .cli { overflow-wrap: anywhere; }
+  .total { font-size: 16px; }
+  .linea .ln { white-space: normal; overflow-wrap: anywhere; }
+  .acciones button { min-height: 44px; }
+}
 </style>

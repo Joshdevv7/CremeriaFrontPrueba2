@@ -199,7 +199,7 @@ onMounted(() => {
 .repartidores-wrap { display: flex; flex-direction: column; gap: 16px; }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 12px; }
 .kpi-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
 .kpi-l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
 .kpi-v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; color: var(--ink); }
@@ -226,7 +226,7 @@ onMounted(() => {
 .v-s { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
 /* Grid y tarjetas */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
 .card { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); cursor: pointer; transition: all .15s ease; }
 .card:hover { border-color: #B9781F; transform: translateY(-1px); box-shadow: 0 8px 18px -6px rgba(0,0,0,.1); }
 
@@ -259,7 +259,7 @@ onMounted(() => {
 .gt-s { font-size: 12px; color: var(--muted); margin-top: 1px; }
 .gt-arrow { font-size: 12px; font-weight: 700; color: var(--pine); }
 .guia-content { padding: 0 18px 18px; border-top: 1px solid var(--line); background: var(--paper); }
-.gc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
+.gc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 14px; margin-top: 14px; }
 .gc-item { display: flex; gap: 10px; }
 .gc-num { width: 22px; height: 22px; border-radius: 50%; background: var(--amber-soft); color: #B9781F; display: grid; place-items: center; font-weight: 800; font-size: 11.5px; flex: 0 0 auto; margin-top: 2px; }
 .gc-tx { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }

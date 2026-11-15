@@ -1,21 +1,35 @@
 <template>
   <div class="orders crm-page">
-    <div class="quick-action"><button class="crm-button" @click="pago = 'Pendiente'"><CrmIcon name="cash" />Ver pagos pendientes</button></div>
-    <section class="stats" aria-label="Resumen de los pedidos visibles" :aria-busy="cargando">
-      <div class="stat"><div class="stat-label">Pedidos visibles<CrmIcon name="bag" /></div><strong>{{ cargando ? '—' : itemsFiltrados.length }}</strong><small>Registros visibles en esta página</small></div>
-      <div class="stat"><div class="stat-label">Por entregar<CrmIcon name="truck" /></div><strong>{{ cargando ? '—' : porEntregar.length }}</strong><small>Abiertos y en ruta en esta página</small></div>
-      <div class="stat attention"><div class="stat-label">Pagos pendientes<CrmIcon name="clock" /></div><strong>{{ cargando ? '—' : pendientesPago.length }}</strong><small>Importe: {{ money(montoPendiente) }} MXN</small></div>
-      <div class="stat"><div class="stat-label">Importe visible<CrmIcon name="cash" /></div><strong class="stat-money">{{ cargando ? '—' : money(montoVisible) }}</strong><small>MXN · Sin pedidos cancelados</small></div>
-    </section>
     <section class="orders-panel" aria-labelledby="orders-heading">
-      <div class="filters"><div class="filter-title"><h2><CrmIcon name="filter" />Filtros de pedidos</h2><button class="clear-filters" @click="limpiarFiltros">Limpiar filtros</button></div><div class="filter-grid">
-        <div class="crm-field"><label for="order-search">Cliente o folio</label><div class="search-field"><CrmIcon name="search" /><input id="order-search" v-model="buscarTexto" type="search" placeholder="Buscar en esta página" /></div></div>
-        <div class="crm-field"><label for="order-delivery">Entrega</label><select id="order-delivery" v-model="estado"><option :value="null">Todas</option><option v-for="e in estados" :key="e.v" :value="e.v">{{ e.t }}</option></select></div>
-        <div class="crm-field"><label for="order-payment">Pago del pedido</label><select id="order-payment" v-model="pago"><option :value="null">Todos</option><option value="Pendiente">Pendiente</option><option value="Pagado">Pagado / a crédito</option></select></div>
-        <div class="crm-field"><label for="order-origin">Origen</label><select id="order-origin" v-model="origen"><option :value="null">Todos</option><option :value="false">Preventa</option><option :value="true">Venta libre</option></select></div>
-        <div class="crm-field"><label for="order-driver">Repartidor</label><select id="order-driver" v-model="repartidorId"><option :value="null">Todos</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select></div>
-        <div class="crm-field"><label for="order-customer">Cliente</label><select id="order-customer" v-model="clienteId"><option :value="null">Todos</option><option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.nombre }}</option></select></div>
-      </div><p v-if="catalogoError" class="catalog-error" role="status">{{ catalogoError }} <button @click="cargarCatalogos">Reintentar catálogos</button></p></div>
+      <div class="filters">
+        <div class="crm-field">
+          <label for="order-search">Cliente o folio</label>
+          <div class="search-field">
+            <CrmIcon name="search" />
+            <input id="order-search" v-model="buscarTexto" type="search" placeholder="Buscar en esta página" />
+          </div>
+        </div>
+        <div class="filter-tools">
+          <button class="crm-button filter-toggle" type="button" aria-controls="order-filters" :aria-expanded="filtrosAbiertos" @click="filtrosAbiertos = !filtrosAbiertos">
+            <CrmIcon name="filter" /> Filtros{{ filtrosActivos ? ' (' + filtrosActivos + ')' : '' }}
+          </button>
+          <h2 class="filter-desktop-title"><CrmIcon name="filter" />Filtros de pedidos</h2>
+          <button class="crm-button pending-action" type="button" :aria-pressed="pago === 'Pendiente'" @click="pago = pago === 'Pendiente' ? null : 'Pendiente'">
+            <CrmIcon name="cash" /> Pagos pendientes
+          </button>
+        </div>
+        <div id="order-filters" class="filter-options" :class="{ expanded: filtrosAbiertos }">
+          <div class="filter-grid">
+            <div class="crm-field"><label for="order-delivery">Entrega</label><select id="order-delivery" v-model="estado"><option :value="null">Todas</option><option v-for="e in estados" :key="e.v" :value="e.v">{{ e.t }}</option></select></div>
+            <div class="crm-field"><label for="order-payment">Pago del pedido</label><select id="order-payment" v-model="pago"><option :value="null">Todos</option><option value="Pendiente">Pendiente</option><option value="Pagado">Pagado / a crédito</option></select></div>
+            <div class="crm-field"><label for="order-origin">Origen</label><select id="order-origin" v-model="origen"><option :value="null">Todos</option><option :value="false">Preventa</option><option :value="true">Venta libre</option></select></div>
+            <div class="crm-field"><label for="order-driver">Repartidor</label><select id="order-driver" v-model="repartidorId"><option :value="null">Todos</option><option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option></select></div>
+            <div class="crm-field"><label for="order-customer">Cliente</label><select id="order-customer" v-model="clienteId"><option :value="null">Todos</option><option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.nombre }}</option></select></div>
+          </div>
+          <button class="clear-filters" @click="limpiarFiltros">Limpiar filtros</button>
+        </div>
+        <p v-if="catalogoError" class="catalog-error" role="status">{{ catalogoError }} <button @click="cargarCatalogos">Reintentar catálogos</button></p>
+      </div>
       <div class="table-heading"><h2 id="orders-heading">Lista de pedidos <span>{{ itemsFiltrados.length }}</span></h2><small>Importes en MXN · Alcance de esta página</small></div>
       <div v-if="cargando" class="crm-state" role="status">Cargando pedidos…</div>
       <div v-else-if="error" class="crm-state error" role="alert"><h2>No se pudieron cargar los pedidos</h2><p>{{ error }}</p><button class="crm-button" @click="cargar">Reintentar</button></div>
@@ -23,13 +37,33 @@
       <div v-else class="table-wrap"><table><thead><tr><th>Pedido / cliente</th><th>Entrega</th><th>Pago del pedido</th><th>Origen</th><th>Repartidor</th><th class="money-col">Total</th><th><span class="crm-sr-only">Acciones</span></th></tr></thead><tbody><tr v-for="p in itemsFiltrados" :key="p.id" :class="{ canceled: p.estado === 'Cancelado' }">
         <td data-label="Pedido / cliente"><div class="customer"><span class="folio">#{{ p.id }}</span> {{ p.clienteNombreMostrar || p.clienteNombre }}</div><small>{{ fecha(p.fecha) }}</small><p v-if="p.estado === 'Cancelado'" class="cancel-reason">{{ p.canceladoPorNombre ? `Cancelada por ${p.canceladoPorNombre}. ` : '' }}{{ p.motivoCancelacion || 'Sin motivo registrado' }}</p></td>
         <td data-label="Entrega"><span class="crm-badge" :class="deliveryTone(p.estado)">{{ deliveryLabel(p.estado) }}</span></td>
-        <td data-label="Pago del pedido"><span v-if="sinCobro(p)" class="not-confirmed">{{ p.estado === 'Cancelado' || p.estado === 'CerradoNoEntregado' ? 'No aplica' : 'Por definir al entregar' }}</span><template v-else><span class="crm-badge" :class="p.estadoPago === 'Pendiente' ? 'amber' : 'pine'">{{ textoPago(p) }}</span><small v-if="p.metodoPago === 'Credito'" class="credit-note">Consultar saldo del cliente</small></template></td>
-        <td data-label="Origen">{{ p.esVentaLibre ? 'Venta libre' : 'Preventa' }}<small>{{ p.esVentaLibre ? 'Mostrador / ruta' : 'Pedido previo' }}</small></td>
+        <td data-label="Pago del pedido">
+          <span v-if="sinCobro(p)" class="not-confirmed">{{ p.estado === 'Cancelado' || p.estado === 'CerradoNoEntregado' ? 'No aplica' : 'Por definir al entregar' }}</span>
+          <div v-else>
+            <span class="crm-badge" :class="p.estadoPago === 'Pendiente' ? 'amber' : 'pine'">{{ textoPago(p) }}</span>
+            <small v-if="p.metodoPago === 'Credito'" class="credit-note">Consultar saldo del cliente</small>
+          </div>
+        </td>
+        <td data-label="Origen">
+          <div>{{ p.esVentaLibre ? 'Venta libre' : 'Preventa' }}<small>{{ p.esVentaLibre ? 'Mostrador / ruta' : 'Pedido previo' }}</small></div>
+        </td>
         <td data-label="Repartidor"><span :class="{ unassigned: !p.repartidorNombre }">{{ p.repartidorNombre || 'Sin asignar' }}</span></td>
         <td data-label="Total" class="money-col"><strong>{{ money(p.total) }}</strong></td>
-        <td class="row-actions"><button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button><button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /></button><button v-if="auth.esVendedor && p.estado === 'Abierto' && !p.esVentaLibre" class="detail-button" @click="abrirAsignacion(p)">Asignar repartidor</button><button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /></button><button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button></td>
+        <td class="row-actions">
+          <button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button>
+          <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /><span class="compact-action-label">Editar</span></button>
+          <button v-if="auth.esVendedor && p.estado === 'Abierto' && !p.esVentaLibre" class="detail-button" @click="abrirAsignacion(p)">Asignar repartidor</button>
+          <button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /><span class="compact-action-label">Registrar pago</span></button>
+          <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button>
+        </td>
       </tr></tbody></table></div>
       <div class="table-footer"><span aria-live="polite">{{ itemsFiltrados.length }} visibles · {{ total }} en la consulta · Página {{ pagina }} de {{ totalPaginas }}</span><nav aria-label="Páginas de pedidos" class="pager"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :class="{ current: pagina === n }" :aria-current="pagina === n ? 'page' : undefined" :disabled="cargando" :aria-label="`Página ${n}`" @click="irPagina(n)">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)"><CrmIcon name="arrow" /></button></nav></div>
+    </section>
+    <section class="stats" aria-label="Resumen de los pedidos visibles" :aria-busy="cargando">
+      <div class="stat"><div class="stat-label">Pedidos visibles<CrmIcon name="bag" /></div><strong>{{ cargando ? '—' : itemsFiltrados.length }}</strong><small>Registros visibles en esta página</small></div>
+      <div class="stat"><div class="stat-label">Por entregar<CrmIcon name="truck" /></div><strong>{{ cargando ? '—' : porEntregar.length }}</strong><small>Abiertos y en ruta en esta página</small></div>
+      <div class="stat attention"><div class="stat-label">Pagos pendientes<CrmIcon name="clock" /></div><strong>{{ cargando ? '—' : pendientesPago.length }}</strong><small>Importe: {{ money(montoPendiente) }} MXN</small></div>
+      <div class="stat"><div class="stat-label">Importe visible<CrmIcon name="cash" /></div><strong class="stat-money">{{ cargando ? '—' : money(montoVisible) }}</strong><small>MXN · Sin pedidos cancelados</small></div>
     </section>
     <p class="scope-note">Indicadores de la página visible. En pedidos abiertos, el total es lo solicitado; en cerrados, lo entregado. El pago del pedido no indica el saldo de crédito del cliente.</p>
     <details class="order-guide"><summary><CrmIcon name="help" />Entender estados de entrega y pago</summary><p>Entrega y pago son independientes. Los pedidos abiertos se pueden editar o eliminar. Venta libre incluye mostrador y ruta. Una venta a crédito puede conservar saldo por cobrar: revísalo en Clientes. Registrar pago conserva el método que ya tiene el pedido.</p></details>
@@ -60,6 +94,8 @@ const auth = useAuthStore()
 const pedidoAsignacion = ref(null), repartidorNuevo = ref(null), asignando = ref(false), asignacionError = ref('')
 const items = ref([]), cargando = ref(true), error = ref(''), catalogoError = ref('')
 const estado = ref(null), pago = ref(null), origen = ref(null), clienteId = ref(null), repartidorId = ref(null), buscarTexto = ref('')
+const filtrosAbiertos = ref(false)
+const filtrosActivos = computed(() => [estado, pago, origen, clienteId, repartidorId].filter(filtro => filtro.value !== null).length)
 const clientes = ref([]), repartidores = ref([]), pagina = ref(1), total = ref(0)
 const tamano = 20
 const pagoModal = ref(null), pagoFolio = ref(''), pagoGuardando = ref(false), pagoError = ref(''), detallePedido = ref(null)
@@ -135,10 +171,65 @@ onMounted(()=>{emit('ctx',{titulo:'Pedidos',sub:'Entrega, pago y origen: cada da
 onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogController?.abort()})
 </script>
 <style scoped>
-.quick-action{display:flex;justify-content:flex-end;margin-top:-12px;margin-bottom:18px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:var(--shadow)}.stat-label{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink-soft)}.stat-label :deep(svg){width:18px;height:18px}.stat strong{display:block;font-size:30px;line-height:1.25;margin:11px 0 5px;letter-spacing:-.7px;font-variant-numeric:tabular-nums}.stat strong.stat-money{font-size:25px}.stat small{font-size:11px;color:var(--ink-soft)}.stat.attention{background:#FCF5E7;border-color:#D7BA82}.stat.attention strong{color:#795316}
-.orders-panel{border:1px solid var(--line);background:var(--surface);border-radius:15px;overflow:hidden;box-shadow:var(--shadow)}.filters{padding:20px 22px 18px;border-bottom:1px solid var(--line)}.filter-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.filter-title h2{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;margin:0}.clear-filters{border:0;background:none;color:var(--pine);font:inherit;font-size:12px;font-weight:700;min-height:36px;cursor:pointer}.filter-grid{display:grid;grid-template-columns:1.35fr repeat(3,1fr) 1.2fr 1.2fr;gap:12px}.search-field{position:relative}.search-field :deep(svg){position:absolute;left:11px;top:13px;width:17px;height:17px;color:var(--ink-soft)}.search-field input{padding-left:35px}.catalog-error{color:var(--clay);font-size:12px;margin:12px 0 0}.catalog-error button{background:none;border:0;font:inherit;color:var(--pine);text-decoration:underline;cursor:pointer}
+.orders{display:grid;grid-template-columns:minmax(0,1fr)}
+.stats{grid-row:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:var(--shadow);overflow-wrap:anywhere}
+.stat-label{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink-soft)}
+.stat-label :deep(svg){width:18px;height:18px;flex:none}
+.stat strong{display:block;font-size:30px;line-height:1.25;margin:11px 0 5px;letter-spacing:-.7px;font-variant-numeric:tabular-nums}
+.stat strong.stat-money{font-size:25px}
+.stat small{font-size:11px;color:var(--ink-soft)}
+.stat.attention{background:#FCF5E7;border-color:#D7BA82}
+.stat.attention strong{color:#795316}
+.orders-panel{border:1px solid var(--line);background:var(--surface);border-radius:15px;overflow:hidden;box-shadow:var(--shadow)}
+.filters{display:grid;gap:12px;padding:20px 22px 18px;border-bottom:1px solid var(--line)}
+.filter-tools{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.filter-desktop-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;margin:0}
+.filter-toggle{display:none}
+.compact-action-label{display:none}
+.pending-action[aria-pressed="true"]{background:var(--pine-tint);color:var(--pine-deep);border-color:var(--pine)}
+.clear-filters{border:0;background:none;color:var(--pine);font:inherit;font-size:12px;font-weight:700;cursor:pointer;margin-top:3px}
+.filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.search-field{position:relative}
+.search-field :deep(svg){position:absolute;left:11px;top:13px;width:17px;height:17px;color:var(--ink-soft)}
+.search-field input{padding-left:35px}
+.catalog-error{color:var(--clay);font-size:12px;margin:0}
+.catalog-error button{background:none;border:0;font:inherit;color:var(--pine);text-decoration:underline;cursor:pointer}
 .table-heading{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:20px 22px 16px}.table-heading h2{display:flex;gap:9px;align-items:center;margin:0;font-size:16px;font-weight:700}.table-heading h2 span{font-size:11px;background:var(--pine-tint);color:var(--pine);padding:3px 8px;border-radius:6px}.table-heading>small{font-size:11px;color:var(--ink-soft)}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.55px;color:var(--ink-soft);background:#F7F5EE;padding:11px 13px;border-block:1px solid var(--line)}td{padding:12px 13px;border-bottom:1px solid #EEE9DE;vertical-align:middle}th:first-child,td:first-child{padding-left:22px}th:last-child,td:last-child{padding-right:22px}tr:last-child td{border-bottom:0}.customer{font-weight:700;min-width:155px}.folio{color:var(--pine);margin-right:5px}td small{display:block;font-size:10px;color:var(--ink-soft);margin-top:4px}.money-col{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.row-actions{white-space:nowrap;text-align:right}.detail-button{border:0;background:transparent;color:var(--pine);font:inherit;font-size:11px;font-weight:700;min-height:40px;padding:6px;cursor:pointer}.icon-action{border:1px solid var(--line);background:var(--surface);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:34px;height:36px;color:var(--pine);margin-left:4px;cursor:pointer}.icon-action :deep(svg){width:16px;height:16px}.icon-action.danger{color:var(--clay)}.unassigned{color:#875519}.not-confirmed{font-size:11px;color:var(--ink-soft)}.canceled .customer,.canceled .money-col strong{text-decoration:line-through}.cancel-reason{font-size:10px;max-width:260px;color:var(--clay);margin:5px 0 0}.table-footer{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:14px 22px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}.pager{display:flex;gap:5px}.pager button{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--ink-soft)}.pager button:disabled{opacity:.45;cursor:default}.pager button.current{background:var(--pine);color:#fff;border-color:var(--pine)}.pager :deep(svg){width:16px;height:16px}.scope-note{font-size:11px;color:var(--ink-soft);line-height:1.7;margin:16px 2px}.order-guide{font-size:12px;color:var(--ink-soft)}.order-guide summary{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--pine);min-height:44px;font-weight:700}.order-guide p{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px;line-height:1.7}
 .payment-method{font-size:13px;margin:0 0 20px}.payment-method small{display:block;font-size:12px;margin-top:5px;color:var(--ink-soft)}.payment-error{color:var(--clay);font-size:13px;margin-top:12px}.order-details{margin:0}.order-details>div{display:flex;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}.order-details dt{color:var(--ink-soft)}.order-details dd{text-align:right;margin:0;font-weight:700}.credit-explanation{font-size:12px;background:var(--sky-soft);color:#215671;padding:12px;border-radius:9px}
-@media(max-width:1200px){.filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.stat strong.stat-money{font-size:22px}}@media(max-width:850px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.table-heading>small{display:none}}@media(max-width:720px){.quick-action{margin-top:0;justify-content:stretch}.quick-action .crm-button{width:100%}.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{padding:16px}.table-heading{padding:16px}table,tbody,tr,td{display:block}thead{display:none}tr{padding:16px;border-bottom:1px solid var(--line)}td,td:first-child,td:last-child{padding:7px 0;border:0;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right}td::before{content:attr(data-label);font-size:11px;color:var(--ink-soft);text-align:left;flex-shrink:0}.customer{min-width:0;text-align:left;overflow-wrap:anywhere}td:first-child{display:block;text-align:left;padding-bottom:10px}td:first-child::before{display:none}td small{font-size:11px}td:first-child small{text-align:left}.row-actions{justify-content:flex-end;flex-wrap:wrap;margin-top:10px}.row-actions::before{display:none}.detail-button,.icon-action{min-height:44px}.icon-action{width:44px}.table-footer{padding:14px 16px;flex-direction:column;align-items:stretch}.pager{justify-content:center}.pager button{width:40px;height:44px}.stat{padding:13px}.stat strong{font-size:27px}.stat strong.stat-money{font-size:22px}.stat-label{font-size:11px}.stat small{font-size:10px}}
+@media(max-width:1200px){
+  .filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .stat strong.stat-money{font-size:22px}
+}
+@media(max-width:1024px){
+  .stats{grid-row:auto;grid-template-columns:repeat(2,minmax(0,1fr));margin:18px 0 0}
+  .filter-desktop-title,.table-heading>small{display:none}
+  .filters,.table-heading{padding:16px}
+  .filter-tools{justify-content:flex-start}
+  .filter-tools .crm-button{font-size:13px;padding-inline:10px}
+  .filter-toggle{display:inline-flex}
+  .filter-options:not(.expanded){display:none}
+  .filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  table,tbody,tr{display:block}
+  thead{display:none}
+  tr{padding:14px 16px;border-bottom:1px solid var(--line)}
+  td,td:first-child,td:last-child{padding:6px 0;border:0;display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:right;overflow-wrap:anywhere}
+  td::before{content:attr(data-label);font-size:11px;color:var(--ink-soft);text-align:left;flex-shrink:0}
+  .customer{min-width:0;text-align:left;overflow-wrap:anywhere}
+  td:first-child{display:block;text-align:left;padding-bottom:10px}
+  td:first-child::before,.row-actions::before{display:none}
+  td small{font-size:11px}
+  td.row-actions{justify-content:flex-end;flex-wrap:wrap;white-space:normal;margin-top:5px}
+  .detail-button,.icon-action{min-height:44px;margin:0}
+  .detail-button{background:var(--pine-tint);border-radius:9px;padding:6px 10px;font-size:12px}
+  .icon-action{width:auto;min-width:44px;padding:0 8px;gap:5px;font:inherit;font-weight:700}
+  .compact-action-label{display:inline}
+  .table-footer{padding:14px 16px;flex-direction:column;align-items:stretch}
+  .pager{justify-content:center;flex-wrap:wrap}
+  .pager button{width:40px;height:44px}
+  .stat{padding:13px}
+  .stat strong{font-size:27px}
+  .stat-label{font-size:11px}
+}
 .clear-filters,.catalog-error button{min-height:44px}
 </style>

@@ -31,7 +31,7 @@ const routes = [
         }
       },
       { path: 'resumen', component: () => import('@/views/admin/ResumenView.vue'), meta: { rol: 'Admin' } },
-      { path: 'ventas', component: () => import('@/views/admin/VentasView.vue') }, // Admin y Vendedor
+      { path: 'ventas', component: () => import('@/views/admin/VentasView.vue'), meta: { ocultarNavegacionMovil: true } }, // Admin y Vendedor
       { path: 'mis-ventas', component: () => import('@/views/admin/MisVentasView.vue'), meta: { rol: ['Vendedor', 'Admin'] } },
       { path: 'mi-corte', component: () => import('@/views/admin/MiCorteView.vue'), meta: { rol: ['Vendedor', 'Admin'] } },
       { path: 'pedidos', component: () => import('@/views/admin/PedidosView.vue') },

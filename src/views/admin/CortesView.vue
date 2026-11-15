@@ -679,7 +679,7 @@ onMounted(() => {
 .text-clay { color: var(--clay); }
 
 /* Resumen KPI */
-.resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; margin-bottom: 18px; }
 .rc-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -766,7 +766,7 @@ onMounted(() => {
 .ch-badge { background: var(--clay); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 999px; }
 
 /* Grid de tarjetas de corte */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); gap: 14px; margin-bottom: 24px; }
 .card { background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between; }
 .card.e-ok { border-color: #C8E3D8; }
 .card.e-inc { border-color: #F8D8A7; background: linear-gradient(0deg, #FFFBF5 0%, var(--surface) 60%); }
@@ -796,6 +796,12 @@ onMounted(() => {
 .btn-det { flex: 1; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 13px; padding: 9px; border-radius: 11px; cursor: pointer; }
 .btn-just { flex: 1.3; border: none; background: var(--amber); color: #3b2505; font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 13px; padding: 9px; border-radius: 11px; cursor: pointer; }
 
+@media (max-width: 430px) {
+  .c-top, .c-nums, .c-actions { flex-wrap: wrap; }
+  .c-info { overflow-wrap: anywhere; }
+  .c-actions button { min-height: 44px; }
+}
+
 /* Modales */
 .modal-bg { position: fixed; inset: 0; background: rgba(21,42,36,.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 3000; padding: 20px; }
 .modal { background: var(--surface); border-radius: 22px; width: 100%; max-width: 460px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.5); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
@@ -808,7 +814,7 @@ onMounted(() => {
 .m-body { padding: 18px 20px; overflow-y: auto; }
 
 /* Detalle interno */
-.d-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 16px; background: var(--paper); padding: 12px; border-radius: 14px; }
+.d-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); gap: 10px; margin-bottom: 16px; background: var(--paper); padding: 12px; border-radius: 14px; }
 .dn .k { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; display: block; }
 .dn .v { font-family: "Bricolage Grotesque", sans-serif; font-size: 16px; margin-top: 3px; font-variant-numeric: tabular-nums; display: block; }
 .dn .v.neg { color: var(--clay); } .dn .v.pos { color: var(--pine); }
@@ -816,7 +822,7 @@ onMounted(() => {
 .dn-hint { font-size: 10.5px; font-weight: 700; color: var(--clay); display: block; margin-top: 2px; }
 
 .d-section-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; color: var(--muted); letter-spacing: .05em; margin: 16px 0 8px; }
-.pay-methods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.pay-methods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100px, 100%), 1fr)); gap: 8px; margin-bottom: 14px; }
 .pm-box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; }
 .pm-box.pm-warn { border-color: #F8D8A7; background: #FFFBF5; }
 .pm-k { font-size: 10.5px; color: var(--muted); font-weight: 700; display: block; }
@@ -1204,7 +1210,7 @@ onMounted(() => {
 .guide-icon svg { width: 22px; height: 22px; stroke: #B9781F; fill: none; stroke-width: 2.2; }
 .guide-title { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 17px; color: var(--ink); margin: 0; }
 .guide-subtitle { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-.guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 16px; }
 .g-item { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; }
 .g-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .g-num { width: 20px; height: 20px; border-radius: 50%; background: var(--amber); color: #3b2505; font-size: 11px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0; }

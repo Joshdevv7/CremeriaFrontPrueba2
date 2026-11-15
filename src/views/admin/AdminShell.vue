@@ -21,7 +21,7 @@
         <div class="scrim" :class="{ show: navAbierto }" @click="cerrarNav" aria-hidden="true"></div>
 
         <!-- MAIN -->
-        <main class="main" :inert="navAbierto ? true : undefined">
+        <main class="main" :class="{ 'sin-nav-inferior': route.meta.ocultarNavegacionMovil }" :inert="navAbierto ? true : undefined">
           <div class="top">
             <div class="top-l">
               <button ref="navTrigger" class="hamb" aria-label="Abrir menú" aria-controls="admin-navigation" :aria-expanded="navAbierto" @click="abrirNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
@@ -32,7 +32,7 @@
               </div>
             </div>
             <div class="top-r">
-              <CampanaNotif />
+              <CampanaNotif class="top-notifications" />
               <div v-if="ctx.acciones?.seg" class="seg">
                 <button v-for="o in ctx.acciones.seg.opciones" :key="o.k" :class="{ on: ctx.acciones.seg.valor === o.k }" @click="ctx.acciones.seg.onSelect(o.k)">{{ o.t }}</button>
               </div>
@@ -49,7 +49,7 @@
       </div>
 
       <!-- bottom nav (móvil) -->
-      <nav class="botnav" v-if="!navAbierto">
+      <nav v-if="!navAbierto && !route.meta.ocultarNavegacionMovil" class="botnav" aria-label="Accesos rápidos">
         <router-link v-for="n in navMovil" :key="n.path" :to="n.path" :class="{ on: activo(n) }" :aria-current="activo(n) ? 'page' : undefined">
           <span v-html="n.icon"></span>{{ n.label }}
         </router-link>
@@ -74,7 +74,7 @@ const auth = useAuthStore()
 const navAbierto = ref(false)
 const navPanel = ref(null), navTrigger = ref(null), navClose = ref(null)
 const abiertos = reactive({})
-const mobileMenu = window.matchMedia('(max-width: 720px)')
+const mobileMenu = window.matchMedia('(max-width: 900px)')
 async function abrirNav() { navAbierto.value = true; await nextTick(); navClose.value?.focus() }
 function cerrarNav() { if (!navAbierto.value) return; navAbierto.value = false; nextTick(() => navTrigger.value?.focus()) }
 function mantenerFoco(event) {
@@ -231,37 +231,48 @@ async function salir() { if (await confirmar({ titulo: 'Cerrar sesión', mensaje
 .hamb { display: none; width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); place-items: center; cursor: pointer; }
 .hamb svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 2.2; stroke-linecap: round; }
 
-.botnav { display: none; position: fixed; left: 12px; right: 12px; bottom: 12px; height: 64px; background: rgba(255,253,248,.92); backdrop-filter: blur(16px); border: 1px solid var(--line); border-radius: 20px; align-items: center; justify-content: space-around; box-shadow: 0 14px 30px -14px rgba(21,42,36,.4); z-index: 60; }
+.botnav { display: none; position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); height: 64px; background: rgba(255,253,248,.92); backdrop-filter: blur(16px); border: 1px solid var(--line); border-radius: 20px; align-items: center; justify-content: space-around; box-shadow: 0 14px 30px -14px rgba(21,42,36,.4); z-index: 60; }
 .botnav a { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 600; cursor: pointer; }
 .botnav a :deep(svg) { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .botnav a.on { color: var(--pine); }
 .botnav.oculta { display: none !important; }
 .scrim { display: none; position: fixed; inset: 0; background: rgba(21,42,36,.4); z-index: 40; }
 
-@media (max-width: 1024px) {
-  .side { width: 74px; padding: 22px 12px; }
-  .side .logo .nm, .side .navlbl, .side .nav-a span:last-child, .side .profile .who { display: none; }
-  .side .nav-a { justify-content: center; padding: 12px; }
-  .side .profile { justify-content: center; padding: 8px; }
-}
-@media (max-width: 720px) {
-  .side { display: none; }
-  .main { padding: 18px 16px 96px; }
-  .hamb { display: grid; }
-  .top h1 { font-size: 22px; }
-  .botnav { display: flex; }
-  .side.open { display: flex; position: fixed; left: 0; top: 0; z-index: 50; width: 248px; padding: 22px 16px; background: var(--surface); }
-  .side.open .logo .nm, .side.open .navlbl, .side.open .nav-a span:last-child, .side.open .profile .who { display: block; }
-  .side.open .nav-a { justify-content: flex-start; padding: 11px 12px; }
-  .scrim.show { display: block; }
-}
 .nav-a { position: relative; }
 .nav-txt { flex: 1; }
 .nav-badge { background: var(--clay); color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11px; min-width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; padding: 0 6px; flex: 0 0 auto; }
 .nav-a.on .nav-badge { background: #fff; color: var(--pine); }
 .side{width:238px;padding:25px 17px;background:var(--surface);gap:22px}.logo{padding-bottom:4px}.logo .nm small{font-size:11px;color:var(--ink-soft)}.logo .mk{background:var(--pine);box-shadow:none}.navigation-groups{display:flex;flex-direction:column;gap:7px}.navigation-groups .navlbl{font-size:10px;color:var(--ink-soft);padding-bottom:8px}.nav-a{text-decoration:none;font-size:13px;min-height:44px}.nav-group summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;border-radius:10px;min-height:46px;padding:11px 12px;color:var(--ink-soft);font-weight:700;font-size:13px}.nav-group summary::-webkit-details-marker{display:none}.nav-group summary :deep(svg){width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.nav-group summary .group-chevron{width:14px;height:14px;margin-left:auto;fill:none;stroke:currentColor;stroke-width:2}.nav-group[open]>summary{background:var(--pine-tint);color:var(--pine)}.nav-children{border-left:1px solid #CADDD3;margin:7px 0 9px 22px;padding-left:10px;display:flex;flex-direction:column;gap:3px}.nav-children .nav-a{padding:9px 11px;font-size:12px;min-height:38px}.group-count{font-size:10px;padding:2px 5px;background:var(--amber-soft);border-radius:5px;color:#754C0F}.profile{width:100%;font:inherit;text-align:left}.profile .who .r{color:var(--ink-soft)}.nav-close{display:none;background:none;border:0;color:var(--pine);font-size:25px;width:44px;height:44px;flex:none;margin-left:auto;cursor:pointer}.main{padding:30px 32px 40px}.top h1{font-size:32px}.top .sub{color:var(--ink-soft);font-weight:500;font-size:13px;margin-top:6px}.btn-primary{background:var(--pine);min-height:44px;box-shadow:none}.side :focus-visible,.top :focus-visible,.botnav :focus-visible{outline:3px solid var(--sky);outline-offset:3px}
-@media(max-width:1024px){.side{width:214px;padding:20px 13px}.side .logo .nm,.side .navlbl,.side .nav-a .nav-txt,.side .profile .who{display:block}.side .nav-a{justify-content:flex-start}.side .profile{justify-content:flex-start}.main{padding-inline:22px}.nav-badge{display:grid!important}}
-@media(max-width:720px){.side{display:none}.side.open{width:min(290px,calc(100vw - 30px));padding:20px 17px}.side.open .nav-close{display:block}.side.open .nav-a{min-height:44px}.main{padding:20px 16px 100px}.top h1{font-size:27px}.top .sub{max-width:245px;font-size:12px}.botnav a{min-height:44px;min-width:50px;color:var(--ink-soft)}.profile{min-height:50px}.hamb{flex:none}}
+@media (max-width: 1024px) {
+  .side { width: 214px; padding: 20px 13px; }
+  .main { padding-inline: 22px; }
+}
+@media (max-width: 900px) {
+  .side { display: none; }
+  .side.open { display: flex; position: fixed; top: 0; left: 0; z-index: 50; width: min(290px, calc(100vw - 30px)); padding: 20px 17px calc(20px + env(safe-area-inset-bottom)); }
+  .side.open .nav-close { display: block; }
+  .side.open .nav-a { min-height: 44px; }
+  .nav-txt { white-space: normal; }
+  .scrim.show { display: block; }
+  .hamb { display: grid; flex: none; }
+  .profile { min-height: 50px; }
+  .main { padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 720px) {
+  .main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .main.sin-nav-inferior { padding-bottom: 0; }
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; margin-bottom: 20px; }
+  .top-l { min-width: 0; }
+  .top h1 { font-size: 27px; overflow-wrap: anywhere; }
+  .top .sub { font-size: 12px; }
+  .top .back { min-width: 44px; min-height: 44px; }
+  .top-r { display: contents; }
+  .top-notifications { grid-column: 2; grid-row: 1; }
+  .seg, .top-r .btn-primary { grid-column: 1 / -1; justify-content: center; }
+  .seg button { flex: 1; min-height: 44px; padding-inline: 6px; }
+  .botnav { display: flex; }
+  .botnav a { min-height: 44px; min-width: 50px; justify-content: center; color: var(--ink-soft); }
+}
 .side,.main{font-family:"Hanken Grotesk",system-ui,sans-serif}.logo .mk,.logo .nm,.top h1,.btn-primary{font-family:"Bricolage Grotesque",system-ui,sans-serif}
 .hamb{width:44px;height:44px}.top-r :deep(.bell){width:44px;height:44px}
 </style>

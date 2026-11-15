@@ -10,7 +10,49 @@
 
     <template v-else-if="!cerrado">
       <div class="grid2">
-        <div class="col">
+        <div class="cuadre">
+          <div class="eyebrow">Cuadre de efectivo físico</div>
+          <div class="recon">
+            <div class="rrow" v-if="resumen.efectivoPendiente > 0">
+              <span class="l">Ventas con efectivo como método registrado</span>
+              <span class="v">{{ money(resumen.totalEfectivo) }}</span>
+            </div>
+            <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
+              <span class="l">Ventas entregadas c/ pago pendiente</span>
+              <span class="v">−{{ money(resumen.efectivoPendiente) }}</span>
+            </div>
+
+            <!-- Alerta explicativa de pago pendiente -->
+            <div v-if="resumen.efectivoPendiente > 0" class="alerta-pend-efectivo">
+              ℹ️ <b>Pago pendiente:</b> Se descontaron {{ money(resumen.efectivoPendiente) }} porque la mercancía se entregó sin recibir el dinero en mano aún.
+            </div>
+
+            <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
+              <span class="l">Efectivo esperado en mano</span>
+              <span class="v">{{ money2(resumen.efectivoEsperado) }}</span>
+            </div>
+            <div class="declare">
+              <label for="corte-efectivo" class="fl">Efectivo físico que entregas</label>
+              <div class="inwrap">
+                <span class="pfx" aria-hidden="true">$</span>
+                <input id="corte-efectivo" v-model="cashStr" type="text" inputmode="decimal" @input="onCash">
+                <span class="sfx">MXN</span>
+              </div>
+            </div>
+            <div class="diff" :class="estadoDiff">
+              <div class="dt"><div class="a">{{ tituloDiff }}</div><div class="b">{{ subDiff }}</div></div>
+              <div class="dv">{{ valorDiff }}</div>
+            </div>
+            <div class="note-field" v-show="!esCero">
+              <label for="corte-observacion" class="fl">Observación o justificación de la diferencia</label>
+              <input id="corte-observacion" v-model="observacion" placeholder="Explica la causa del faltante o sobrante…">
+            </div>
+          </div>
+          <p v-if="error" class="err">{{ error }}</p>
+          <button class="cta" :disabled="enviando" @click="cerrar()">{{ enviando ? 'Cerrando corte…' : 'Cerrar mi corte de caja' }}</button>
+        </div>
+
+        <div class="desglose">
           <div class="hero">
             <div class="top"><span class="t">Ventas por cortar</span><span class="tag">{{ resumen.numeroPedidos }} venta(s)</span></div>
             <div class="val">{{ money(resumen.totalVentas) }}<span class="mxn">MXN</span></div>
@@ -67,48 +109,6 @@
               <div class="tm-tot">{{ money(v.total) }}</div>
             </div>
           </div>
-        </div>
-
-        <div class="col">
-          <div class="eyebrow">Cuadre de efectivo físico</div>
-          <div class="recon">
-            <div class="rrow" v-if="resumen.efectivoPendiente > 0">
-              <span class="l">Ventas con efectivo como método registrado</span>
-              <span class="v">{{ money(resumen.totalEfectivo) }}</span>
-            </div>
-            <div class="rrow pend" v-if="resumen.efectivoPendiente > 0">
-              <span class="l">Ventas entregadas c/ pago pendiente</span>
-              <span class="v">−{{ money(resumen.efectivoPendiente) }}</span>
-            </div>
-
-            <!-- Alerta explicativa de pago pendiente -->
-            <div v-if="resumen.efectivoPendiente > 0" class="alerta-pend-efectivo">
-              ℹ️ <b>Pago pendiente:</b> Se descontaron {{ money(resumen.efectivoPendiente) }} porque la mercancía se entregó sin recibir el dinero en mano aún.
-            </div>
-
-            <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
-              <span class="l">Efectivo esperado en mano</span>
-              <span class="v">{{ money2(resumen.efectivoEsperado) }}</span>
-            </div>
-            <div class="declare">
-              <div class="fl">Efectivo físico que entregas</div>
-              <div class="inwrap">
-                <span class="pfx">$</span>
-                <input v-model="cashStr" type="text" inputmode="decimal" @input="onCash">
-                <span class="sfx">MXN</span>
-              </div>
-            </div>
-            <div class="diff" :class="estadoDiff">
-              <div class="dt"><div class="a">{{ tituloDiff }}</div><div class="b">{{ subDiff }}</div></div>
-              <div class="dv">{{ valorDiff }}</div>
-            </div>
-            <div class="note-field" v-show="!esCero">
-              <div class="fl">Observación o justificación de la diferencia</div>
-              <input v-model="observacion" placeholder="Explica la causa del faltante o sobrante…">
-            </div>
-          </div>
-          <p v-if="error" class="err">{{ error }}</p>
-          <button class="cta" :disabled="enviando" @click="cerrar()">{{ enviando ? 'Cerrando corte…' : 'Cerrar mi corte de caja' }}</button>
         </div>
       </div>
 
@@ -383,7 +383,9 @@ onMounted(() => {
 .v-ic ion-icon { font-size: 30px; color: var(--pine); }
 .v-t { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 19px; }
 .v-s { color: var(--muted); font-size: 13.5px; margin: 8px auto 0; line-height: 1.5; max-width: 360px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "desglose cuadre"; gap: 16px; align-items: start; }
+.cuadre { grid-area: cuadre; min-width: 0; }
+.desglose { grid-area: desglose; min-width: 0; }
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 16px 2px 11px; }
 .hero { background: linear-gradient(155deg,var(--pine),var(--pine-deep)); border-radius: 24px; padding: 20px; color: #fff; position: relative; overflow: hidden; box-shadow: 0 20px 40px -22px rgba(10,63,51,.9); }
 .hero .top { display: flex; justify-content: space-between; align-items: center; position: relative; }
@@ -399,7 +401,7 @@ onMounted(() => {
 .mrow.trans .mic { background: var(--sky-soft); } .mrow.trans .mic ion-icon { color: var(--sky); }
 .mrow.card .mic { background: var(--amber-soft); } .mrow.card .mic ion-icon { color: #B9781F; }
 .mrow.cred .mic { background: var(--clay-soft); } .mrow.cred .mic ion-icon { color: var(--clay); }
-.mrow .ml { flex: 1; }
+.mrow .ml { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .mrow .ml .k { font-weight: 700; font-size: 14.5px; }
 .mrow .ml .c { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 1px; }
 .mrow .mv { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; text-align: right; }
@@ -408,19 +410,19 @@ onMounted(() => {
 .canc-note { font-size: 11.5px; color: var(--clay); background: #FFF5F4; border: 1px solid #F0D5D0; padding: 6px 10px; border-radius: 8px; margin: 6px 2px 0; line-height: 1.4; }
 
 /* Botón y lista de tickets */
-.btn-desglose { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; color: var(--ink-soft); cursor: pointer; box-shadow: var(--shadow); }
+.btn-desglose { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; color: var(--ink-soft); cursor: pointer; box-shadow: var(--shadow); }
 .btn-desglose ion-icon { font-size: 17px; color: var(--pine); }
 .lista-tickets { margin-top: 8px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .ticket-mini { display: flex; align-items: center; justify-content: space-between; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; }
 .tm-info { flex: 1; min-width: 0; }
-.tm-cli { font-size: 13px; font-weight: 700; }
+.tm-cli { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .tm-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .tag-pend { font-size: 9.5px; font-weight: 700; background: var(--clay-soft); color: var(--clay); padding: 1px 6px; border-radius: 4px; }
 .tm-tot { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 14.5px; font-variant-numeric: tabular-nums; }
 
 /* Cuadre de efectivo */
 .recon { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px 16px; box-shadow: var(--shadow); }
-.rrow { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.rrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .rrow.pend { border-bottom: 1px dashed var(--line); }
 .rrow.pend .l { font-size: 13px; color: var(--clay); font-weight: 600; }
 .rrow.pend .v { color: var(--clay); font-size: 15px; }
@@ -429,13 +431,13 @@ onMounted(() => {
 .rrow.total .l { font-weight: 700; color: var(--ink); }
 .rrow.total .v { font-size: 19px; color: var(--pine); }
 .rrow .l { font-size: 14px; font-weight: 600; color: var(--ink-soft); }
-.rrow .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.rrow .v { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .declare { padding: 15px 0 6px; }
-.declare .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
+.declare .fl { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
 .inwrap { display: flex; align-items: center; background: var(--paper); border: 1.5px solid var(--line); border-radius: 13px; padding: 4px 14px; transition: border-color .2s; }
 .inwrap:focus-within { border-color: var(--pine); }
 .inwrap .pfx { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 22px; color: var(--ink-soft); margin-right: 6px; }
-.inwrap input { border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; color: var(--ink); width: 100%; font-variant-numeric: tabular-nums; }
+.inwrap input { border: none; background: transparent; outline: none; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 24px; color: var(--ink); width: 100%; min-width: 0; min-height: 44px; font-variant-numeric: tabular-nums; }
 .inwrap .sfx { font-size: 13px; color: var(--muted); font-weight: 600; }
 .diff { margin-top: 14px; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 13px; transition: .25s; }
 .diff .dt { flex: 1; }
@@ -446,7 +448,7 @@ onMounted(() => {
 .diff.short { background: var(--clay-soft); } .diff.short .a, .diff.short .dv { color: var(--clay); } .diff.short .b { color: #9A4730; }
 .diff.over { background: var(--amber-soft); } .diff.over .a, .diff.over .dv { color: #9A6512; } .diff.over .b { color: #B9781F; }
 .note-field { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 11px; box-shadow: var(--shadow); }
-.note-field .fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
+.note-field .fl { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
 .note-field input { width: 100%; border: none; background: transparent; outline: none; font-family: "Hanken Grotesk"; font-size: 14px; font-weight: 500; color: var(--ink); }
 .note-field input::placeholder { color: #AAB3AC; }
 .cta { width: 100%; margin-top: 14px; background: var(--ink); color: #fff; border: none; border-radius: 16px; padding: 16px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 15.5px; cursor: pointer; box-shadow: 0 12px 22px -12px rgba(21,42,36,.7); }
@@ -485,5 +487,9 @@ onMounted(() => {
 .gi-text b { color: var(--ink); font-weight: 700; }
 .gi-text code { font-family: monospace; background: var(--paper-2); padding: 2px 5px; border-radius: 4px; font-size: 11.5px; }
 
-@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 1024px) {
+  .grid2 { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cuadre" "desglose"; gap: 24px; }
+  .cuadre > .eyebrow { margin-top: 0; }
+  .lista-tickets { max-height: none; overflow-y: visible; }
+}
 </style>

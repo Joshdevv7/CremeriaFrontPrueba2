@@ -577,17 +577,25 @@ onMounted(() => { emitCtx(); cargar() })
 }
 
 @media (max-width: 1180px) {
-  .row.a, .row.b { grid-template-columns: 1fr; }
-  .quick-actions { grid-template-columns: repeat(2, 1fr); }
-  .guia-content { grid-template-columns: 1fr; }
+  .row.a, .row.b, .row.c { grid-template-columns: minmax(0, 1fr); }
+  .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guia-content { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 1024px) {
-  .kpis { grid-template-columns: repeat(2,1fr); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 580px) {
-  .quick-actions { grid-template-columns: 1fr; }
-  .kpis { grid-template-columns: 1fr; }
+  .quick-actions, .kpis { grid-template-columns: minmax(0, 1fr); }
   .donut-wrap { justify-content: center; }
-  .mini { grid-template-columns: 1fr; gap: 8px; }
+  .mlegend { flex-basis: 100%; min-width: 0; }
+  .mini { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .card { padding: 16px; }
+  .card .ch, .eq-labels { flex-wrap: wrap; gap: 6px 12px; }
+  .cred-box { min-width: min(180px, 100%); }
+  .rk { flex-wrap: wrap; }
+  .rk .info { overflow-wrap: anywhere; }
+  .alert { display: grid; grid-template-columns: auto minmax(0, 1fr); overflow-wrap: anywhere; }
+  .alert .wa, .alert .sin-prov { grid-column: 1 / -1; justify-self: end; }
+  .alert .wa { min-height: 44px; }
 }
 </style>

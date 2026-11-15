@@ -38,7 +38,8 @@ defineEmits(['done'])
 
 <style scoped>
 .exito { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(160deg,var(--pine),var(--pine-deep)); padding: 40px 24px; overflow: auto; }
+  align-items: safe center; background: linear-gradient(160deg,var(--pine),var(--pine-deep));
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); overflow: auto; }
 .card { width: 100%; max-width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; }
 
 .check { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; margin-bottom: 18px; position: relative; }
@@ -66,6 +67,13 @@ p { color: #A9D2C6; font-size: 14px; font-weight: 500; margin-top: 6px; }
 @media (min-width: 768px) {
   .exito { background: rgba(10,40,33,.55); backdrop-filter: blur(6px); }
   .card { max-width: 440px; background: linear-gradient(160deg,var(--pine),var(--pine-deep)); border-radius: 28px; padding: 44px 32px 32px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.6); }
+}
+
+@media (max-height: 560px) {
+  .card { padding-block: 18px; }
+  .check { width: 48px; height: 48px; margin-bottom: 10px; }
+  .check svg { width: 28px; height: 28px; }
+  .panel { margin-top: 12px; }
 }
 
 .exito-fade-enter-active, .exito-fade-leave-active { transition: opacity .35s ease; }

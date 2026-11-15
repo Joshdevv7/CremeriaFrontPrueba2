@@ -257,37 +257,38 @@
         </div>
 
         <div class="table-scroll">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Mes</th>
-                <th>Estado</th>
-                <th class="num">Ventas</th>
-                <th class="num">Utilidad Neta</th>
-                <th class="num">Margen Real</th>
-                <th class="num">Proyección Cierre</th>
+          <table class="data-table" role="table" aria-label="Detalle mes a mes">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" scope="col">Mes</th>
+                <th role="columnheader" scope="col">Estado</th>
+                <th role="columnheader" scope="col" class="num">Ventas</th>
+                <th role="columnheader" scope="col" class="num">Utilidad Neta</th>
+                <th role="columnheader" scope="col" class="num">Margen Real</th>
+                <th role="columnheader" scope="col" class="num">Proyección Cierre</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               <tr 
                 v-for="m in data.meses" 
                 :key="m.etiqueta" 
                 :class="{ 'row-current': m.enCurso }"
+                role="row"
               >
-                <td class="font-bold">{{ m.etiqueta }}</td>
-                <td>
+                <td role="cell" class="font-bold">{{ m.etiqueta }}</td>
+                <td role="cell">
                   <span class="badge-status" :class="m.enCurso ? 'en-curso' : 'cerrado'">
                     {{ m.enCurso ? 'En curso (Día ' + data.diasTranscurridos + ')' : 'Cerrado' }}
                   </span>
                 </td>
-                <td class="num tabular">{{ money(m.ventas) }}</td>
-                <td class="num tabular font-bold" :class="m.utilidadNeta >= 0 ? 'text-green' : 'text-clay'">
+                <td role="cell" class="num tabular" data-label="Ventas">{{ money(m.ventas) }}</td>
+                <td role="cell" class="num tabular font-bold" data-label="Utilidad neta" :class="m.utilidadNeta >= 0 ? 'text-green' : 'text-clay'">
                   {{ money(m.utilidadNeta) }}
                 </td>
-                <td class="num tabular">
+                <td role="cell" class="num tabular" data-label="Margen real">
                   <span class="margin-pill">{{ m.margenPorcentaje }}%</span>
                 </td>
-                <td class="num tabular">
+                <td role="cell" class="num tabular" data-label="Proyección de cierre">
                   <template v-if="m.enCurso">
                     <span class="font-bold text-amber">{{ money(m.proyeccionCierre) }}</span>
                     <span class="text-xs text-muted block">(Ritmo: {{ money(data.ritmoDiarioActual) }}/d)</span>
@@ -298,17 +299,17 @@
                 </td>
               </tr>
               <!-- Fila del próximo mes estimado -->
-              <tr class="row-estimate">
-                <td class="font-bold text-sky">{{ data.estimadoEtiqueta }}</td>
-                <td>
+              <tr role="row" class="row-estimate">
+                <td role="cell" class="font-bold text-sky">{{ data.estimadoEtiqueta }}</td>
+                <td role="cell">
                   <span class="badge-status estimado">Proyectado</span>
                 </td>
-                <td class="num tabular font-bold text-sky">{{ money(data.proximoMesEstimado) }}</td>
-                <td class="num tabular font-bold text-sky">{{ money(data.proximoMesUtilidadEstimada) }}</td>
-                <td class="num tabular">
+                <td role="cell" class="num tabular font-bold text-sky" data-label="Ventas">{{ money(data.proximoMesEstimado) }}</td>
+                <td role="cell" class="num tabular font-bold text-sky" data-label="Utilidad neta">{{ money(data.proximoMesUtilidadEstimada) }}</td>
+                <td role="cell" class="num tabular" data-label="Margen real">
                   <span class="margin-pill sky">{{ data.margenPromedioPorcentaje }}%</span>
                 </td>
-                <td class="num tabular font-bold text-sky">{{ money(data.proximoMesEstimado) }}</td>
+                <td role="cell" class="num tabular font-bold text-sky" data-label="Proyección de cierre">{{ money(data.proximoMesEstimado) }}</td>
               </tr>
             </tbody>
           </table>
@@ -996,6 +997,7 @@ onMounted(async () => {
 
 /* Tabla detallada */
 .table-section {
+  container-type: inline-size;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -1045,6 +1047,17 @@ onMounted(async () => {
 }
 .data-table tr.row-estimate {
   background: #F3F8FA;
+}
+
+@container (max-width: 540px) {
+  .data-table, .data-table tbody { display: block; }
+  .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .data-table tbody { display: grid; gap: 12px; }
+  .data-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .data-table td { min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+  .data-table td:nth-child(2) { text-align: right; }
+  .data-table td[data-label] { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 8px; }
+  .data-table td[data-label]::before { content: attr(data-label); float: left; padding-right: 8px; color: var(--ink-soft); font-weight: 600; text-align: left; }
 }
 
 .badge-status {
@@ -1206,5 +1219,6 @@ onMounted(async () => {
   .bars-container {
     height: 220px;
   }
+  .table-section { padding: 16px; }
 }
 </style>

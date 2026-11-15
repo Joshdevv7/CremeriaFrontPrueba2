@@ -469,7 +469,7 @@ onMounted(async () => {
 .clear-btn { background: none; border: none; font-size: 18px; color: var(--muted); cursor: pointer; }
 
 /* Grid de personal */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; margin-bottom: 24px; }
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -633,7 +633,7 @@ onMounted(async () => {
 .guide-icon svg { width: 22px; height: 22px; stroke: var(--clay); fill: none; stroke-width: 2.2; }
 .guide-title { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 17px; color: var(--ink); margin: 0; }
 .guide-subtitle { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-.guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 16px; }
 .g-item { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; }
 .g-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .g-num { width: 20px; height: 20px; border-radius: 50%; background: var(--clay); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0; }

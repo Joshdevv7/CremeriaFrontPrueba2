@@ -328,14 +328,14 @@ onMounted(() => {
 .edu-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .edu-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; padding: 6px 12px; border-radius: 10px; cursor: pointer; flex: 0 0 auto; }
 .edu-body { padding: 16px 18px; border-top: 1px solid var(--line); background: var(--surface); }
-.edu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.edu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; }
 .edu-step { display: flex; gap: 12px; align-items: flex-start; }
 .step-badge { width: 26px; height: 26px; border-radius: 50%; background: var(--pine); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex: 0 0 auto; margin-top: 2px; }
 .step-content b { font-size: 13.5px; font-weight: 700; color: var(--ink); }
 .step-content p { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; }
 .kpi-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
 .kpi-l { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .kpi-v { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 26px; letter-spacing: -.02em; color: var(--ink); margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
@@ -358,7 +358,7 @@ onMounted(() => {
 .cnt-badge.red { background: var(--clay); }
 
 /* Grid de Productos */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr)); gap: 12px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 15px; box-shadow: var(--shadow); cursor: pointer; display: flex; flex-direction: column; gap: 11px; transition: transform .12s, border-color .12s; }
 .card:hover { transform: translateY(-2px); border-color: var(--pine); }
 
@@ -370,7 +370,7 @@ onMounted(() => {
 
 .info { flex: 1; min-width: 0; }
 .nombre-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.nombre { font-weight: 700; font-size: 15px; color: var(--ink); }
+.nombre { font-weight: 700; font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
 .badge-amber { font-size: 9.5px; font-weight: 800; background: var(--amber-soft); color: #B9781F; padding: 2px 7px; border-radius: 6px; text-transform: uppercase; }
 .badge-red { font-size: 9.5px; font-weight: 800; background: var(--clay-soft); color: var(--clay); padding: 2px 7px; border-radius: 6px; text-transform: uppercase; }
 
@@ -404,6 +404,12 @@ onMounted(() => {
 
 /* Botones de acción */
 .card-pie { display: flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 4px; }
+@media (max-width: 430px) {
+  .card-head { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .precios-col { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; text-align: left; }
+  .stock-box, .caja-strip, .card-pie { flex-wrap: wrap; gap: 6px 8px; }
+  .card-pie button { min-height: 44px; }
+}
 .btn-wa-reorden { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; background: #1AA75A; color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; border-radius: 11px; padding: 8px 12px; cursor: pointer; }
 .btn-wa-reorden svg { width: 14px; height: 14px; fill: #fff; }
 

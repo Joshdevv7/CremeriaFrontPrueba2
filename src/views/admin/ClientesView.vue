@@ -258,7 +258,7 @@ onMounted(() => {
 .err { color: var(--clay); font-weight: 600; margin-top: 24px; }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px; margin-bottom: 16px; }
 .kpi-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
 .kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .kpi-icon ion-icon { font-size: 20px; }
@@ -282,7 +282,7 @@ onMounted(() => {
 .chip.clay.on { background: var(--clay); color: #fff; border-color: var(--clay); }
 
 /* Grid de clientes */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); cursor: pointer; display: flex; flex-direction: column; gap: 10px; transition: border-color .15s; }
 .card:hover { border-color: #B4C4BA; }
 .card-main { display: flex; align-items: center; gap: 13px; }
@@ -290,7 +290,7 @@ onMounted(() => {
 .chip-avatar ion-icon { font-size: 21px; color: var(--pine); }
 .info { flex: 1; min-width: 0; }
 .nombre-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.nombre { font-weight: 700; font-size: 15px; }
+.nombre { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
 .tag-deuda { font-size: 10.5px; font-weight: 700; color: var(--clay); background: var(--clay-soft); padding: 2px 7px; border-radius: 6px; }
 .tag-deuda.vencido { background: #FDE8E4; color: #B33A1F; font-weight: 800; }
 .sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -308,6 +308,10 @@ onMounted(() => {
 .act-btn ion-icon { font-size: 14px; }
 .act-btn.wa { color: #128C7E; background: #E8F5E9; border-color: #C8E6C9; }
 .act-btn.ped { color: var(--pine); background: var(--pine-tint); border-color: #BFD8CD; }
+@media (max-width: 430px) {
+  .card-actions { flex-wrap: wrap; }
+  .act-btn { min-height: 44px; }
+}
 
 /* Paginación */
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; }

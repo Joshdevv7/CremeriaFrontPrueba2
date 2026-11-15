@@ -298,7 +298,7 @@ onMounted(() => {
 .aviso { background: var(--amber-soft); border: 1px solid #EAD9B8; color: #8A6516; border-radius: 12px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
 
 /* Grid de créditos */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 12px; }
 .card { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
 .chip { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .chip ion-icon { font-size: 21px; }
@@ -322,6 +322,15 @@ onMounted(() => {
 .wa-btn ion-icon { font-size: 18px; }
 .pagar { background: var(--pine); color: #fff; border: none; border-radius: 10px; padding: 8px 12px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .pagar:disabled { opacity: .5; }
+
+@media (max-width: 430px) {
+  .card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .cli, .sub { overflow-wrap: anywhere; }
+  .right { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; text-align: left; }
+  .monto-block { align-items: flex-start; }
+  .pagar, .wa-btn { min-height: 44px; }
+  .wa-btn { width: 44px; }
+}
 
 /* Paginación */
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; }

@@ -1,13 +1,16 @@
 <template>
-  <div class="editor">
+  <div class="editor" :data-paso="paso" :style="{ '--teclado': teclado + 'px' }">
     <p v-if="cargando" class="muted">Cargando…</p>
     <div v-else-if="errorCatalogos">
       <p class="err" role="alert">No se pudo cargar el catálogo de Ventas. Revisa tu conexión e inténtalo de nuevo.</p>
       <button type="button" class="pf-chip" @click="cargarCatalogos">Reintentar</button>
     </div>
     <template v-else>
-      <div class="form" v-show="!exito">
-        <!-- COLUMNA 1: CATÁLOGO DE PRODUCTOS (PRIMERO EN EL FLUJO Y EN CELULAR) -->
+      <header v-show="!exito" class="paso-venta">
+        <p>Paso {{ paso }} de {{ pasos.length }}</p>
+        <h2 ref="tituloPaso" tabindex="-1">{{ pasos[paso - 1] }}</h2>
+      </header>
+      <div v-show="!exito" class="form" :inert="enviando ? true : undefined">
         <div class="col prods-col">
           <div class="eyebrow-bar">
             <span class="eyebrow">Catálogo de Almacén</span>
@@ -18,7 +21,7 @@
 
           <div class="search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input v-model="buscar" placeholder="Buscar por nombre de producto…">
+            <input v-model="buscar" type="search" aria-label="Buscar producto" placeholder="Buscar por nombre de producto…">
           </div>
 
           <div class="prod-filtros">
@@ -42,113 +45,114 @@
                 </div>
               </div>
               <div class="stepper">
-                <button @click="dec(p)" :disabled="(cant[p.id]||0)<=0">−</button>
+                <button type="button" :aria-label="'Quitar una unidad de ' + p.nombre" @click="dec(p)" :disabled="(cant[p.id]||0)<=0">−</button>
                 <span class="q">{{ cant[p.id] || 0 }}</span>
-                <button @click="inc(p)" :disabled="(cant[p.id]||0) >= maxUnidad(p)">+</button>
+                <button type="button" :aria-label="'Agregar una unidad de ' + p.nombre" @click="inc(p)" :disabled="(cant[p.id]||0) >= maxUnidad(p)">+</button>
               </div>
             </div>
             <div v-if="p.vendePorCaja" class="uni">
-              <button :class="{ on: !esCaja(p.id) }" @click="setUnidad(p, 'pza')">Pieza</button>
-              <button :class="{ on: esCaja(p.id) }" @click="setUnidad(p, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
+              <button :class="{ on: !esCaja(p.id) }" :aria-pressed="!esCaja(p.id)" @click="setUnidad(p, 'pza')">Pieza</button>
+              <button :class="{ on: esCaja(p.id) }" :aria-pressed="esCaja(p.id)" @click="setUnidad(p, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
             </div>
           </div>
           <p v-if="!filtrados.length" class="muted">No hay productos que coincidan con la búsqueda o filtro.</p>
         </div>
 
-        <!-- COLUMNA 2: CLIENTE Y COBRO (DESPUÉS DE ESCOGER PRODUCTOS) -->
-        <div class="col selects-col" id="seccion-cobro">
-          <div class="field">
+        <div class="col selects-col">
+          <div class="field cliente-venta">
             <div class="fl">Cliente</div>
             <div class="modo-cli">
-              <button :class="{ on: !ocasional }" @click="setOcasional(false)">Registrado</button>
-              <button :class="{ on: ocasional }" @click="setOcasional(true)">Clientes varios</button>
+              <button :class="{ on: !ocasional }" :aria-pressed="!ocasional" @click="setOcasional(false)">Registrado</button>
+              <button :class="{ on: ocasional }" :aria-pressed="ocasional" @click="setOcasional(true)">Clientes varios</button>
             </div>
             <template v-if="!ocasional">
-              <div v-if="cliente" class="cli-sel" @click="cliente = null">
-                <div class="av-ic">{{ ini(cliente.nombre) }}</div>
-                <div class="info">
-                  <div class="nm">{{ cliente.nombre }}</div>
-                  <div class="sub">Clic para cambiar de cliente</div>
-                  <div v-if="cliente.saldoDeuda > 0" class="cli-deuda-pill">
-                    ⚠️ Adeudo actual: <b>{{ money(cliente.saldoDeuda) }}</b>
-                  </div>
-                </div>
-              </div>
+              <button v-if="cliente" type="button" class="cli-sel" @click="cliente = null">
+                <span class="av-ic" aria-hidden="true">{{ ini(cliente.nombre) }}</span>
+                <span class="info">
+                  <span class="nm">{{ cliente.nombre }}</span>
+                  <span class="sub">Cambiar cliente</span>
+                  <span v-if="cliente.saldoDeuda > 0" class="cli-deuda-pill">
+                    Adeudo actual: <b>{{ money(cliente.saldoDeuda) }}</b>
+                  </span>
+                </span>
+              </button>
               <template v-else>
-                <input class="inp" v-model="buscarCli" placeholder="Buscar cliente…" style="margin-top:9px">
+                <input class="inp" type="search" v-model="buscarCli" aria-label="Buscar cliente" placeholder="Buscar cliente…" style="margin-top:9px">
                 <div class="cli-lista">
-                  <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
+                  <button v-for="c in clientesFiltrados" :key="c.id" type="button" class="cli-op" @click="cliente = c">
                     <span class="c-nm">{{ c.nombre }}</span>
                     <span v-if="c.saldoDeuda > 0" class="c-deuda-tag">Debe {{ money(c.saldoDeuda) }}</span>
-                  </div>
+                  </button>
                   <p v-if="!clientesFiltrados.length" class="muted2">Sin clientes registrados coincidentes.</p>
                 </div>
               </template>
             </template>
             <template v-else>
-              <input class="inp" v-model="nombreOcasional" placeholder="Nombre del comprador (opcional)" maxlength="80" style="margin-top:9px">
+              <input class="inp" v-model="nombreOcasional" aria-label="Nombre del comprador (opcional)" placeholder="Nombre del comprador (opcional)" maxlength="80" style="margin-top:9px">
               <p class="hint2">Venta de mostrador a clientes varios. No genera historial de cliente ni admite venta a crédito.</p>
             </template>
           </div>
 
-          <div class="field">
+          <div class="field pago-venta">
             <div class="fl">Método de pago</div>
             <div class="pagos">
-              <button v-for="m in metodosDisponibles" :key="m.k" :class="{ on: metodo === m.k }" @click="metodo = m.k">{{ m.t }}</button>
+              <button v-for="m in metodosDisponibles" :key="m.k" :class="{ on: metodo === m.k && (!movil || metodoElegido) }" :aria-pressed="metodo === m.k && (!movil || metodoElegido)" @click="elegirMetodo(m.k)">{{ m.t }}</button>
             </div>
 
-            <!-- Alerta si selecciona crédito a cliente con adeudo previo -->
-            <div v-if="metodo === 3 && cliente?.saldoDeuda > 0" class="alerta-riesgo">
-              <div class="alerta-t">⚠️ Cliente con saldo pendiente previo</div>
-              <div class="alerta-b">Este cliente ya debe <b>{{ money(cliente.saldoDeuda) }}</b>. Esta venta sumará <b>{{ money(total) }}</b> a su saldo deudor en Kardex.</div>
-            </div>
-
-            <div v-if="metodo === 0" class="sub-field">
-              <div class="fl2">
-                <span>¿Con cuánto paga?</span>
-                <span class="tot-hint" v-if="total > 0">A cobrar: <b>{{ money(total) }}</b></span>
-              </div>
-              <input class="inp" type="number" min="0" step="0.01" v-model.number="pagaCon" placeholder="¿Con cuánto paga el cliente?" @input="onPagaConInput">
-
-              <!-- Atajos de billetes para agilizar en mostrador -->
-              <div class="billetes-grid" v-if="total > 0">
-                <button type="button" class="btn-bill" :class="{ on: pagaCon === total && !pagaConEditado }" @click="fijarExacto()">
-                  Exacto ({{ money(total) }})
-                </button>
-                <button v-for="b in billetesSugeridos" :key="b" type="button" class="btn-bill" :class="{ on: pagaCon === b }" @click="fijarPagaCon(b)">
-                  ${{ b }}
-                </button>
+            <div class="datos-pago" :class="{ 'sin-metodo': !metodoElegido }">
+              <!-- Alerta si selecciona crédito a cliente con adeudo previo -->
+              <div v-if="metodo === 3 && cliente?.saldoDeuda > 0" class="alerta-riesgo">
+                <div class="alerta-t">⚠️ Cliente con saldo pendiente previo</div>
+                <div class="alerta-b">Este cliente ya debe <b>{{ money(cliente.saldoDeuda) }}</b>. Esta venta sumará <b>{{ money(total) }}</b> a su saldo deudor en Kardex.</div>
               </div>
 
-              <div v-if="pagaCon > 0" class="feria" :class="{ falta: pagaCon < total }">
-                <template v-if="pagaCon === total">
-                  <span class="tag-exacto">✓ Importe exacto (sin cambio)</span>
-                </template>
-                <template v-else-if="pagaCon > total">
-                  Feria / Cambio a entregar: <b>{{ money(pagaCon - total) }}</b>
-                </template>
-                <template v-else>
-                  Faltan {{ money(total - pagaCon) }} para cubrir el total.
-                </template>
+              <div v-if="metodo === 0 && !pagoPendiente" class="sub-field">
+                <div class="fl2">
+                  <span>¿Con cuánto paga?</span>
+                  <span class="tot-hint" v-if="total > 0">A cobrar: <b>{{ money(total) }}</b></span>
+                </div>
+                <input class="inp" type="number" min="0" step="0.01" inputmode="decimal" v-model.number="pagaCon" aria-label="¿Con cuánto paga el cliente?" placeholder="¿Con cuánto paga el cliente?" @input="onPagaConInput">
+
+                <!-- Atajos de billetes para agilizar en mostrador -->
+                <div class="billetes-grid" v-if="total > 0">
+                  <button type="button" class="btn-bill" :class="{ on: pagaCon === total && !pagaConEditado }" @click="fijarExacto()">
+                    Exacto ({{ money(total) }})
+                  </button>
+                  <button v-for="b in billetesSugeridos" :key="b" type="button" class="btn-bill" :class="{ on: pagaCon === b }" @click="fijarPagaCon(b)">
+                    ${{ b }}
+                  </button>
+                </div>
+
+                <div v-if="pagaCon > 0" class="feria" :class="{ falta: pagaCon < total }">
+                  <template v-if="pagaCon === total">
+                    <span class="tag-exacto">✓ Importe exacto (sin cambio)</span>
+                  </template>
+                  <template v-else-if="pagaCon > total">
+                    Feria / Cambio a entregar: <b>{{ money(pagaCon - total) }}</b>
+                  </template>
+                  <template v-else>
+                    Faltan {{ money(total - pagaCon) }} para cubrir el total.
+                  </template>
+                </div>
               </div>
-            </div>
-            <div v-if="metodo === 1 || metodo === 2" class="sub-field">
-              <div class="fl2">Folio / referencia (opcional)</div>
-              <input class="inp" v-model="referencia" placeholder="Ej. Folio de transferencia o voucher" :disabled="pagoPendiente">
-            </div>
-            <div v-if="metodo === 3" class="sub-field credito">
-              <div class="fl2">Días para pagar</div>
-              <div class="dias">
-                <button v-for="d in [7,15,30]" :key="d" :class="{ on: diasCredito === d }" @click="diasCredito = d">{{ d }} días</button>
+              <div v-if="(metodo === 1 || metodo === 2) && !pagoPendiente" class="sub-field">
+                <div class="fl2">Folio / referencia (opcional)</div>
+                <input class="inp" v-model="referencia" aria-label="Folio o referencia (opcional)" placeholder="Ej. Folio de transferencia o voucher">
               </div>
-              <div class="hint2">Vence el {{ fechaLimiteTxt }}. Se registrará en Cuentas por Cobrar y afectará el saldo deudor del cliente.</div>
-            </div>
-            <div v-if="metodo !== 3" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
-              <div class="pt-check"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
-              <div class="pt-tx">
-                <div class="pt-t">Pago pendiente</div>
-                <div class="pt-s">{{ ocasional ? 'Se entrega la mercancía ahora; el cobro se registra después.' : 'Sin cobro al entregar. Registra cada abono en Deudas de Clientes con el método que recibas.' }}</div>
+              <div v-if="metodo === 3" class="sub-field credito">
+                <div class="fl2">Días para pagar</div>
+                <div class="dias">
+                  <button v-for="d in [7,15,30]" :key="d" :class="{ on: diasCredito === d }" :aria-pressed="diasCredito === d" @click="diasCredito = d">{{ d }} días</button>
+                </div>
+                <div class="hint2">Vence el {{ fechaLimiteTxt }}. Se registrará en Cuentas por Cobrar y afectará el saldo deudor del cliente.</div>
               </div>
+              <button v-if="metodo !== 3" type="button" role="checkbox" :aria-checked="pagoPendiente" class="pend-toggle" :class="{ on: pagoPendiente }" @click="pagoPendiente = !pagoPendiente">
+                <span class="pt-check" aria-hidden="true"><svg v-if="pagoPendiente" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>
+                <span class="pt-tx">
+                  <span class="pt-t">Pago pendiente</span>
+                  <span class="pt-s">{{ ocasional ? 'Se entrega la mercancía ahora; el cobro se registra después.' : 'Registra cada abono en Deudas de clientes con el método que recibas.' }}</span>
+                </span>
+              </button>
             </div>
           </div>
 
@@ -156,25 +160,41 @@
             <div class="k">Total de la venta<b>{{ lineasActivas.length }} producto(s) en ticket</b></div>
             <div class="v">{{ money(total) }}</div>
             <button class="cta" :disabled="enviando || !puede" @click="vender()">{{ enviando ? 'Registrando…' : 'Cobrar y registrar venta' }}</button>
-            <p v-if="error" class="err">{{ error }}</p>
+            <p v-if="error" role="alert" class="err">{{ error }}</p>
+          </div>
+          <div class="field confirmar-venta">
+            <dl class="resumen-pago">
+              <div><dt>Cliente</dt><dd>{{ nombreMostrar }}</dd></div>
+              <div><dt>Método de pago</dt><dd>{{ nombreMetodo }}</dd></div>
+              <div v-if="metodo === 3"><dt>Fecha límite</dt><dd>{{ fechaLimiteTxt }}</dd></div>
+              <div v-else-if="pagoPendiente"><dt>Estado</dt><dd>Pago pendiente</dd></div>
+              <template v-else-if="metodo === 0">
+                <div><dt>Efectivo recibido</dt><dd>{{ money(pagaCon) }}</dd></div>
+                <div><dt>Cambio a entregar</dt><dd>{{ money(pagaCon - total) }}</dd></div>
+              </template>
+              <div v-else-if="referencia.trim()"><dt>Referencia</dt><dd>{{ referencia.trim() }}</dd></div>
+            </dl>
+            <ul class="resumen-productos" aria-label="Productos del ticket">
+              <li v-for="id in lineasActivas" :key="id">
+                <span>{{ cant[id] }} × {{ pmap[id]?.nombre }}{{ esCaja(id) ? ' (caja)' : '' }}</span>
+                <b>{{ money(cant[id] * precioL(pmap[id])) }}</b>
+              </li>
+            </ul>
+            <p v-if="error" role="alert" class="err">{{ error }}</p>
           </div>
         </div>
       </div>
 
-      <!-- Barra flotante de cobro rápido para móvil (responsive) -->
-      <div class="mobile-float-bar" v-if="lineasActivas.length > 0 && !exito">
-        <div class="mf-info">
-          <span class="mf-items">{{ lineasActivas.length }} producto(s) en carrito</span>
-          <span class="mf-tot">{{ money(total) }}</span>
+      <footer v-show="!exito" class="acciones-venta">
+        <div v-if="paso > 1" class="resumen-total" aria-live="polite"><span>Total</span><b>{{ money(total) }}</b></div>
+        <div class="botones-venta">
+          <button v-if="paso > 1" type="button" class="volver-paso" :disabled="enviando" @click="irAPaso(paso - 1)">Atrás</button>
+          <button type="button" class="cta" :disabled="!puedeAvanzar || enviando" @click="continuar">{{ enviando ? 'Registrando…' : accionPaso }}</button>
         </div>
-        <button type="button" class="mf-btn" @click="irAlCobro()">
-          <span>Ir al cobro</span>
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-        </button>
-      </div>
+      </footer>
 
       <!-- Guía educativa interactiva -->
-      <div class="guia-card">
+      <div v-show="!exito" class="guia-card guia-venta">
         <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
           <div class="guia-icon">💡</div>
           <div class="guia-tit">¿Cómo funciona el módulo de Ventas en Mostrador?</div>
@@ -236,13 +256,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import { imprimirTicketVenta } from '@/services/printer'
 
 const emit = defineEmits(['ctx'])
+const anchoMovil = window.matchMedia('(max-width: 900px)')
+const movil = ref(anchoMovil.matches)
+const teclado = ref(0)
+const pasos = ['Selecciona el cliente', 'Agrega productos', 'Elige el método de pago', 'Confirma la venta']
+const paso = ref(1)
+const tituloPaso = ref(null)
 const productos = ref([]), clientes = ref([])
 const cargando = ref(true), enviando = ref(false), error = ref('')
 const errorCatalogos = ref(false)
@@ -257,7 +283,10 @@ function setOcasional(v) {
   ocasional.value = v
   if (v) {
     cliente.value = null
-    if (metodo.value === 3) metodo.value = 0
+    if (metodo.value === 3) {
+      metodo.value = 0
+      metodoElegido.value = false
+    }
   } else {
     nombreOcasional.value = ''
   }
@@ -293,17 +322,26 @@ function esCaja(id) { return unidad[id] === 'caja' }
 function factor(p) { return p?.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
 function precioL(p) { return esCaja(p.id) ? (p.precioCaja || 0) : p.precioVenta }
 function maxUnidad(p) { return esCaja(p.id) ? Math.floor((p.stockAlmacen || 0) / factor(p)) : (p.stockAlmacen || 0) }
-function setUnidad(p, u) { unidad[p.id] = u; cant[p.id] = 0 }
+function setUnidad(p, u) {
+  if (esCaja(p.id) === (u === 'caja')) return
+  unidad[p.id] = u
+  cant[p.id] = 0
+}
 function inc(p) { cant[p.id] = Math.min((cant[p.id] || 0) + 1, maxUnidad(p)) }
 function dec(p) { if (cant[p.id] > 0) cant[p.id]-- }
 
-const total = computed(() => lineasActivas.value.reduce((s, id) => s + (cant[id] || 0) * precioL(pmap.value[id]), 0))
+const total = computed(() => {
+  const importe = lineasActivas.value.reduce((s, id) => s + (cant[id] || 0) * precioL(pmap.value[id]), 0)
+  return Math.round(importe * 100) / 100
+})
 
 const metodosBase = [
   { k: 0, t: 'Efectivo' }, { k: 1, t: 'Transferencia' }, { k: 2, t: 'Tarjeta' }, { k: 3, t: 'Crédito' }
 ]
 const metodosDisponibles = computed(() => ocasional.value ? metodosBase.filter(m => m.k !== 3) : metodosBase)
 const metodo = ref(0)
+const metodoElegido = ref(false)
+const nombreMetodo = computed(() => metodosBase.find(m => m.k === metodo.value)?.t || '')
 const referencia = ref('')
 const pagaCon = ref(null)
 const pagaConEditado = ref(false)
@@ -351,11 +389,9 @@ const billetesSugeridos = computed(() => {
   return res
 })
 
-function irAlCobro() {
-  const el = document.getElementById('seccion-cobro')
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+function elegirMetodo(valor) {
+  metodo.value = valor
+  metodoElegido.value = true
 }
 
 const pagoPendiente = ref(false)
@@ -365,7 +401,45 @@ const fechaLimiteTxt = computed(() => fechaLimite.value.toLocaleDateString('es-M
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
-const puede = computed(() => total.value > 0 && (ocasional.value ? true : !!cliente.value))
+const clienteElegido = computed(() => ocasional.value || !!cliente.value)
+const puede = computed(() => total.value > 0 && clienteElegido.value)
+const pagoValido = computed(() => metodoElegido.value &&
+  (metodo.value !== 0 || pagoPendiente.value || Number(pagaCon.value) >= total.value))
+const puedeAvanzar = computed(() => [
+  clienteElegido.value,
+  puede.value,
+  puede.value && pagoValido.value,
+  puede.value && pagoValido.value
+][paso.value - 1])
+const accionFinal = computed(() => {
+  if (metodo.value === 3) return 'Registrar a crédito'
+  return pagoPendiente.value ? 'Registrar pago pendiente' : 'Cobrar'
+})
+const accionPaso = computed(() => ['Continuar a productos', 'Continuar al pago', 'Revisar venta', accionFinal.value][paso.value - 1])
+
+async function irAPaso(destino) {
+  paso.value = destino
+  await nextTick()
+  tituloPaso.value?.scrollIntoView({ block: 'start' })
+  tituloPaso.value?.focus({ preventScroll: true })
+}
+
+function continuar() {
+  if (!puedeAvanzar.value || enviando.value) return
+  if (paso.value < pasos.length) irAPaso(paso.value + 1)
+  else vender()
+}
+
+function medirTeclado() {
+  const viewport = window.visualViewport
+  teclado.value = viewport?.scale === 1 ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0
+}
+
+function ajustarFlujo(evento) {
+  movil.value = evento.matches
+  if (movil.value && paso.value > 1 && !clienteElegido.value) paso.value = 1
+  else if (movil.value && paso.value > 2 && !puede.value) paso.value = 2
+}
 
 const ultimaVenta = ref(null)
 const imprimiendoTicket = ref(false)
@@ -373,7 +447,7 @@ const descargandoPdf = ref(false)
 const ticketMsg = ref('')
 
 async function vender() {
-  if (!puede.value) return
+  if (!puede.value || enviando.value) return
   enviando.value = true; error.value = ''; ticketMsg.value = ''
   const lineas = lineasActivas.value.map((id) => ({ productoId: id, cantidad: cant[id], esCaja: esCaja(id) }))
   const body = { metodoPago: metodo.value, pagoPendiente: metodo.value === 3 ? false : pagoPendiente.value, lineas }
@@ -396,10 +470,10 @@ async function vender() {
       { k: 'Ticket / Folio', v: `#${data.id}` },
       { k: 'Productos', v: String(lineas.length) },
       { k: 'Total', v: money(data.total) },
-      { k: 'Método de pago', v: metodosBase.find((m) => m.k === metodo.value)?.t || '' },
+      { k: 'Método de pago', v: nombreMetodo.value },
       { k: 'Estado de pago', v: body.pagoPendiente ? 'Pago pendiente' : (metodo.value === 3 ? 'A crédito' : 'Pagado') }
     ]
-    if (metodo.value === 0 && pagaCon.value > 0) {
+    if (metodo.value === 0 && !body.pagoPendiente && pagaCon.value > 0) {
       exitoDet.value.push({ k: 'Pagó con', v: money(pagaCon.value) })
       if (pagaCon.value >= data.total) exitoDet.value.push({ k: 'Feria entregada', v: money(pagaCon.value - data.total) })
     }
@@ -458,7 +532,7 @@ async function descargarPdf() {
   }
 }
 
-function nuevaVenta() {
+async function nuevaVenta() {
   exito.value = false
   ultimaVenta.value = null
   ticketMsg.value = ''
@@ -466,8 +540,12 @@ function nuevaVenta() {
   Object.keys(cant).forEach((k) => delete cant[k])
   Object.keys(unidad).forEach((k) => delete unidad[k])
   cliente.value = null; nombreOcasional.value = ''; ocasional.value = false
+  buscar.value = ''; buscarCli.value = ''; filtroProd.value = 'todos'; error.value = ''
+  metodoElegido.value = false
   metodo.value = 0; referencia.value = ''; pagaCon.value = null; pagaConEditado.value = false; anteriorTotal = 0; pagoPendiente.value = false; diasCredito.value = 7
-  cargarCatalogos()
+  paso.value = 1
+  await cargarCatalogos()
+  if (movil.value) await irAPaso(1)
 }
 
 async function cargarCatalogos() {
@@ -489,7 +567,15 @@ async function cargarCatalogos() {
 
 onMounted(() => {
   emit('ctx', { titulo: 'Ventas', sub: 'Venta directa a clientes en el local', back: null })
+  anchoMovil.addEventListener('change', ajustarFlujo)
+  window.visualViewport?.addEventListener('resize', medirTeclado)
+  window.visualViewport?.addEventListener('scroll', medirTeclado)
   cargarCatalogos()
+})
+onUnmounted(() => {
+  anchoMovil.removeEventListener('change', ajustarFlujo)
+  window.visualViewport?.removeEventListener('resize', medirTeclado)
+  window.visualViewport?.removeEventListener('scroll', medirTeclado)
 })
 </script>
 
@@ -513,8 +599,12 @@ onMounted(() => {
 .modo-cli button { flex: 1; border: none; background: transparent; color: var(--muted); border-radius: 9px; padding: 8px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; }
 .modo-cli button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .cli-lista { margin-top: 8px; max-height: 180px; overflow: auto; }
-.cli-op { background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.cli-op { background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; font: inherit; font-weight: 600; font-size: 13.5px; }
 .cli-sel { display: flex; align-items: center; gap: 11px; background: var(--pine-tint); border: 1px solid #BFD8CD; border-radius: 13px; padding: 11px; margin-top: 9px; cursor: pointer; }
+.cli-sel, .cli-op, .pend-toggle { width: 100%; text-align: left; color: var(--ink); }
+.cli-sel .info { min-width: 0; }
+.cli-sel .nm, .cli-sel .sub, .pt-t, .pt-s { display: block; }
+.cli-sel .nm, .c-nm, .meta .nm { overflow-wrap: anywhere; }
 .av-ic { width: 34px; height: 34px; border-radius: 10px; background: var(--amber-soft); display: grid; place-items: center; color: #B9781F; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; flex: 0 0 auto; }
 .cli-sel .nm { font-weight: 700; font-size: 14px; } .cli-sel .sub { font-size: 11.5px; color: var(--muted); }
 .hint2 { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
@@ -657,53 +747,64 @@ onMounted(() => {
 .gi-text b { color: var(--ink); font-weight: 700; }
 
 /* Responsive celular / tablet */
-.mobile-float-bar { display: none; }
+.paso-venta, .confirmar-venta, .acciones-venta { display: none; }
 
 @media (max-width: 900px) {
-  .form { grid-template-columns: 1fr; gap: 18px; padding-bottom: 74px; }
+  .form { grid-template-columns: minmax(0, 1fr); padding-bottom: calc(106px + var(--teclado) + env(safe-area-inset-bottom)); }
   .selects-col { position: static; }
-  .totcard { position: static; }
+  .paso-venta { display: block; margin: 0 0 14px; }
+  .paso-venta p { margin: 0 0 4px; color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+  .paso-venta h2 { margin: 0; font-size: 22px; scroll-margin-block-start: 12px; }
+  .paso-venta h2:focus { outline: none; }
+  .totcard, .guia-venta, .datos-pago.sin-metodo,
+  .prods-col, .cliente-venta, .pago-venta, .confirmar-venta { display: none; }
+  .cliente-venta > .fl, .pago-venta > .fl, .prods-col .badge-activos { display: none; }
+  [data-paso="1"] .cliente-venta, [data-paso="3"] .pago-venta, [data-paso="4"] .confirmar-venta { display: block; }
+  [data-paso="2"] .prods-col { display: flex; }
+  [data-paso="2"] .selects-col { display: none; }
+  .cli-lista { max-height: min(36dvh, 350px); }
+  .modo-cli button, .cli-op, .pf-chip, .stepper button, .uni button,
+  .pagos button, .dias button, .btn-bill, .volver-paso, .btn-act { min-height: 44px; }
+  .stepper button { width: 44px; }
+  .prod .emoji { display: none; }
+  .search input, .inp { font-size: 16px; }
+  .search input { min-height: 22px; min-width: 0; }
+  .search:focus-within { outline: 2px solid var(--pine); outline-offset: 2px; }
+  .pagos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pagos button { font-size: 14px; }
+  .resumen-pago, .resumen-productos { margin: 0; padding: 0; }
+  .resumen-pago div, .resumen-productos li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; }
+  .resumen-pago div + div, .resumen-productos li { border-top: 1px solid var(--line); }
+  .resumen-pago dt { color: var(--ink-soft); }
+  .resumen-pago dd { margin: 0; text-align: right; font-weight: 700; }
+  .resumen-pago dd, .resumen-productos span { min-width: 0; overflow-wrap: anywhere; }
+  .resumen-productos b { white-space: nowrap; }
 
-  .mobile-float-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  .acciones-venta {
+    display: grid;
+    gap: 8px;
     position: fixed;
-    bottom: 16px;
-    left: 14px;
-    right: 14px;
-    background: #0E5C4A;
-    color: #ffffff;
-    border-radius: 16px;
-    padding: 12px 18px;
-    box-shadow: 0 12px 28px -6px rgba(14,92,74,.6);
-    z-index: 100;
-    backdrop-filter: blur(10px);
-    animation: slideUp .2s ease-out;
+    inset-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+    bottom: calc(8px + var(--teclado) + env(safe-area-inset-bottom));
+    max-width: 680px;
+    margin-inline: auto;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(21,42,36,.24);
+    z-index: 30;
   }
-  .mf-info { display: flex; flex-direction: column; }
-  .mf-items { font-size: 11px; opacity: .85; font-weight: 600; }
-  .mf-tot { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
-  .mf-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #ffffff;
-    color: #0E5C4A;
-    border: none;
-    border-radius: 11px;
-    padding: 10px 16px;
-    font-family: "Bricolage Grotesque", sans-serif;
-    font-weight: 800;
-    font-size: 13.5px;
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
-  }
-  .mf-btn svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2.5; fill: none; }
+  .resumen-total { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; color: var(--ink-soft); }
+  .resumen-total b { font-size: 20px; color: var(--ink); }
+  .botones-venta { display: flex; gap: 8px; min-width: 0; }
+  .botones-venta .cta { min-height: 44px; padding: 10px; box-shadow: none; }
+  .volver-paso { padding: 0 12px; font: inherit; font-weight: 700; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
 }
 
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@media (max-width: 900px) and (max-height: 480px) and (min-width: 480px) {
+  .acciones-venta { display: flex; align-items: center; }
+  .resumen-total { gap: 12px; }
+  .botones-venta { flex: 1; }
 }
 </style>

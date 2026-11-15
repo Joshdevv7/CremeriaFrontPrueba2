@@ -203,56 +203,57 @@
     </div>
 
     <!-- Modal de registrar abono -->
-    <div v-if="modalAbono" class="modal-bg" @click.self="cerrarAbono()">
-      <div class="modal">
+    <CrmDialog :open="!!modalAbono" :dismissible="false" labelledby="abono-cliente-titulo" describedby="abono-cliente-nombre">
+      <form v-if="modalAbono" class="abono-form" novalidate @submit.prevent="guardarAbono">
         <div class="m-head">
           <div>
-            <div class="m-title">Registrar abono a cuenta</div>
-            <div class="m-sub">{{ modalAbono.clienteNombre }}</div>
+            <h2 id="abono-cliente-titulo" class="m-title">Registrar abono a cuenta</h2>
+            <div id="abono-cliente-nombre" class="m-sub">{{ modalAbono.clienteNombre }}</div>
           </div>
-          <button class="m-x" @click="cerrarAbono()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          <button class="m-x" type="button" aria-label="Cerrar formulario de abono" data-initial-focus :disabled="procesando" @click="cerrarAbono"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
         <div class="m-body">
           <div class="falta">
             <span class="fl">Saldo deudor actual</span>
             <span class="fv">{{ money(modalAbono.saldo) }}</span>
           </div>
-          <div class="campo">
-            <div class="fl2">Monto que abona el cliente</div>
-            <div class="mwrap">
-              <span class="pfx">$</span>
-              <input class="inp mono" type="number" step="0.01" v-model.number="montoAbono">
+          <div class="abono-captura">
+            <div class="campo">
+              <label for="abono-cliente-monto" class="fl2">Monto que abona el cliente</label>
+              <div class="mwrap">
+                <span class="pfx" aria-hidden="true">$</span>
+                <input id="abono-cliente-monto" class="inp mono" type="number" inputmode="decimal" step="0.01" v-model.number="montoAbono" :disabled="procesando" @keydown.enter.prevent>
+              </div>
+              <div class="quick-abonos">
+                <button type="button" :disabled="procesando" @click="montoAbono = modalAbono.saldo">Liquidar total ({{ money(modalAbono.saldo) }})</button>
+                <button v-if="modalAbono.saldo > 100" type="button" :disabled="procesando" @click="montoAbono = Math.round(modalAbono.saldo / 2)">50% ({{ money(modalAbono.saldo / 2) }})</button>
+              </div>
             </div>
-            <div class="quick-abonos">
-              <button @click="montoAbono = modalAbono.saldo">Liquidar total ({{ money(modalAbono.saldo) }})</button>
-              <button v-if="modalAbono.saldo > 100" @click="montoAbono = Math.round(modalAbono.saldo / 2)">50% ({{ money(modalAbono.saldo / 2) }})</button>
-            </div>
+            <fieldset class="campo medio-cobro" :disabled="procesando">
+              <legend class="fl2">Método de cobro</legend>
+              <div class="metodos-abono">
+                <button type="button" :class="{ on: metodoAbono === 0 }" :aria-pressed="metodoAbono === 0" @click="metodoAbono = 0">Efectivo</button>
+                <button type="button" :class="{ on: metodoAbono === 1 }" :aria-pressed="metodoAbono === 1" @click="metodoAbono = 1">Transferencia</button>
+              </div>
+            </fieldset>
           </div>
           <div class="campo">
-            <div class="fl2">Método de cobro</div>
-            <div class="metodos-abono">
-              <button type="button" :class="{ on: metodoAbono === 0 }" :aria-pressed="metodoAbono === 0" @click="metodoAbono = 0">Efectivo</button>
-              <button type="button" :class="{ on: metodoAbono === 1 }" :aria-pressed="metodoAbono === 1" @click="metodoAbono = 1">Transferencia</button>
-            </div>
-          </div>
-          <div class="campo">
-            <div class="fl2">Nota o referencia del abono (opcional)</div>
-            <input class="inp" v-model="notaAbono" :placeholder="metodoAbono === 1 ? 'Ej. Folio de rastreo / Banco' : 'Ej. Pago en efectivo recibido en bodega'">
+            <label for="abono-cliente-nota" class="fl2">Nota o referencia del abono (opcional)</label>
+            <input id="abono-cliente-nota" class="inp" v-model="notaAbono" :disabled="procesando" :placeholder="metodoAbono === 1 ? 'Ej. Folio de rastreo / Banco' : 'Ej. Pago en efectivo recibido en bodega'" @keydown.enter.prevent>
             <div class="quick-notas">
-              <button type="button" @click="notaAbono = 'Abono recibido en mostrador'">En mostrador</button>
-              <button type="button" @click="notaAbono = 'Liquidación total de adeudo'">Liquidación total</button>
+              <button type="button" :disabled="procesando" @click="notaAbono = 'Abono recibido en mostrador'">En mostrador</button>
+              <button type="button" :disabled="procesando" @click="notaAbono = 'Liquidación total de adeudo'">Liquidación total</button>
             </div>
           </div>
-          <p v-if="modalError" class="m-err">{{ modalError }}</p>
         </div>
-        <div class="m-foot">
-          <button class="m-cancel" @click="cerrarAbono()">Cancelar</button>
-          <button class="m-ok" :disabled="procesando || !puedeGuardarAbono" @click="guardarAbono()">
-            {{ procesando ? 'Guardando…' : 'Registrar abono' }}
-          </button>
-        </div>
-      </div>
-    </div>
+        <footer class="m-foot">
+          <p v-if="modalError" class="m-err" role="alert">{{ modalError }}</p>
+          <p class="metodo-resumen" aria-live="polite">Método: <strong>{{ metodoAbono === 1 ? 'Transferencia' : 'Efectivo' }}</strong></p>
+          <button class="m-cancel" type="button" :disabled="procesando" @click="cerrarAbono">Cancelar</button>
+          <button class="m-ok" type="submit" :disabled="procesando || !puedeGuardarAbono">{{ procesando ? 'Guardando…' : 'Registrar abono' }}</button>
+        </footer>
+      </form>
+    </CrmDialog>
   </div>
 </template>
 
@@ -272,6 +273,7 @@ import {
 } from 'ionicons/icons'
 import http from '@/api/http'
 import { imprimirEstadoCuentaPdf } from '@/services/estadoCuentaPdf'
+import CrmDialog from '@/components/CrmDialog.vue'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -350,9 +352,12 @@ function abrirAbono(d) {
   notaAbono.value = ''
   modalError.value = ''
 }
-function cerrarAbono() { modalAbono.value = null }
+function cerrarAbono() {
+  if (!procesando.value) modalAbono.value = null
+}
 
 async function guardarAbono() {
+  if (procesando.value || !puedeGuardarAbono.value) return
   procesando.value = true; modalError.value = ''
   try {
     await http.post('/creditos/abonos-cliente', {
@@ -361,7 +366,7 @@ async function guardarAbono() {
       metodoPago: metodoAbono.value,
       nota: notaAbono.value.trim() || null
     })
-    cerrarAbono()
+    modalAbono.value = null
     await cargar()
   } catch (e) {
     modalError.value = e.response?.data?.mensaje || 'No se pudo registrar el abono.'
@@ -488,7 +493,7 @@ onMounted(() => {
 .search-wrap input:focus { outline: none; }
 
 /* Grid deudores */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; margin-bottom: 24px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
 .c-top { display: flex; align-items: center; gap: 12px; }
 .av { width: 42px; height: 42px; border-radius: 12px; background: var(--clay-soft); color: var(--clay); display: grid; place-items: center; font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 15px; flex: 0 0 auto; }
@@ -497,7 +502,7 @@ onMounted(() => {
 .meta { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 1px; }
 .saldo { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 18px; color: var(--clay); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.card-acts { display: flex; gap: 8px; }
+.card-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .btn-kardex { flex: 1.4; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 11px; padding: 8px 10px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: all .15s; }
 .btn-kardex:hover { background: var(--line); }
 .btn-kardex ion-icon { font-size: 16px; color: var(--pine); }
@@ -555,6 +560,35 @@ onMounted(() => {
 .m-wa { display: flex; align-items: center; justify-content: center; gap: 6px; border: none; background: #128C7E; color: #fff; border-radius: 12px; padding: 11px 14px; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s; }
 .m-wa:hover { filter: brightness(1.08); }
 .m-wa ion-icon { font-size: 17px; }
+.btn-abonar, .btn-kardex, .m-cancel, .m-ok, .m-pdf, .m-copy, .m-wa, .metodos-abono button { min-height: 44px; }
+
+.abono-form { display: flex; flex-direction: column; max-height: calc(100dvh - 90px); }
+.abono-form .m-head { gap: 10px; padding: 0 0 12px; }
+.abono-form .m-title { margin: 0; }
+.abono-form .m-sub { overflow-wrap: anywhere; }
+.abono-form .m-x { width: 44px; height: 44px; }
+.abono-form .m-body { min-height: 0; overscroll-behavior: contain; padding: 12px 4px 0; }
+.abono-form .fl2 { display: block; }
+.abono-form .inp { font-size: 16px; }
+.medio-cobro { min-width: 0; border: 0; padding: 0; margin-inline: 0; }
+.metodos-abono button { min-width: 0; padding-inline: 7px; overflow-wrap: anywhere; }
+.abono-form .quick-abonos button, .abono-form .quick-notas button { min-height: 32px; }
+.abono-form .m-foot { padding: 8px 0 0; }
+.abono-form .m-foot > p { width: 100%; margin: 0; }
+.metodo-resumen { font-size: 13px; color: var(--ink-soft); }
+
+@media (max-height: 450px) and (min-width: 560px) {
+  .abono-captura { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .abono-form .m-head { padding-bottom: 6px; }
+  .abono-form .falta { padding: 5px 9px; margin-bottom: 8px; }
+  .abono-form .m-body { padding-top: 6px; }
+}
+
+@media (max-width: 360px) {
+  .c-top { flex-wrap: wrap; }
+  .saldo { margin-left: auto; }
+  .rz-stats { flex-wrap: wrap; }
+}
 
 /* Kardex styles */
 .kardex-banner { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 14px; }
