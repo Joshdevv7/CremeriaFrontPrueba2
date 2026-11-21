@@ -32,14 +32,14 @@
 
         <div class="search-box">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input v-model="busqueda" placeholder="Buscar repartidor o vendedor…">
-          <button v-if="busqueda" class="clear-btn" @click="busqueda = ''">×</button>
+          <input v-model="busqueda" placeholder="Buscar repartidor o vendedor (mínimo 3 caracteres)">
+          <button v-if="busqueda" class="clear-btn" @click="busqueda = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
         </div>
       </div>
 
       <!-- Grid de personal o estado vacío claro -->
       <div v-if="!visibles.length" class="vacio-box">
-        <div class="vb-ic">{{ filtro === 'conDeuda' ? '🎉' : '👥' }}</div>
+        <div class="vb-ic"><CrmIcon :name="filtro === 'conDeuda' ? 'celebrate' : 'users'" /></div>
         <div class="vb-t">
           {{ busqueda
             ? 'Sin resultados para la búsqueda'
@@ -196,7 +196,7 @@
             <!-- Lista de movimientos -->
             <div class="kardex-title">Movimientos registrados</div>
             <div v-if="!kardexData.movimientos.length" class="sin-movs">
-              <span class="sm-ic">✅</span>
+              <span class="sm-ic"><CrmIcon name="success" /></span>
               <div class="sm-t">Al corriente · Sin movimientos de deuda</div>
               <div class="sm-s">Este colaborador no tiene faltantes acumulados en cortes ni cargos pendientes por cobrar.</div>
             </div>
@@ -246,6 +246,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import http from '@/api/http'
@@ -257,7 +259,7 @@ const cargando = ref(true)
 const error = ref('')
 
 const filtro = ref('todos') // 'todos' | 'conDeuda' | 'sinDeuda'
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 
 // Modal Abono
 const modalAbono = ref(null)
@@ -285,8 +287,8 @@ const visibles = computed(() => {
   else if (filtro.value === 'sinDeuda') list = sinDeuda.value
 
   if (!busqueda.value.trim()) return list
-  const q = busqueda.value.toLowerCase().trim()
-  return list.filter((d) => (d.repartidorNombre || '').toLowerCase().includes(q))
+  const q = terminoBusqueda.value
+  return list.filter((d) => normalizarBusqueda((d.repartidorNombre || '')).includes(q))
 })
 
 const puedeGuardarAbono = computed(() => Number(montoAbono.value) > 0 && Number(montoAbono.value) <= (modalAbono.value?.saldo ?? 0))
@@ -568,11 +570,13 @@ onMounted(async () => {
 .ks-v { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 20px; margin-top: 3px; display: block; font-variant-numeric: tabular-nums; }
 .sin-movs { text-align: center; padding: 24px 16px; background: var(--paper); border: 1px dashed var(--line); border-radius: 14px; }
 .sm-ic { font-size: 28px; display: block; margin-bottom: 6px; }
+.sm-ic .crm-icon { width: 28px; height: 28px; }
 .sm-t { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 15px; color: var(--ink); }
 .sm-s { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
 
 .vacio-box { background: var(--surface); border: 1px dashed var(--line); border-radius: 20px; padding: 42px 20px; text-align: center; margin-bottom: 24px; }
 .vb-ic { font-size: 38px; margin-bottom: 8px; }
+.vb-ic .crm-icon { width: 40px; height: 40px; }
 .vb-t { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); }
 .vb-s { font-size: 13px; color: var(--muted); margin-top: 4px; max-width: 440px; margin-left: auto; margin-right: auto; line-height: 1.4; }
 .vb-btn { margin-top: 14px; border: none; background: var(--pine-tint); color: var(--pine); font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 9px; cursor: pointer; }

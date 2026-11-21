@@ -4,7 +4,7 @@
       <div class="app">
         <!-- SIDEBAR -->
         <aside id="admin-navigation" ref="navPanel" class="side" :class="{ open: navAbierto }" :role="navAbierto ? 'dialog' : undefined" :aria-modal="navAbierto ? 'true' : undefined" aria-label="Navegación de operaciones" @keydown.esc.stop="cerrarNav" @keydown.tab="mantenerFoco">
-          <div class="logo"><BrandLogo :size="40" /><div class="nm">Productos Osuna<small>CRM de cremería</small></div><button ref="navClose" class="nav-close" aria-label="Cerrar menú" @click="cerrarNav">×</button></div>
+          <div class="logo"><BrandLogo :size="40" /><div class="nm">Productos Osuna<small>CRM de cremería</small></div><button ref="navClose" class="nav-close" aria-label="Cerrar menú" @click="cerrarNav"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg></button></div>
           <nav aria-label="Menú principal" class="navigation-groups">
             <div class="navlbl">Espacio de trabajo</div>
             <template v-for="g in gruposVisibles" :key="g.titulo">
@@ -139,6 +139,7 @@ const grupos = [
   ] },
   { titulo: 'Inventario y compras', items: [
     { path: '/panel/productos', label: 'Inventario', icon: ICN.inv, match: ['/panel/productos', '/panel/producto'], rol: ['Admin', 'Vendedor'] },
+    { path: '/panel/alertas-stock', label: 'Alertas de stock', icon: ICN.merma, match: ['/panel/alertas-stock'], rol: ['Admin', 'Vendedor'] },
     { path: '/panel/compras', label: 'Compras', icon: ICN.compras, match: ['/panel/compras', '/panel/compra'] },
     { path: '/panel/proveedores', label: 'Proveedores', icon: ICN.prov, match: ['/panel/proveedores', '/panel/proveedor'] },
     { path: '/panel/mermas', label: 'Mermas', icon: ICN.merma, match: ['/panel/mermas'], rol: ['Admin'] }
@@ -191,7 +192,7 @@ function setCtx(c) { ctx.titulo = c.titulo ?? ''; ctx.sub = c.sub ?? ''; ctx.bac
 const iniciales = computed(() => (auth.usuario?.nombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase())
 function activo(n) { return n.match.some((m) => route.path === m || route.path.startsWith(m + '/')) }
 onMounted(contarCargasPendientes)
-async function salir() { if (await confirmar({ titulo: 'Cerrar sesión', mensaje: '¿Quieres salir de tu sesión?', textoConfirmar: 'Cerrar sesión' })) { auth.logout(); router.replace('/login') } }
+async function salir() { cerrarNav(); if (await confirmar({ titulo: 'Cerrar sesión', mensaje: '¿Quieres salir de tu sesión?', textoConfirmar: 'Cerrar sesión' })) { auth.logout(); router.replace('/login') } }
 </script>
 
 <style scoped>
@@ -215,7 +216,7 @@ async function salir() { if (await confirmar({ titulo: 'Cerrar sesión', mensaje
 .profile .who .n { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .profile .who .r { font-size: 11.5px; color: var(--muted); font-weight: 600; }
 
-.main { flex: 1; min-width: 0; padding: 26px 30px 40px; overflow: auto; }
+.main { flex: 1; min-width: 0; padding: 26px 30px 40px; overflow: auto; position: relative; isolation: isolate; z-index: 0; }
 .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
 .top-l { display: flex; align-items: center; gap: 12px; }
 .top h1 { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 27px; letter-spacing: -.02em; display: inline; }

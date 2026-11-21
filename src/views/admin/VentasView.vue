@@ -15,13 +15,13 @@
           <div class="eyebrow-bar">
             <span class="eyebrow">Catálogo de Almacén</span>
             <span v-if="lineasActivas.length" class="badge-activos">
-              🛒 {{ lineasActivas.length }} en ticket · {{ money(total) }}
+              <CrmIcon name="cart" /> {{ lineasActivas.length }} en ticket · {{ money(total) }}
             </span>
           </div>
 
           <div class="search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input v-model="buscar" type="search" aria-label="Buscar producto" placeholder="Buscar por nombre de producto…">
+            <input v-model="buscar" type="search" aria-label="Buscar producto" placeholder="Buscar por nombre de producto (mínimo 3 caracteres)">
           </div>
 
           <div class="prod-filtros">
@@ -79,7 +79,7 @@
                 </span>
               </button>
               <template v-else>
-                <input class="inp" type="search" v-model="buscarCli" aria-label="Buscar cliente" placeholder="Buscar cliente…" style="margin-top:9px">
+                <input class="inp" type="search" v-model="buscarCli" aria-label="Buscar cliente" placeholder="Buscar cliente (mínimo 3 caracteres)" style="margin-top:9px">
                 <div class="cli-lista">
                   <button v-for="c in clientesFiltrados" :key="c.id" type="button" class="cli-op" @click="cliente = c">
                     <span class="c-nm">{{ c.nombre }}</span>
@@ -104,7 +104,7 @@
             <div class="datos-pago" :class="{ 'sin-metodo': !metodoElegido }">
               <!-- Alerta si selecciona crédito a cliente con adeudo previo -->
               <div v-if="metodo === 3 && cliente?.saldoDeuda > 0" class="alerta-riesgo">
-                <div class="alerta-t">⚠️ Cliente con saldo pendiente previo</div>
+                <div class="alerta-t"><CrmIcon name="alert" /> Cliente con saldo pendiente previo</div>
                 <div class="alerta-b">Este cliente ya debe <b>{{ money(cliente.saldoDeuda) }}</b>. Esta venta sumará <b>{{ money(total) }}</b> a su saldo deudor en Kardex.</div>
               </div>
 
@@ -127,7 +127,7 @@
 
                 <div v-if="pagaCon > 0" class="feria" :class="{ falta: pagaCon < total }">
                   <template v-if="pagaCon === total">
-                    <span class="tag-exacto">✓ Importe exacto (sin cambio)</span>
+                    <span class="tag-exacto"><CrmIcon name="check" /> Importe exacto (sin cambio)</span>
                   </template>
                   <template v-else-if="pagaCon > total">
                     Feria / Cambio a entregar: <b>{{ money(pagaCon - total) }}</b>
@@ -198,7 +198,7 @@
       <!-- Guía educativa interactiva -->
       <div v-show="!exito" class="guia-card guia-venta">
         <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-          <div class="guia-icon">💡</div>
+          <div class="guia-icon"><CrmIcon name="bulb" /></div>
           <div class="guia-tit">¿Cómo funciona el módulo de Ventas en Mostrador?</div>
           <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
         </div>
@@ -258,6 +258,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
@@ -281,7 +283,7 @@ const mostrarGuia = ref(false)
 
 const ocasional = ref(false)
 const cliente = ref(null)
-const buscarCli = ref('')
+const { buscar: buscarCli, termino: terminoCliente } = useBusqueda('')
 const nombreOcasional = ref('')
 function setOcasional(v) {
   ocasional.value = v
@@ -298,11 +300,11 @@ function setOcasional(v) {
 const nombreMostrar = computed(() => ocasional.value ? (nombreOcasional.value.trim() || 'Clientes varios') : (cliente.value?.nombre || ''))
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 const clientesFiltrados = computed(() => {
-  const t = buscarCli.value.trim().toLowerCase()
-  return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value
+  const t = terminoCliente.value
+  return clientes.value.filter(c => coincideBusqueda(t, c.nombre, c.telefono, c.direccion))
 })
 
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const filtroProd = ref('todos') // 'todos' | 'stock' | 'cajas'
 const cant = reactive({})
 const preciosEspeciales = reactive({})
@@ -311,8 +313,8 @@ const pmap = computed(() => Object.fromEntries(productos.value.map((p) => [p.id,
 
 const filtrados = computed(() => {
   let list = productos.value
-  const t = buscar.value.trim().toLowerCase()
-  if (t) list = list.filter((p) => p.nombre.toLowerCase().includes(t))
+  const t = terminoBusqueda.value
+  if (t) list = list.filter(p => coincideBusqueda(t, p.nombre, p.codigoBarras, p.categoria, p.proveedorNombre))
   if (filtroProd.value === 'stock') {
     list = list.filter((p) => (p.stockAlmacen || 0) > 0)
   } else if (filtroProd.value === 'cajas') {

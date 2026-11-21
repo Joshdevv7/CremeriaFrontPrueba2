@@ -3,11 +3,12 @@
     <section class="orders-panel" aria-labelledby="orders-heading">
       <div class="filters">
         <div class="crm-field">
-          <label for="order-search">Cliente o folio</label>
+          <label for="order-search">Buscar pedido</label>
           <div class="search-field">
             <CrmIcon name="search" />
-            <input id="order-search" v-model="buscarTexto" type="search" placeholder="Buscar en esta página" />
+            <input id="order-search" v-model="buscarTexto" type="search" placeholder="Escribe al menos 3 caracteres" aria-describedby="order-search-help" />
           </div>
+          <small id="order-search-help" class="search-help">Cliente, teléfono, repartidor o folio · Desde 3 caracteres.</small>
         </div>
         <div class="filter-tools">
           <button class="crm-button filter-toggle" type="button" aria-controls="order-filters" :aria-expanded="filtrosAbiertos" @click="filtrosAbiertos = !filtrosAbiertos">
@@ -30,11 +31,11 @@
         </div>
         <p v-if="catalogoError" class="catalog-error" role="status">{{ catalogoError }} <button @click="cargarCatalogos">Reintentar catálogos</button></p>
       </div>
-      <div class="table-heading"><h2 id="orders-heading">Lista de pedidos <span>{{ itemsFiltrados.length }}</span></h2><small>Importes en MXN · Alcance de esta página</small></div>
+      <div class="table-heading"><h2 id="orders-heading">Lista de pedidos <span>{{ itemsFiltrados.length }}</span></h2><small>Importes en MXN · Resultados de la consulta</small></div>
       <div v-if="cargando" class="crm-state" role="status">Cargando pedidos…</div>
       <div v-else-if="error" class="crm-state error" role="alert"><h2>No se pudieron cargar los pedidos</h2><p>{{ error }}</p><button class="crm-button" @click="cargar">Reintentar</button></div>
-      <div v-else-if="!itemsFiltrados.length" class="crm-state"><h2>{{ buscarTexto ? 'Sin coincidencias en esta página' : 'No hay pedidos con estos filtros' }}</h2><p>{{ buscarTexto ? 'Prueba otro cliente o folio. La búsqueda no incluye otras páginas.' : 'Cambia los filtros o vuelve a consultar.' }}</p><button class="crm-button" @click="limpiarFiltros">Limpiar filtros</button></div>
-      <div v-else class="table-wrap"><table><thead><tr><th>Pedido / cliente</th><th>Entrega</th><th>Pago del pedido</th><th>Origen</th><th>Repartidor</th><th class="money-col">Total</th><th><span class="crm-sr-only">Acciones</span></th></tr></thead><tbody><tr v-for="p in itemsFiltrados" :key="p.id" :class="{ canceled: p.estado === 'Cancelado' }">
+      <div v-else-if="!itemsFiltrados.length" class="crm-state"><h2>{{ buscarTexto ? 'Sin coincidencias' : 'No hay pedidos con estos filtros' }}</h2><p>{{ buscarTexto ? 'Prueba otro cliente, teléfono, repartidor o folio.' : 'Cambia los filtros o vuelve a consultar.' }}</p><button class="crm-button" @click="limpiarFiltros">Limpiar filtros</button></div>
+      <div v-else class="table-wrap"><table><thead><tr><th>Pedido / cliente</th><th>Entrega</th><th>Pago del pedido</th><th>Origen</th><th>Repartidor</th><th class="money-col">Total</th><th><span class="crm-sr-only">Acciones</span></th></tr></thead><tbody><tr v-for="p in itemsPaginados" :key="p.id" :class="{ canceled: p.estado === 'Cancelado' }">
         <td data-label="Pedido / cliente"><div class="customer"><span class="folio">#{{ p.id }}</span> {{ p.clienteNombreMostrar || p.clienteNombre }}</div><small>{{ fecha(p.fecha) }}</small><p v-if="p.estado === 'Cancelado'" class="cancel-reason">{{ p.canceladoPorNombre ? `Cancelada por ${p.canceladoPorNombre}. ` : '' }}{{ p.motivoCancelacion || 'Sin motivo registrado' }}</p></td>
         <td data-label="Entrega"><span class="crm-badge" :class="deliveryTone(p.estado)">{{ deliveryLabel(p.estado) }}</span></td>
         <td data-label="Pago del pedido">
@@ -54,18 +55,18 @@
           <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /><span class="compact-action-label">Editar</span></button>
           <button v-if="auth.esVendedor && p.estado === 'Abierto' && !p.esVentaLibre" class="detail-button" @click="abrirAsignacion(p)">Asignar repartidor</button>
           <button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /><span class="compact-action-label">Registrar pago</span></button>
-          <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /></button>
+          <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action danger" :aria-label="`Eliminar pedido ${p.id}`" @click="eliminar(p)"><CrmIcon name="trash" /><span class="compact-action-label">Eliminar</span></button>
         </td>
       </tr></tbody></table></div>
-      <div class="table-footer"><span aria-live="polite">{{ itemsFiltrados.length }} visibles · {{ total }} en la consulta · Página {{ pagina }} de {{ totalPaginas }}</span><nav aria-label="Páginas de pedidos" class="pager"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :class="{ current: pagina === n }" :aria-current="pagina === n ? 'page' : undefined" :disabled="cargando" :aria-label="`Página ${n}`" @click="irPagina(n)">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)"><CrmIcon name="arrow" /></button></nav></div>
+      <div class="table-footer"><span aria-live="polite">{{ itemsPaginados.length }} en esta página · {{ itemsFiltrados.length }} coincidencias · {{ total }} en la consulta · Página {{ pagina }} de {{ totalPaginas }}</span><nav aria-label="Páginas de pedidos" class="pager"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :class="{ current: pagina === n }" :aria-current="pagina === n ? 'page' : undefined" :disabled="cargando" :aria-label="`Página ${n}`" @click="irPagina(n)">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)"><CrmIcon name="arrow" /></button></nav></div>
     </section>
     <section class="stats" aria-label="Resumen de los pedidos visibles" :aria-busy="cargando">
-      <div class="stat"><div class="stat-label">Pedidos visibles<CrmIcon name="bag" /></div><strong>{{ cargando ? '—' : itemsFiltrados.length }}</strong><small>Registros visibles en esta página</small></div>
-      <div class="stat"><div class="stat-label">Por entregar<CrmIcon name="truck" /></div><strong>{{ cargando ? '—' : porEntregar.length }}</strong><small>Abiertos y en ruta en esta página</small></div>
+      <div class="stat"><div class="stat-label">Pedidos visibles<CrmIcon name="bag" /></div><strong>{{ cargando ? '—' : itemsFiltrados.length }}</strong><small>Resultados de la búsqueda</small></div>
+      <div class="stat"><div class="stat-label">Por entregar<CrmIcon name="truck" /></div><strong>{{ cargando ? '—' : porEntregar.length }}</strong><small>Abiertos y en ruta en los resultados</small></div>
       <div class="stat attention"><div class="stat-label">Pagos pendientes<CrmIcon name="clock" /></div><strong>{{ cargando ? '—' : pendientesPago.length }}</strong><small>Importe: {{ money(montoPendiente) }} MXN</small></div>
       <div class="stat"><div class="stat-label">Importe visible<CrmIcon name="cash" /></div><strong class="stat-money">{{ cargando ? '—' : money(montoVisible) }}</strong><small>MXN · Sin pedidos cancelados</small></div>
     </section>
-    <p class="scope-note">Indicadores de la página visible. En pedidos abiertos, el total es lo solicitado; en cerrados, lo entregado. El pago del pedido no indica el saldo de crédito del cliente.</p>
+    <p class="scope-note">Indicadores de los resultados de la búsqueda. En pedidos abiertos, el total es lo solicitado; en cerrados, lo entregado. El pago del pedido no indica el saldo de crédito del cliente.</p>
     <details class="order-guide"><summary><CrmIcon name="help" />Entender estados de entrega y pago</summary><p>Entrega y pago son independientes. Los pedidos abiertos se pueden editar o eliminar. Venta libre incluye mostrador y ruta. Una venta a crédito puede conservar saldo por cobrar: revísalo en Clientes. Registrar pago conserva el método que ya tiene el pedido.</p></details>
     <CrmDialog :open="!!detallePedido" labelledby="order-detail-title" @close="detallePedido = null"><template v-if="detallePedido"><div class="crm-dialog-head"><div><h2 id="order-detail-title">Pedido #{{ detallePedido.id }}</h2><p>{{ detallePedido.clienteNombreMostrar || detallePedido.clienteNombre }}</p></div><button class="crm-button crm-close" aria-label="Cerrar detalle" data-initial-focus @click="detallePedido = null"><CrmIcon name="close" /></button></div><dl class="order-details"><div><dt>Entrega</dt><dd>{{ deliveryLabel(detallePedido.estado) }}</dd></div><div><dt>Pago del pedido</dt><dd>{{ sinCobro(detallePedido) ? 'Sin cobro confirmado' : textoPago(detallePedido) }}</dd></div><div><dt>Método registrado</dt><dd>{{ metodoTexto(detallePedido.metodoPago) }}</dd></div><div><dt>Origen</dt><dd>{{ detallePedido.esVentaLibre ? 'Venta libre · mostrador / ruta' : 'Preventa' }}</dd></div><div><dt>Repartidor</dt><dd>{{ detallePedido.repartidorNombre || 'Sin asignar' }}</dd></div><div><dt>Total {{ detallePedido.estado === 'Abierto' ? 'solicitado' : 'del pedido' }}</dt><dd>{{ money(detallePedido.total) }} MXN</dd></div></dl><p v-if="detallePedido.metodoPago === 'Credito'" class="credit-explanation">Saldo de crédito no disponible en esta consulta. Revisa la cuenta del cliente.</p><p v-if="detalleCargando" role="status">Cargando historial…</p><p v-if="detalleError" role="alert" class="payment-error">{{ detalleError }} <button class="crm-button" @click="abrirDetalle(detallePedido)">Reintentar</button></p><AuditoriaPrecios :eventos="detallePrecios" /><div class="crm-dialog-actions"><button class="crm-button" @click="detallePedido = null">Volver</button></div></template></CrmDialog>
     <CrmDialog :open="!!pagoModal" :dismissible="!pagoGuardando" labelledby="payment-title" describedby="payment-description" @close="cerrarPago"><template v-if="pagoModal"><div class="crm-dialog-head"><div><h2 id="payment-title">Registrar pago de pedido</h2><p id="payment-description">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }} MXN</p></div><button class="crm-button crm-close" :disabled="pagoGuardando" aria-label="Cerrar registro de pago" @click="cerrarPago"><CrmIcon name="close" /></button></div><form @submit.prevent="guardarPago"><p class="payment-method">Método registrado: <strong>{{ metodoTexto(pagoModal.metodoPago) }}</strong><small>El registro de pago conserva este método.</small></p><div class="crm-field"><label for="payment-reference">Folio o referencia (opcional)</label><input id="payment-reference" v-model="pagoFolio" data-initial-focus maxlength="60" :disabled="pagoGuardando" placeholder="Folio del comprobante" /></div><p v-if="pagoError" class="payment-error" role="alert">{{ pagoError }}</p><div class="crm-dialog-actions"><button class="crm-button" type="button" :disabled="pagoGuardando" @click="cerrarPago">Cancelar</button><button class="crm-button primary" type="submit" :disabled="pagoGuardando">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button></div></form></template></CrmDialog>
@@ -84,7 +85,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { confirmar } from '@/composables/useConfirm'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import CrmIcon from '@/components/CrmIcon.vue'
 import CrmDialog from '@/components/CrmDialog.vue'
 import AuditoriaPrecios from '@/components/AuditoriaPrecios.vue'
@@ -94,7 +97,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const pedidoAsignacion = ref(null), repartidorNuevo = ref(null), asignando = ref(false), asignacionError = ref('')
 const items = ref([]), cargando = ref(true), error = ref(''), catalogoError = ref('')
-const estado = ref(null), pago = ref(null), origen = ref(null), clienteId = ref(null), repartidorId = ref(null), buscarTexto = ref('')
+const estado = ref(null), pago = ref(null), origen = ref(null), clienteId = ref(null), repartidorId = ref(null)
+const { buscar: buscarTexto, termino } = useBusqueda()
 const filtrosAbiertos = ref(false)
 const filtrosActivos = computed(() => [estado, pago, origen, clienteId, repartidorId].filter(filtro => filtro.value !== null).length)
 const clientes = ref([]), repartidores = ref([]), pagina = ref(1), total = ref(0)
@@ -117,9 +121,10 @@ async function abrirDetalle(pedido) {
 }
 let solicitud = 0, controller, catalogController, disposed = false
 const estados = [{ v:'Abierto',t:'Abierto' },{ v:'EnRuta',t:'En ruta' },{ v:'CerradoCompleto',t:'Completa' },{ v:'CerradoParcial',t:'Parcial' },{ v:'CerradoNoEntregado',t:'No entregado' },{ v:'Cancelado',t:'Cancelada' }]
-const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano)))
+const totalPaginas = computed(() => Math.max(1, Math.ceil(itemsFiltrados.value.length / tamano)))
 const paginasVisibles = computed(() => { const start = Math.max(1, Math.min(pagina.value - 2, totalPaginas.value - 4)); return Array.from({ length:Math.min(5,totalPaginas.value) },(_,i)=>start+i) })
-const itemsFiltrados = computed(() => { const q=buscarTexto.value.trim().toLocaleLowerCase('es-MX'); return items.value.filter(p => !q || `${p.id} ${p.clienteNombreMostrar || p.clienteNombre || ''}`.toLocaleLowerCase('es-MX').includes(q)) })
+const itemsFiltrados = computed(() => items.value.filter(p => coincideBusqueda(termino.value, p.id, '#' + p.id, p.clienteNombreMostrar || p.clienteNombre, p.clienteTelefono, p.direccion, p.repartidorNombre)))
+const itemsPaginados = computed(() => itemsFiltrados.value.slice((pagina.value - 1) * tamano, pagina.value * tamano))
 const porEntregar = computed(() => itemsFiltrados.value.filter(p => ['Abierto','EnRuta'].includes(p.estado)))
 const sinCobro = p => ['Abierto','EnRuta','Cancelado','CerradoNoEntregado'].includes(p.estado)
 const puedeCobrar = p => !sinCobro(p) && p.estadoPago === 'Pendiente'
@@ -166,23 +171,23 @@ async function eliminar(p) {
 }
 async function cargar() {
   const current=++solicitud;controller?.abort();controller=new AbortController();cargando.value=true;error.value=''
-  const params={pagina:pagina.value,tamano}
+  const params={}
   if(estado.value)params.estado=estado.value
   if(pago.value)params.estadoPago=pago.value
   if(origen.value!==null)params.esVentaLibre=origen.value
   if(clienteId.value)params.clienteId=clienteId.value
   if(repartidorId.value)params.repartidorId=repartidorId.value
-  try{const {data}=await http.get('/pedidos',{params,signal:controller.signal});if(current!==solicitud||disposed)return;items.value=data.items||[];total.value=data.total??items.value.length;if(pagina.value>totalPaginas.value)pagina.value=totalPaginas.value}
+  try{const lista=await listarPaginas('/pedidos',params,{signal:controller.signal});if(current!==solicitud||disposed)return;items.value=lista;total.value=lista.length;if(pagina.value>totalPaginas.value)pagina.value=totalPaginas.value}
   catch(e){if(current===solicitud&&!disposed&&e.code!=='ERR_CANCELED'){items.value=[];total.value=0;error.value=e.response?.data?.mensaje||'No se pudieron cargar los pedidos.'}}
   finally{if(current===solicitud&&!disposed)cargando.value=false}
 }
 async function cargarCatalogos() {
   catalogController?.abort();catalogController=new AbortController();const signal=catalogController.signal;catalogoError.value=''
-  try{const [cl,rp]=await Promise.all([http.get('/clientes',{params:{tamano:100},signal}),http.get('/usuarios/repartidores',{signal})]);if(disposed||signal.aborted)return;clientes.value=cl.data.items||cl.data;repartidores.value=rp.data}
+  try{const [cl,rp]=await Promise.all([listarPaginas('/clientes',{}, {signal}),http.get('/usuarios/repartidores',{signal})]);if(disposed||signal.aborted)return;clientes.value=cl;repartidores.value=rp.data}
   catch(e){if(!disposed&&!signal.aborted)catalogoError.value='No se pudieron cargar las opciones de cliente o repartidor.'}
 }
-watch([estado,pago,origen,clienteId,repartidorId],()=>{if(pagina.value!==1)pagina.value=1;else cargar()})
-watch(pagina,cargar)
+watch([estado,pago,origen,clienteId,repartidorId],()=>{pagina.value=1;cargar()})
+watch(termino,()=>{pagina.value=1})
 onMounted(()=>{emit('ctx',{titulo:'Pedidos',sub:'Entrega, pago y origen: cada dato en su lugar.',back:null,acciones:{boton:{texto:'Nuevo pedido',to:'/panel/pedido/nuevo'}}});cargarCatalogos();cargar()})
 onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogController?.abort()})
 </script>
@@ -209,6 +214,7 @@ onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogContro
 .search-field{position:relative}
 .search-field :deep(svg){position:absolute;left:11px;top:13px;width:17px;height:17px;color:var(--ink-soft)}
 .search-field input{padding-left:35px}
+.search-help{font-size:11px;color:var(--ink-soft)}
 .catalog-error{color:var(--clay);font-size:12px;margin:0}
 .catalog-error button{background:none;border:0;font:inherit;color:var(--pine);text-decoration:underline;cursor:pointer}
 .table-heading{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:20px 22px 16px}.table-heading h2{display:flex;gap:9px;align-items:center;margin:0;font-size:16px;font-weight:700}.table-heading h2 span{font-size:11px;background:var(--pine-tint);color:var(--pine);padding:3px 8px;border-radius:6px}.table-heading>small{font-size:11px;color:var(--ink-soft)}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.55px;color:var(--ink-soft);background:#F7F5EE;padding:11px 13px;border-block:1px solid var(--line)}td{padding:12px 13px;border-bottom:1px solid #EEE9DE;vertical-align:middle}th:first-child,td:first-child{padding-left:22px}th:last-child,td:last-child{padding-right:22px}tr:last-child td{border-bottom:0}.customer{font-weight:700;min-width:155px}.folio{color:var(--pine);margin-right:5px}td small{display:block;font-size:10px;color:var(--ink-soft);margin-top:4px}.money-col{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.row-actions{white-space:nowrap;text-align:right}.detail-button{border:0;background:transparent;color:var(--pine);font:inherit;font-size:11px;font-weight:700;min-height:40px;padding:6px;cursor:pointer}.icon-action{border:1px solid var(--line);background:var(--surface);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:34px;height:36px;color:var(--pine);margin-left:4px;cursor:pointer}.icon-action :deep(svg){width:16px;height:16px}.icon-action.danger{color:var(--clay)}.unassigned{color:#875519}.not-confirmed{font-size:11px;color:var(--ink-soft)}.canceled .customer,.canceled .money-col strong{text-decoration:line-through}.cancel-reason{font-size:10px;max-width:260px;color:var(--clay);margin:5px 0 0}.table-footer{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:14px 22px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}.pager{display:flex;gap:5px}.pager button{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--ink-soft)}.pager button:disabled{opacity:.45;cursor:default}.pager button.current{background:var(--pine);color:#fff;border-color:var(--pine)}.pager :deep(svg){width:16px;height:16px}.scope-note{font-size:11px;color:var(--ink-soft);line-height:1.7;margin:16px 2px}.order-guide{font-size:12px;color:var(--ink-soft)}.order-guide summary{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--pine);min-height:44px;font-weight:700}.order-guide p{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px;line-height:1.7}
@@ -226,16 +232,22 @@ onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogContro
   .filter-toggle{display:inline-flex}
   .filter-options:not(.expanded){display:none}
   .filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  table,tbody,tr{display:block}
+  .table-wrap{padding:4px 16px 18px;background:var(--paper);overflow:visible}
+  table{display:block}
+  tbody{display:grid;gap:18px}
   thead{display:none}
-  tr{padding:14px 16px;border-bottom:1px solid var(--line)}
+  tr{display:block;padding:16px;background:var(--surface);border:1px solid #CDD9D1;border-radius:14px;box-shadow:0 3px 10px rgba(21,42,36,.06)}
   td,td:first-child,td:last-child{padding:6px 0;border:0;display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:right;overflow-wrap:anywhere}
   td::before{content:attr(data-label);font-size:11px;color:var(--ink-soft);text-align:left;flex-shrink:0}
   .customer{min-width:0;text-align:left;overflow-wrap:anywhere}
-  td:first-child{display:block;text-align:left;padding-bottom:10px}
+  td:first-child{display:block;text-align:left;padding-bottom:13px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+  .customer{font-size:15px;line-height:1.5}
+  .folio{display:inline-block;font-size:13px;margin-right:7px}
   td:first-child::before,.row-actions::before{display:none}
   td small{font-size:11px}
-  td.row-actions{justify-content:flex-end;flex-wrap:wrap;white-space:normal;margin-top:5px}
+  td.row-actions{justify-content:flex-start;flex-wrap:wrap;white-space:normal;margin-top:12px;padding-top:13px;border-top:1px solid var(--line);gap:8px}
+  td.money-col{padding-block:10px}
+  td.money-col strong{font-size:18px;color:var(--pine-deep)}
   .detail-button,.icon-action{min-height:44px;margin:0}
   .detail-button{background:var(--pine-tint);border-radius:9px;padding:6px 10px;font-size:12px}
   .icon-action{width:auto;min-width:44px;padding:0 8px;gap:5px;font:inherit;font-weight:700}
@@ -246,6 +258,12 @@ onBeforeUnmount(()=>{disposed=true;++solicitud;controller?.abort();catalogContro
   .stat{padding:13px}
   .stat strong{font-size:27px}
   .stat-label{font-size:11px}
+}
+@media(max-width:360px){
+  .table-wrap{padding-inline:10px}
+  tr{padding:13px}
+  .filter-tools .crm-button{font-size:12px}
+  .row-actions .detail-button{flex-basis:100%;text-align:center}
 }
 .clear-filters,.catalog-error button{min-height:44px}
 </style>

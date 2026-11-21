@@ -105,7 +105,7 @@
                 <div style="margin-top:8px">
                   <div class="rk" v-for="(p, i) in d.topProductos" :key="p.productoId">
                     <div class="pos" :class="{ gold: i === 0 }">{{ i + 1 }}</div>
-                    <div class="em">📦</div>
+                    <div class="em"><CrmIcon name="box" /></div>
                     <div class="info"><div class="n">{{ p.nombre }}</div><div class="bar"><i :style="{ width: barra(p.utilidad) + '%' }"></i></div></div>
                     <div class="util"><div class="u">{{ money(p.utilidad) }}</div><div class="m">{{ Math.round(p.margenPorcentaje) }}% margen</div></div>
                   </div>
@@ -116,11 +116,11 @@
                 <div class="ch"><h3>Alertas de stock</h3><span class="meta">{{ d.alertasStock.length }} por debajo del mínimo</span></div>
                 <div style="margin-top:12px">
                   <div class="alert" v-for="a in d.alertasStock" :key="a.productoId">
-                    <div class="em">📦</div>
+                    <div class="em"><CrmIcon name="box" /></div>
                     <div class="info"><div class="n">{{ a.nombre }}</div><div class="s">Quedan <b>{{ fmt(a.stock) }}</b> · mín <b>{{ fmt(a.minimo) }}</b> · pedir <b>{{ fmt(a.sugerido) }}</b></div></div>
                     <button class="wa" @click="whatsapp(a)"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>WhatsApp</button>
                   </div>
-                  <p v-if="!d.alertasStock.length" class="vacio">Todo el inventario está por encima del mínimo. 👍</p>
+                  <p v-if="!d.alertasStock.length" class="vacio"><CrmIcon name="success" /> Todo el inventario está por encima del mínimo.</p>
                 </div>
               </div>
             </div>
@@ -146,6 +146,7 @@ import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import BrandLogo from '@/components/BrandLogo.vue'
+import CrmIcon from '@/components/CrmIcon.vue'
 
 const router = useRouter()
 const auth = useAuthStore()

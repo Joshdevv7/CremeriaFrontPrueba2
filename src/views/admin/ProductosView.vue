@@ -4,7 +4,7 @@
     <div class="edu-card">
       <div class="edu-head" @click="guiaAbierta = !guiaAbierta">
         <div class="edu-tit">
-          <span class="edu-ico">💡</span>
+          <span class="edu-ico"><CrmIcon name="bulb" /></span>
           <div>
             <b>¿Cómo se controla el inventario en almacén y en ruta?</b>
             <div class="edu-sub">Conoce la separación de existencias, venta por caja y el reorden sugerido a proveedores</div>
@@ -55,7 +55,7 @@
       <div class="kpi-card">
         <div class="kpi-l">Requieren reorden</div>
         <div class="kpi-v" :class="{ alert: kpiRequierenReorden > 0 }">{{ kpiRequierenReorden }}</div>
-        <div class="kpi-s">{{ kpiRequierenReorden > 0 ? 'Stock igual o menor al mínimo' : 'Existencias saludables 👍' }}</div>
+        <div class="kpi-s"><CrmIcon v-if="!kpiRequierenReorden" name="success" /> {{ kpiRequierenReorden > 0 ? 'Stock igual o menor al mínimo' : 'Existencias saludables' }}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-l">Agotados / Sin stock</div>
@@ -68,8 +68,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por nombre, categoría, código o proveedor…">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''">×</button>
+        <input v-model="buscar" placeholder="Buscar por nombre, categoría, código o proveedor (mínimo 3 caracteres)">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
 
       <div class="tabs">
@@ -79,7 +79,7 @@
           :class="{ on: tabActiva === t.k }"
           @click="tabActiva = t.k"
         >
-          {{ t.l }}
+          <CrmIcon v-if="t.icono" :name="t.icono" /> {{ t.l }}
           <span class="cnt-badge" v-if="t.k === 'reorden' && kpiRequierenReorden > 0">{{ kpiRequierenReorden }}</span>
           <span class="cnt-badge red" v-if="t.k === 'agotados' && kpiAgotados > 0">{{ kpiAgotados }}</span>
         </button>
@@ -95,9 +95,7 @@
       <div v-for="p in filtrados" :key="p.id" class="card" @click="editar(p.id)">
         <div class="card-head">
           <div class="emoji-chip" :class="chipClase(p)">
-            <span v-if="p.stockAlmacen <= 0">❌</span>
-            <span v-else-if="p.requiereReorden">⚠️</span>
-            <span v-else>📦</span>
+            <CrmIcon :name="p.stockAlmacen <= 0 ? 'close' : p.requiereReorden ? 'alert' : 'box'" />
           </div>
 
           <div class="info">
@@ -131,12 +129,12 @@
             <b class="st-val" :class="stockColorClase(p)">{{ fmt(p.stockAlmacen) }} {{ p.unidad || 'pzas' }}</b>
             <span class="st-umbrales">(mín: {{ fmt(p.stockMinimo) }} · obj: {{ fmt(p.stockObjetivo) }})</span>
           </div>
-          <div class="costo-prom">CPP: <b>{{ money(p.costoPromedio) }}</b></div>
+          <div class="costo-prom">Costo promedio: <b>{{ money(p.costoPromedio) }}</b></div>
         </div>
 
         <!-- Indicador de venta por caja -->
         <div v-if="p.vendePorCaja" class="caja-strip">
-          <span>📦 Venta por caja ({{ p.piezasPorCaja }} pzas):</span>
+          <span><CrmIcon name="box" /> Venta por caja ({{ p.piezasPorCaja }} pzas):</span>
           <b>{{ money(p.precioCaja) }} / caja</b>
         </div>
 
@@ -173,6 +171,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -186,16 +186,16 @@ const route = useRoute()
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref(String(route.query.buscar || ''))
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda(String(route.query.buscar || ''))
 watch(() => route.query.buscar, value => { buscar.value = String(value || '') })
 const tabActiva = ref('todos')
 const guiaAbierta = ref(false)
 
 const tabs = [
   { k: 'todos', l: 'Todos' },
-  { k: 'reorden', l: '⚠️ Requieren reorden' },
-  { k: 'agotados', l: '❌ Agotados' },
-  { k: 'caja', l: '📦 Por caja' }
+  { k: 'reorden', l: 'Requieren reorden', icono: 'alert' },
+  { k: 'agotados', l: 'Agotados', icono: 'close' },
+  { k: 'caja', l: 'Por caja', icono: 'box' }
 ]
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -207,13 +207,13 @@ const filtrados = computed(() => {
   else if (tabActiva.value === 'agotados') list = list.filter(p => p.stockAlmacen <= 0)
   else if (tabActiva.value === 'caja') list = list.filter(p => p.vendePorCaja)
 
-  const t = buscar.value.trim().toLowerCase()
+  const t = terminoBusqueda.value
   if (t) {
     list = list.filter(p =>
-      p.nombre.toLowerCase().includes(t) ||
-      (p.categoria && p.categoria.toLowerCase().includes(t)) ||
-      (p.codigoBarras && p.codigoBarras.toLowerCase().includes(t)) ||
-      (p.proveedorNombre && p.proveedorNombre.toLowerCase().includes(t))
+      normalizarBusqueda(p.nombre).includes(t) ||
+      (p.categoria && normalizarBusqueda(p.categoria).includes(t)) ||
+      (p.codigoBarras && normalizarBusqueda(p.codigoBarras).includes(t)) ||
+      (p.proveedorNombre && normalizarBusqueda(p.proveedorNombre).includes(t))
     )
   }
   return list
@@ -336,6 +336,7 @@ onMounted(() => {
 .kpi-v.alert { color: #B9781F; }
 .kpi-v.red { color: var(--clay); }
 .kpi-s { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+.kpi-s .crm-icon { width: 14px; height: 14px; }
 
 /* Filtros y buscador */
 .filtros-bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }

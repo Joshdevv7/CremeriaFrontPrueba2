@@ -52,9 +52,9 @@
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input 
           v-model="busqueda" 
-          placeholder="Buscar por concepto (ej. gasolina, renta)…"
+          placeholder="Buscar por concepto (ej. gasolina, renta) (mínimo 3 caracteres)"
         >
-        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''">×</button>
+        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
     </div>
 
@@ -121,11 +121,14 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import { repeatOutline, flashOutline } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -135,7 +138,7 @@ const error = ref('')
 
 const tipo = ref('')        // '', 'Fijo', 'Variable'
 const periodo = ref('mes')  // 'mes', 'mesPasado', 'personalizado', 'todo'
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 
 const hoyStr = new Date().toISOString().slice(0, 10)
 const fechaDesde = ref(hoyStr)
@@ -164,8 +167,8 @@ const periodoTxt = computed(() => tabsPeriodo.find((p) => p.k === periodo.value)
 // Filtro en vivo por concepto
 const itemsFiltrados = computed(() => {
   if (!busqueda.value.trim()) return items.value
-  const q = busqueda.value.toLowerCase().trim()
-  return items.value.filter((g) => (g.concepto || '').toLowerCase().includes(q))
+  const q = terminoBusqueda.value
+  return items.value.filter((g) => normalizarBusqueda((g.concepto || '')).includes(q))
 })
 
 function rango() {
@@ -198,12 +201,11 @@ async function cargar() {
   error.value = ''
   try {
     const { desde, hasta } = rango()
-    const params = { tamano: 300 }
+    const params = {}
     if (tipo.value) params.tipo = tipo.value
     if (desde) params.desde = desde
     if (hasta) params.hasta = hasta
-    const { data } = await http.get('/gastos', { params })
-    items.value = data.items
+    items.value = await listarPaginas('/gastos', params)
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los gastos.'
   } finally {

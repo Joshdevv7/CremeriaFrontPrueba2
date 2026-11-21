@@ -14,7 +14,7 @@
           <div class="field">
             <div class="fl">WhatsApp <span class="op">(para enviar pedidos de reorden)</span></div>
             <div class="inp-wa-wrap">
-              <span class="wa-ico">📱</span>
+              <span class="wa-ico"><CrmIcon name="smartphone" /></span>
               <input class="inp inp-wa" v-model="form.whatsapp" placeholder="Ej. 526671234567" inputmode="tel" maxlength="15" @input="filtrarWa">
             </div>
             <small class="hint">Incluye la clave de país (ej. 52 para México). Este número se usará para el reorden en 1 toque.</small>
@@ -49,13 +49,18 @@
               <router-link v-if="form.activo" :to="{ path: '/panel/producto/nuevo', query: { proveedorId: route.params.id } }" class="ph-link">+ Nuevo producto</router-link>
             </div>
 
+            <label class="buscar-asociados">
+              Buscar producto vinculado
+              <input class="inp" v-model="buscarProducto" type="search" placeholder="Nombre o código (mínimo 3 caracteres)">
+            </label>
             <div v-if="!productosAsociados.length" class="prods-vacio">
               Aún no hay productos vinculados a este proveedor.<br>
               Asigna este proveedor al crear o editar un producto en el catálogo.
             </div>
 
+            <p v-else-if="!productosFiltrados.length" class="prods-vacio">No hay productos que coincidan con la búsqueda.</p>
             <div v-else class="prods-list">
-              <div v-for="pr in productosAsociados" :key="pr.id" class="p-item" @click="verProducto(pr.id)">
+              <div v-for="pr in productosFiltrados" :key="pr.id" class="p-item" @click="verProducto(pr.id)">
                 <div class="p-info">
                   <div class="p-nom">{{ pr.nombre }}</div>
                   <div class="p-sub">
@@ -84,6 +89,8 @@ import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -92,6 +99,9 @@ const auth = useAuthStore()
 const esNuevo = computed(() => route.params.id === 'nuevo')
 const form = reactive({ nombre: '', whatsapp: '', telefono: '', activo: true })
 const productosAsociados = ref([])
+const { buscar: buscarProducto, termino: terminoProducto } = useBusqueda()
+const productosFiltrados = computed(() => productosAsociados.value.filter(p =>
+  coincideBusqueda(terminoProducto.value, p.nombre, p.codigoBarras, p.categoria)))
 const cargando = ref(true), enviando = ref(false), error = ref('')
 const cargaFallida = ref(false)
 const exito = ref(false), exitoTit = ref(''), exitoDet = ref([])
@@ -156,6 +166,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.buscar-asociados { display: grid; gap: 8px; padding: 16px; font-size: 13px; font-weight: 700; }
 .editor-wrap { max-width: 960px; }
 .estado { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .muted { color: var(--muted); margin-top: 24px; }

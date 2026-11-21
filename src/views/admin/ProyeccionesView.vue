@@ -113,7 +113,7 @@
           <div class="kpi-tag">Tendencia del negocio</div>
           <div class="tend-row">
             <div class="tend-badge" :class="data.tendencia">
-              <span class="tend-arrow">{{ tendIcono }}</span>
+              <span class="tend-arrow"><CrmIcon :name="tendIcono" /></span>
               <span class="tend-name">{{ tendTexto }}</span>
             </div>
             <div class="tend-pct" v-if="data.variacionPorcentaje !== 0">
@@ -362,8 +362,8 @@
             </div>
             <p>
               Compara el rendimiento del último mes cerrado contra el promedio histórico previo. 
-              Si creció más del <b>+5%</b> se considera en <b>ascenso (↑)</b>; si cayó más del <b>-5%</b>, en <b>bajada (↓)</b>; 
-              de lo contrario, se clasifica como <b>estable (→)</b>.
+              Si creció más del <b>+5%</b> se considera en <b>ascenso (<CrmIcon name="arrow-up" />)</b>; si cayó más del <b>-5%</b>, en <b>bajada (<CrmIcon name="arrow-down" />)</b>;
+              de lo contrario, se clasifica como <b>estable (<CrmIcon name="arrow" />)</b>.
             </p>
           </div>
 
@@ -392,6 +392,7 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import http from '@/api/http'
 
@@ -492,9 +493,9 @@ const tendTexto = computed(() => {
 
 const tendIcono = computed(() => {
   const t = data.value?.tendencia
-  if (t === 'subiendo') return '↑'
-  if (t === 'bajando') return '↓'
-  return '→'
+  if (t === 'subiendo') return 'arrow-up'
+  if (t === 'bajando') return 'arrow-down'
+  return 'arrow'
 })
 
 async function cambiarPeriodo(meses) {

@@ -43,7 +43,7 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por cliente o folio #…" @input="debounced">
+        <input v-model="buscar" type="search" placeholder="Cliente, teléfono o folio (mínimo 3 caracteres)">
       </div>
 
       <div class="periodos">
@@ -103,7 +103,7 @@
               <b>Motivo registrado:</b> {{ v.motivoCancelacion || 'No especificado' }}
             </div>
             <div class="bc-aviso">
-              ℹ️ Todos los productos de este ticket regresaron al inventario. Esta venta no suma a tus cortes ni a tu efectivo en mano.
+              <CrmIcon name="info" /> Todos los productos de este ticket regresaron al inventario. Esta venta no suma a tus cortes ni a tu efectivo en mano.
             </div>
           </div>
 
@@ -212,7 +212,7 @@
     <!-- Guía interactiva -->
     <div class="guia-card">
       <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-        <div class="guia-icon">💡</div>
+        <div class="guia-icon"><CrmIcon name="bulb" /></div>
         <div class="guia-tit">¿Cómo funciona la Cancelación de Ventas y el Control de Caja?</div>
         <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
       </div>
@@ -241,7 +241,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
+import { ref, computed, onMounted, watch } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import {
   cartOutline,
@@ -257,6 +259,7 @@ import {
   printOutline
 } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { useAuthStore } from '@/stores/auth'
 import { imprimirTicketVenta } from '@/services/printer'
 import AuditoriaPrecios from '@/components/AuditoriaPrecios.vue'
@@ -288,11 +291,10 @@ const motivosRapidos = [
 ]
 
 // Filtros y búsqueda
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const periodo = ref('todos') // 'hoy' | 'semana' | 'todos'
 const soloSinCorte = ref(false)
 const soloCanceladas = ref(false)
-let timerBusqueda = null
 
 // Paginación local
 const pagina = ref(1)
@@ -320,20 +322,17 @@ function toggleCanceladas() {
   pagina.value = 1
 }
 
-function debounced() {
-  clearTimeout(timerBusqueda)
-  timerBusqueda = setTimeout(() => { pagina.value = 1 }, 250)
-}
+watch(terminoBusqueda, () => { pagina.value = 1 })
 
 // Filtro en cliente
 const itemsFiltrados = computed(() => {
   let list = items.value
 
   // Filtro de búsqueda por texto o folio
-  const q = buscar.value.trim().toLowerCase()
+  const q = terminoBusqueda.value
   if (q) {
     list = list.filter((v) => {
-      const nom = (v.clienteNombreMostrar || '').toLowerCase()
+      const nom = normalizarBusqueda([v.clienteNombreMostrar, v.clienteNombre, v.clienteTelefono].filter(Boolean).join(' '))
       const folio = String(v.id)
       return nom.includes(q) || folio.includes(q)
     })
@@ -521,8 +520,7 @@ async function imprimirTermico(v, det) {
 async function cargar() {
   cargando.value = true; error.value = ''
   try {
-    const { data } = await http.get('/pedidos', { params: { repartidorId: auth.usuarioId, esVentaLibre: true, tamano: 200 } })
-    items.value = data.items || []
+    items.value = await listarPaginas('/pedidos', { repartidorId: auth.usuarioId, esVentaLibre: true })
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar tus ventas.'
   } finally {

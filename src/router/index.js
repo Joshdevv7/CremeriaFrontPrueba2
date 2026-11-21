@@ -38,6 +38,7 @@ const routes = [
       { path: 'pedido/nuevo', name: 'pedido-nuevo', component: () => import('@/views/admin/PedidoEditorView.vue') },
       { path: 'pedido/:id', component: () => import('@/views/admin/PedidoEditorView.vue'), meta: { rol: 'Admin' } },
       { path: 'productos', component: () => import('@/views/admin/ProductosView.vue') },
+      { path: 'alertas-stock', name: 'stock-alertas', component: () => import('@/views/admin/StockAlertasView.vue') },
       { path: 'producto/nuevo', name: 'producto-nuevo', component: () => import('@/views/admin/ProductoEditorView.vue') },
       { path: 'producto/:id', component: () => import('@/views/admin/ProductoEditorView.vue'), meta: { rol: 'Admin' } },
       { path: 'proveedores', component: () => import('@/views/admin/ProveedoresView.vue') }, // Admin y Vendedor

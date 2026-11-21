@@ -194,7 +194,7 @@
                 </div>
                 <div class="captured" :style="fotoPreview ? { backgroundImage:`url(${fotoPreview})`, backgroundSize:'cover', backgroundPosition:'center' } : {}"></div>
                 <div class="badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> Foto capturada</div>
-                <div class="retake">↻ Repetir</div>
+                <div class="retake"><CrmIcon name="refresh" /> Repetir</div>
               </div>
               <input ref="fileRef" type="file" accept="image/*" capture="environment" hidden @change="onFoto">
             </div>
@@ -280,7 +280,7 @@
               <div class="ms-title">Cobrar abono</div>
               <div class="ms-sub">{{ pedido?.clienteNombre }}</div>
             </div>
-            <button class="ms-close" :disabled="guardandoAbono" @click="cerrarAbonoModal()" aria-label="Cancelar abono">✕</button>
+            <button class="ms-close" :disabled="guardandoAbono" @click="cerrarAbonoModal()" aria-label="Cancelar abono"><CrmIcon name="close" /></button>
           </div>
 
           <div class="ms-body">
@@ -329,10 +329,10 @@
                 </button>
               </div>
               <div class="pm-tip" v-if="metodoAbono === 0">
-                ⚠️ El efectivo cobrado se sumará a tu entrega de caja en el Corte del turno.
+                <CrmIcon name="alert" /> El efectivo cobrado se sumará a tu entrega de caja en el Corte del turno.
               </div>
               <div class="pm-tip" v-else>
-                ℹ️ Transferencia directa a cuenta. No se exige efectivo físico en tu corte.
+                <CrmIcon name="info" /> Transferencia directa a cuenta. No se exige efectivo físico en tu corte.
               </div>
             </div>
 
@@ -357,7 +357,7 @@
       <!-- MODAL DE ÉXITO DE ABONO (RECIBO Y COMPROBANTES) -->
       <div v-if="abonoExito" class="modal-backdrop">
         <div class="modal-sheet exito-sheet">
-          <div class="exito-icon">✓</div>
+          <div class="exito-icon"><CrmIcon name="check" /></div>
           <div class="exito-title">¡Abono registrado!</div>
           <div class="exito-sub">{{ pedido?.clienteNombre }}</div>
 
@@ -402,6 +402,7 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePrecargaEfectivo } from '@/composables/usePrecargaEfectivo'
@@ -1197,6 +1198,8 @@ onMounted(async () => {
   color: var(--muted);
 }
 .ms-close {
+  display: grid;
+  place-items: center;
   background: var(--paper-2);
   border: none;
   width: 30px;
@@ -1393,6 +1396,7 @@ onMounted(async () => {
   font-weight: 900;
   margin-bottom: 10px;
 }
+.exito-icon .crm-icon { width: 28px; height: 28px; }
 .exito-title {
   font-family: "Bricolage Grotesque";
   font-weight: 800;

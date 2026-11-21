@@ -23,10 +23,10 @@
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input 
           v-model="busqueda" 
-          placeholder="Buscar cliente, folio o # pedido…" 
-          @input="pagina = 1"
+          placeholder="Buscar cliente, folio o # pedido (mínimo 3 caracteres)"
+
         >
-        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''">×</button>
+        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
     </div>
 
@@ -79,7 +79,7 @@
     </p>
 
     <div class="grid" v-if="!cargando && itemsFiltrados.length">
-      <div v-for="t in itemsFiltrados" :key="t.id" class="card" :class="{ pend: t.estadoPago === 'Pendiente' }">
+      <div v-for="t in itemsPaginados" :key="t.id" class="card" :class="{ pend: t.estadoPago === 'Pendiente' }">
         <div class="ic">
           <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M8 5l-4 4 4 4M16 11l4 4-4 4"/></svg>
         </div>
@@ -103,12 +103,12 @@
     </div>
 
     <!-- Paginación -->
-    <div class="pager" v-if="!cargando && totalPaginas > 1 && !busqueda">
+    <div class="pager" v-if="!cargando && totalPaginas > 1">
       <button class="pg" :disabled="pagina <= 1" @click="irPagina(pagina - 1)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
       <button v-for="n in paginasVisibles" :key="n" class="pg num" :class="{ on: n === pagina }" @click="irPagina(n)">{{ n }}</button>
       <button class="pg" :disabled="pagina >= totalPaginas" @click="irPagina(pagina + 1)"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
-    <p v-if="!cargando && total && !busqueda" class="cuenta">{{ total }} transferencia(s) · página {{ pagina }} de {{ totalPaginas }}</p>
+    <p v-if="!cargando && itemsFiltrados.length" class="cuenta">{{ itemsFiltrados.length }} transferencia(s) · página {{ pagina }} de {{ totalPaginas }}</p>
 
     <!-- Modal: capturar folio de un pago pendiente -->
     <div v-if="modal" class="modal-bg" @click.self="cerrar()">
@@ -183,9 +183,12 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -203,7 +206,7 @@ const hasta = ref(hoyStr)
 
 // filtros y búsqueda
 const filtroEstado = ref('todos') // 'todos' | 'pendientes' | 'pagados'
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 
 // paginación
 const pagina = ref(1)
@@ -217,7 +220,8 @@ const folio = ref('')
 const procesando = ref(false)
 const modalError = ref('')
 
-const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano.value)))
+const totalPaginas = computed(() => Math.max(1, Math.ceil(itemsFiltrados.value.length / tamano.value)))
+const itemsPaginados = computed(() => itemsFiltrados.value.slice((pagina.value - 1) * tamano.value, pagina.value * tamano.value))
 const paginasVisibles = computed(() => {
   const tp = totalPaginas.value, actual = pagina.value
   const rango = []
@@ -241,10 +245,10 @@ const puedeGuardar = computed(() => metodo.value === 'Efectivo' || folio.value.t
 // Filtro en vivo por texto (cliente, folio, ID)
 const itemsFiltrados = computed(() => {
   if (!busqueda.value.trim()) return items.value
-  const q = busqueda.value.toLowerCase().trim()
+  const q = terminoBusqueda.value
   return items.value.filter((t) => {
-    const cli = (t.clienteNombreMostrar || t.clienteNombre || '').toLowerCase()
-    const fol = (t.referenciaPago || '').toLowerCase()
+    const cli = normalizarBusqueda([t.clienteNombreMostrar, t.clienteNombre, t.clienteTelefono].filter(Boolean).join(' '))
+    const fol = normalizarBusqueda(t.referenciaPago)
     const idStr = String(t.id)
     return cli.includes(q) || fol.includes(q) || idStr.includes(q)
   })
@@ -275,19 +279,17 @@ async function cargar() {
     const params = {
       metodoPago: 'Transferencia',
       desde: r.desde,
-      hasta: r.hasta,
-      pagina: pagina.value,
-      tamano: tamano.value
+      hasta: r.hasta
     }
     if (filtroEstado.value === 'pendientes') params.estadoPago = 'Pendiente'
     else if (filtroEstado.value === 'pagados') params.estadoPago = 'Pagado'
 
     const [lista, resumen] = await Promise.all([
-      http.get('/pedidos', { params }),
+      listarPaginas('/pedidos', params),
       http.get('/pedidos/transferencias/resumen', { params: { desde: r.desde, hasta: r.hasta } })
     ])
-    items.value = lista.data.items
-    total.value = lista.data.total ?? lista.data.items.length
+    items.value = lista
+    total.value = lista.length
     resumenPeriodo.value = resumen.data
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar las transferencias.'
@@ -326,7 +328,7 @@ async function guardar() {
   }
 }
 
-watch(pagina, cargar)
+watch(terminoBusqueda, () => { pagina.value = 1 })
 
 onMounted(() => {
   emit('ctx', { titulo: 'Transferencias', sub: 'Conciliación bancaria y captura de folios', back: null })

@@ -118,13 +118,13 @@
 
         <!-- ALERTAS DE STOCK -->
         <div class="card">
-          <div class="ch"><h3>Alertas de stock</h3><span class="meta">{{ d.alertasStock.length }} por debajo del mínimo</span></div>
+          <div class="ch"><h3>Alertas de stock</h3><span class="meta">{{ d.alertasStock.length }} en el mínimo o por debajo</span></div>
           <div style="margin-top:12px">
-            <div class="alert" v-for="a in d.alertasStock" :key="a.productoId">
+            <div class="alert" v-for="a in d.alertasStock.slice(0, 5)" :key="a.productoId">
               <div class="em"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
               <div class="info">
                 <div class="n">{{ a.nombre }}</div>
-                <div class="s">Quedan <b>{{ fmt(a.stock) }}</b> · mín <b>{{ fmt(a.minimo) }}</b> · pedir <b>{{ fmt(a.sugerido) }}</b></div>
+                <div class="s">Disponibles <b>{{ fmt(a.stock) }}</b> · mínimo <b>{{ fmt(a.minimo) }}</b> · sugerido <b>{{ fmt(a.sugerido) }}</b></div>
                 <div class="prov" v-if="a.proveedorNombre">{{ a.proveedorNombre }}</div>
               </div>
               <button v-if="a.proveedorWhatsapp" class="wa" @click="whatsapp(a)"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>WhatsApp</button>
@@ -132,13 +132,14 @@
             </div>
             <p v-if="!d.alertasStock.length" class="vacio">Todo el inventario está por encima del mínimo requerido.</p>
           </div>
+          <RouterLink class="stock-more" to="/panel/alertas-stock">Ver alertas de stock <span v-if="d.alertasStock.length > 5">({{ d.alertasStock.length }})</span><CrmIcon name="arrow" /></RouterLink>
         </div>
       </div>
 
       <!-- RESUMEN DE CARTERA DE CRÉDITOS -->
       <div class="row c">
         <div class="card cred">
-          <div class="ch"><h3>Créditos y Cartera por Cobrar</h3><span class="meta link" @click="$router.push('/panel/creditos')">Ver todos →</span></div>
+          <div class="ch"><h3>Créditos y Cartera por Cobrar</h3><RouterLink class="meta link" to="/panel/creditos">Ver todos <CrmIcon name="arrow" /></RouterLink></div>
           <div class="cred-row">
             <div class="cred-box"><div class="l">Cartera activa (por cobrar)</div><div class="v">{{ money(cred.activosMonto) }}</div><div class="s">{{ cred.activosCuentas }} cuenta(s) activa(s) · {{ money(cred.vencidoMonto) }} vencido</div></div>
             <div class="cred-box ok"><div class="l">Créditos liquidados</div><div class="v">{{ cred.liquidados }}</div><div class="s">cuentas pagadas al 100%</div></div>
@@ -148,12 +149,12 @@
 
       <!-- GUÍA INTERACTIVA -->
       <div class="guia-card">
-        <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-          <div class="guia-icon">💡</div>
+        <button type="button" class="guia-header" :aria-expanded="mostrarGuia" aria-controls="summary-guide" @click="mostrarGuia = !mostrarGuia">
+          <div class="guia-icon"><CrmIcon name="help" /></div>
           <div class="guia-tit">¿Cómo funciona el Tablero de Resumen e Indicadores clave?</div>
           <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
-        </div>
-        <div v-if="mostrarGuia" class="guia-content">
+        </button>
+        <div v-if="mostrarGuia" id="summary-guide" class="guia-content">
           <div class="guia-item">
             <div class="gi-num">1</div>
             <div class="gi-text">
@@ -188,6 +189,7 @@
 import { ref, computed, onMounted } from 'vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import CrmIcon from '@/components/CrmIcon.vue'
 
 const emit = defineEmits(['ctx'])
 const auth = useAuthStore()
@@ -598,4 +600,9 @@ onMounted(() => { emitCtx(); cargar() })
   .alert .wa, .alert .sin-prov { grid-column: 1 / -1; justify-self: end; }
   .alert .wa { min-height: 44px; }
 }
+.stock-more { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-top: 12px; border-top: 1px solid var(--line); color: var(--pine); font-size: 13px; font-weight: 700; text-decoration: none; }
+.guia-header { width: 100%; border: none; background: transparent; text-align: left; font: inherit; }
+.alert .wa { min-height: 44px; }
+.meta.link { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; text-decoration: none; }
+.stock-more:focus-visible { outline: 3px solid var(--sky, #2E6F8E); outline-offset: 2px; }
 </style>

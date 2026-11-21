@@ -26,7 +26,7 @@
       <div class="search-bar">
         <div class="search-wrap">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input v-model="buscar" placeholder="Buscar cliente deudor por nombre…">
+          <input v-model="buscar" placeholder="Buscar cliente deudor por nombre (mínimo 3 caracteres)">
         </div>
       </div>
 
@@ -71,7 +71,7 @@
       <!-- Guía interactiva -->
       <div class="guia-card">
         <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-          <div class="guia-icon">💡</div>
+          <div class="guia-icon"><CrmIcon name="bulb" /></div>
           <div class="guia-tit">¿Cómo opera el Kardex y la Deuda de Clientes?</div>
           <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
         </div>
@@ -258,6 +258,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
@@ -280,7 +282,7 @@ const route = useRoute()
 const deudas = ref([])
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref(typeof route.query.buscar === 'string' ? route.query.buscar : '')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda(typeof route.query.buscar === 'string' ? route.query.buscar : '')
 const mostrarGuia = ref(false)
 const copiado = ref(false)
 
@@ -312,15 +314,15 @@ const totalDeuda = computed(() => conDeuda.value.reduce((s, d) => s + d.saldo, 0
 const totalAbonadoHistorico = computed(() => deudas.value.reduce((s, d) => s + (d.totalAbonado || 0), 0))
 
 const conDeudaFiltrada = computed(() => {
-  const q = buscar.value.trim().toLowerCase()
+  const q = terminoBusqueda.value
   if (!q) return conDeuda.value
-  return conDeuda.value.filter(d => (d.clienteNombre || '').toLowerCase().includes(q))
+  return conDeuda.value.filter(d => normalizarBusqueda((d.clienteNombre || '')).includes(q))
 })
 
 const sinDeudaFiltrada = computed(() => {
-  const q = buscar.value.trim().toLowerCase()
+  const q = terminoBusqueda.value
   if (!q) return sinDeuda.value
-  return sinDeuda.value.filter(d => (d.clienteNombre || '').toLowerCase().includes(q))
+  return sinDeuda.value.filter(d => normalizarBusqueda((d.clienteNombre || '')).includes(q))
 })
 
 const saldoRealKardex = computed(() => {

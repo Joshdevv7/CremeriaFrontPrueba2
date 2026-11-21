@@ -46,9 +46,9 @@
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input 
           v-model="busqueda" 
-          placeholder="Buscar repartidor, vendedor, corte #…"
+          placeholder="Buscar repartidor, vendedor, corte # (mínimo 3 caracteres)"
         >
-        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''">×</button>
+        <button v-if="busqueda" class="clear-btn" @click="busqueda = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
     </div>
 
@@ -70,7 +70,7 @@
     </p>
 
     <div v-else class="grid">
-      <div v-for="c in itemsFiltrados" :key="c.id" class="card" :class="claseEstado(c.estado)">
+      <div v-for="c in itemsPaginados" :key="c.id" class="card" :class="claseEstado(c.estado)">
         <div class="c-top">
           <div class="av" :class="claseEstado(c.estado)">{{ ini(c.repartidorNombre) }}</div>
           <div class="c-info">
@@ -109,7 +109,7 @@
     <!-- Paginación -->
     <div class="paginacion-bar" v-if="!cargando && total > 0">
       <div class="pag-info">
-        <span>Mostrando <b>{{ itemsFiltrados.length }}</b> de <b>{{ total }}</b> corte(s)</span>
+        <span>Mostrando <b>{{ itemsPaginados.length }}</b> de <b>{{ itemsFiltrados.length }}</b> corte(s)</span>
         <div class="tamano-sel">
           <span>Por página:</span>
           <select v-model.number="tamano" @change="cambiarTamano()">
@@ -121,7 +121,7 @@
         </div>
       </div>
 
-      <div class="pager" v-if="totalPaginas > 1 && !busqueda">
+      <div class="pager" v-if="totalPaginas > 1">
         <button class="pg" :disabled="pagina <= 1" @click="irPagina(pagina - 1)" title="Página anterior">
           <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
@@ -178,19 +178,19 @@
               <div class="pm-box" :class="{ 'pm-warn': det.efectivoPendiente > 0 }">
                 <span class="pm-k">Efectivo</span>
                 <span class="pm-v">{{ money(det.totalEfectivo) }}</span>
-                <span v-if="det.efectivoPendiente > 0" class="pm-sub-warn">⚠️ {{ money(det.efectivoPendiente) }} pendiente</span>
-                <span v-else-if="det.totalEfectivo > 0" class="pm-sub-ok">✓ Cobrado físico</span>
+                <span v-if="det.efectivoPendiente > 0" class="pm-sub-warn"><CrmIcon name="alert" /> {{ money(det.efectivoPendiente) }} pendiente</span>
+                <span v-else-if="det.totalEfectivo > 0" class="pm-sub-ok"><CrmIcon name="check" /> Cobrado físico</span>
               </div>
               <div class="pm-box" :class="{ 'pm-warn': det.transferenciaPendiente > 0 }">
                 <span class="pm-k">Transferencia</span>
                 <span class="pm-v">{{ money(det.totalTransferencia) }}</span>
-                <span v-if="det.transferenciaPendiente > 0" class="pm-sub-warn">⏳ {{ money(det.transferenciaPendiente) }} por confirmar</span>
-                <span v-else-if="det.totalTransferencia > 0" class="pm-sub-ok">✓ Conciliada</span>
+                <span v-if="det.transferenciaPendiente > 0" class="pm-sub-warn"><CrmIcon name="clock" /> {{ money(det.transferenciaPendiente) }} por confirmar</span>
+                <span v-else-if="det.totalTransferencia > 0" class="pm-sub-ok"><CrmIcon name="check" /> Conciliada</span>
               </div>
               <div class="pm-box">
                 <span class="pm-k">Tarjeta</span>
                 <span class="pm-v">{{ money(det.totalTarjeta) }}</span>
-                <span v-if="det.totalTarjeta > 0" class="pm-sub-ok">✓ Cobrada</span>
+                <span v-if="det.totalTarjeta > 0" class="pm-sub-ok"><CrmIcon name="check" /> Cobrada</span>
               </div>
               <div class="pm-box">
                 <span class="pm-k">Crédito</span>
@@ -239,7 +239,7 @@
                   <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
                   <span>Ver todas las ventas del corte ({{ det.ventas.length }} pedidos)</span>
                 </div>
-                <span class="btv-arrow" :class="{ open: mostrarTodasVentas }">▾</span>
+                <CrmIcon name="chevron-down" class="btv-arrow" :class="{ open: mostrarTodasVentas }" />
               </button>
 
               <div v-if="mostrarTodasVentas" class="ventas-list">
@@ -413,8 +413,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
+import { ref, computed, onMounted, watch } from 'vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { imprimirCorte } from '@/services/printer'
 
 const emit = defineEmits(['ctx'])
@@ -433,7 +436,7 @@ const fechaDesde = ref(hoyStr)
 const fechaHasta = ref(hoyStr)
 
 const filtro = ref('todos') // 'todos' | 'Incompleto' | 'Justificado' | 'Completo'
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 
 // Modal justificación
 const modal = ref(null)
@@ -466,9 +469,9 @@ const etiquetaTipo = (t) => t === 'GastoFijo' ? 'Gasto fijo' : t === 'GastoVaria
 const itemsFiltrados = computed(() => {
   let list = filtro.value === 'todos' ? items.value : items.value.filter((c) => c.estado === filtro.value)
   if (!busqueda.value.trim()) return list
-  const q = busqueda.value.toLowerCase().trim()
+  const q = terminoBusqueda.value
   return list.filter((c) => {
-    const nom = (c.repartidorNombre || '').toLowerCase()
+    const nom = normalizarBusqueda(c.repartidorNombre)
     const cId = String(c.id)
     const cargaId = c.cargaId ? String(c.cargaId) : ''
     return nom.includes(q) || cId.includes(q) || cargaId.includes(q)
@@ -483,7 +486,9 @@ const kpiTotalFaltante = computed(() => itemsFiltrados.value.reduce((s, c) => s 
 const kpiTotalDevuelto = computed(() => itemsFiltrados.value.reduce((s, c) => s + (c.valorDevuelto || 0), 0))
 
 // Paginación calculada
-const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano.value)))
+const totalPaginas = computed(() => Math.max(1, Math.ceil(itemsFiltrados.value.length / tamano.value)))
+const itemsPaginados = computed(() => itemsFiltrados.value.slice((pagina.value - 1) * tamano.value, pagina.value * tamano.value))
+watch([terminoBusqueda, filtro], () => { pagina.value = 1 })
 const paginasVisibles = computed(() => {
   const tp = totalPaginas.value
   const cur = pagina.value
@@ -499,12 +504,10 @@ const paginasVisibles = computed(() => {
 function irPagina(n) {
   if (n < 1 || n > totalPaginas.value) return
   pagina.value = n
-  cargar()
 }
 
 function cambiarTamano() {
   pagina.value = 1
-  cargar()
 }
 
 // Ventas pendientes del detalle
@@ -543,15 +546,11 @@ async function cargar() {
   error.value = ''
   try {
     const r = rangoFechas()
-    const params = {
-      pagina: pagina.value,
-      tamano: tamano.value
-    }
+    const params = {}
     if (r.desde) params.desde = r.desde
     if (r.hasta) params.hasta = r.hasta
-    const { data } = await http.get('/cortes', { params })
-    items.value = data.items || []
-    total.value = data.total ?? (data.items || []).length
+    items.value = await listarPaginas('/cortes', params)
+    total.value = items.value.length
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los cortes.'
   } finally {
@@ -612,7 +611,7 @@ async function imprimirTicketCorte() {
       valorMerma: d.valorMerma,
       devueltos: d.devueltos || []
     })
-    printMsg.value = '✓ Ticket enviado a la impresora correctamente.'
+    printMsg.value = 'Ticket enviado a la impresora correctamente.'
   } catch (e) {
     printMsg.value = 'Aviso: No se pudo conectar a la impresora térmica Bluetooth.'
   } finally {
@@ -830,6 +829,7 @@ onMounted(() => {
 .pm-sub-warn { font-size: 10px; font-weight: 700; color: var(--clay); margin-top: 4px; display: block; }
 .pm-sub-ok { font-size: 10px; font-weight: 700; color: var(--pine); margin-top: 4px; display: block; }
 .pm-sub-info { font-size: 10px; font-weight: 700; color: var(--sky); margin-top: 4px; display: block; }
+.pm-sub-warn .crm-icon, .pm-sub-ok .crm-icon { width: 13px; height: 13px; }
 
 .d-merc { display: flex; gap: 10px; margin-bottom: 14px; }
 .dm { flex: 1; background: var(--paper); border-radius: 12px; padding: 10px 14px; }

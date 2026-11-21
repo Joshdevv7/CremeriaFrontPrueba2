@@ -4,7 +4,7 @@
     <div class="edu-card">
       <div class="edu-head" @click="guiaAbierta = !guiaAbierta">
         <div class="edu-tit">
-          <span class="edu-ico">💡</span>
+          <span class="edu-ico"><CrmIcon name="bulb" /></span>
           <div>
             <b>¿Cómo impactan las compras al inventario y al costo promedio ponderado?</b>
             <div class="edu-sub">Conoce cómo se alimentan tus existencias y cómo se calcula el costo real de tus productos</div>
@@ -25,7 +25,7 @@
           <div class="edu-step">
             <span class="step-badge">2</span>
             <div class="step-content">
-              <b>Costo Promedio Ponderado (CPP)</b>
+              <b>Costo promedio de los productos</b>
               <p>El costo unitario se recalcula automáticamente: <code>(StockViejo × CostoViejo + PiezasNuevas × CostoNuevo) ÷ StockTotal</code>. Así tu utilidad y precio sugerido siempre reflejan la inversión real.</p>
             </div>
           </div>
@@ -69,8 +69,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por folio, factura, proveedor o producto…" @input="onBuscarInput">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''; cargar()">×</button>
+        <input v-model="buscar" type="search" placeholder="Folio, proveedor o producto (mínimo 3 caracteres)">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
 
       <div class="prov-select">
@@ -95,11 +95,11 @@
 
     <p v-if="cargando" class="muted">Cargando compras registradas…</p>
     <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!items.length" class="muted">{{ vacioTexto }}</p>
+    <p v-else-if="!comprasFiltradas.length" class="muted">{{ vacioTexto }}</p>
 
     <!-- LISTADO DE COMPRAS -->
     <div class="grid" v-else>
-      <div v-for="c in items" :key="c.id" class="card" :class="{ open: abierta === c.id }">
+      <div v-for="c in comprasFiltradas" :key="c.id" class="card" :class="{ open: abierta === c.id }">
         <div class="head" @click="toggle(c.id)">
           <div class="chip"><ion-icon :icon="cubeOutline" /></div>
           <div class="info">
@@ -143,6 +143,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import { cubeOutline, chevronDown, chevronUp, documentTextOutline } from 'ionicons/icons'
@@ -158,13 +160,14 @@ const error = ref('')
 const errorProveedores = ref('')
 const abierta = ref(null)
 const descargando = ref(null)
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const filtroProveedorId = ref(null)
 const fechaDesde = ref('')
 const fechaHasta = ref('')
 const guiaAbierta = ref(false)
-let buscarTimer = null
 let ultimaCarga = 0
+const comprasFiltradas = computed(() => items.value.filter(c =>
+  coincideBusqueda(terminoBusqueda.value, c.id, c.referencia, c.proveedorNombre, (c.lineas || []).map(l => l.productoNombre))))
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
@@ -204,10 +207,6 @@ const vacioTexto = computed(() => {
   return 'Aún no hay compras registradas. Registra una con “Nueva compra”.'
 })
 
-function onBuscarInput() {
-  clearTimeout(buscarTimer)
-  buscarTimer = setTimeout(() => cargar(), 350)
-}
 
 function limpiarFiltros() {
   buscar.value = ''
@@ -243,7 +242,6 @@ async function cargar() {
   try {
     const params = limitesFechaCompra(fechaDesde.value, fechaHasta.value)
     if (filtroProveedorId.value) params.proveedorId = filtroProveedorId.value
-    if (buscar.value.trim()) params.buscar = buscar.value.trim()
     const compras = await listarPaginas('/compras', params)
     if (carga !== ultimaCarga) return
     items.value = compras

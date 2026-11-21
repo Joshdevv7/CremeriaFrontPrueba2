@@ -23,7 +23,12 @@
             <span>Productos</span>
             <button class="scan-b" type="button" @click="mostrarScan = true"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg>Escanear</button>
           </div>
-          <div v-for="p in productos" :key="p.id" class="prod" :class="{ flash: resaltado === p.id, excede: excede(p) }" :ref="(el) => setProdRef(p.id, el)">
+          <label class="buscar-producto">
+            Buscar producto
+            <input v-model="buscar" type="search" class="inp" placeholder="Nombre, categoría o código (mínimo 3 caracteres)">
+          </label>
+          <p v-if="!productosFiltrados.length" class="muted">No hay productos que coincidan con la búsqueda.</p>
+          <div v-for="p in productosFiltrados" :key="p.id" class="prod" :class="{ flash: resaltado === p.id, excede: excede(p) }" :ref="(el) => setProdRef(p.id, el)">
             <div class="top">
               <div class="emoji"><svg class="pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
               <div class="meta">
@@ -72,12 +77,16 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import BuscadorSelect from '@/components/BuscadorSelect.vue'
 import PrecioEspecial from '@/components/PrecioEspecial.vue'
 import { precioAplicado, precioEspecialValido, datosPrecioEspecial, cargarPrecioEspecial } from '@/utils/precioEspecial'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
 const router = useRouter()
 const esNuevo = computed(() => route.name === 'pedido-nuevo')
 const clientes = ref([]), repartidores = ref([]), productos = ref([])
+const { buscar, termino } = useBusqueda()
+const productosFiltrados = computed(() => productos.value.filter(p =>
+  coincideBusqueda(termino.value, p.nombre, p.codigoBarras, p.categoria, p.proveedorNombre)))
 const clienteId = ref(null), repartidorId = ref(null)
 const cant = reactive({})
 const preciosEspeciales = reactive({})
@@ -138,6 +147,7 @@ function normCod(x) { return String(x || '').replace(/\s/g, '') }
 async function onScan(code) {
   const p = productos.value.find((x) => x.codigoBarras && normCod(x.codigoBarras) === normCod(code))
   if (!p) { scanMsg.value = `Código ${code} no está en el catálogo`; setTimeout(() => { scanMsg.value = '' }, 2500); return }
+  buscar.value = ''
   if (!cant[p.id]) cant[p.id] = 1            // lo agrega en 1; tú ajustas la cantidad
   scanMsg.value = `Agregado: ${p.nombre} — ajusta la cantidad`
   setTimeout(() => { scanMsg.value = '' }, 2500)
@@ -220,6 +230,7 @@ onMounted(() => { emit('ctx', { titulo: esNuevo.value ? 'Nuevo pedido' : 'Editar
 
 <style scoped>
 .muted { color: var(--muted); margin-top: 24px; }
+.buscar-producto { display: grid; gap: 8px; font-size: 13px; font-weight: 700; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin-top: 10px; }
 .form { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; align-items: start; }
 .col { display: flex; flex-direction: column; gap: 11px; }

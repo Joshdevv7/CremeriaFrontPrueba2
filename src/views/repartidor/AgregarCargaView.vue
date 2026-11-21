@@ -34,7 +34,7 @@
           <p class="intro">Selecciona lo que vas a llevar de más. El administrador debe autorizarlo; mientras tanto puedes seguir vendiendo con lo que traes.</p>
           <div class="search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input v-model="buscar" placeholder="Buscar producto…">
+            <input v-model="buscar" placeholder="Buscar producto (mínimo 3 caracteres)">
           </div>
           <div class="lista">
             <div v-for="p in filtrados" :key="p.id" class="prod">
@@ -68,9 +68,11 @@
   </ion-page>
 </template>
 <script setup>
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { useAuthStore } from '@/stores/auth'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
@@ -80,7 +82,7 @@ const cargaLineas = ref([])
 const cargando = ref(true)
 const sinCarga = ref(false)
 const pendiente = ref(null)     // solicitud de reabastecimiento esperando autorización
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const cant = reactive({})
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
 const enviando = ref(false)
@@ -91,7 +93,7 @@ const mostrarScan = ref(false)
 const scanMsg = ref('')
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
-const filtrados = computed(() => { const t = buscar.value.trim().toLowerCase(); return t ? productos.value.filter((p) => p.nombre.toLowerCase().includes(t)) : productos.value })
+const filtrados = computed(() => productos.value.filter(p => coincideBusqueda(terminoBusqueda.value, p.nombre, p.codigoBarras, p.categoria)))
 const totalItems = computed(() => Object.values(cant).filter((q) => q > 0).length)
 function factorP(p) { return p && p.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
 function maxUnidad(p) { return unidad[p.id] === 'caja' ? Math.floor(p.stockAlmacen / factorP(p)) : p.stockAlmacen }
@@ -134,8 +136,7 @@ onMounted(async () => {
       const rs = await http.get('/cargas/reabastecimientos', { params: { repartidorId: auth.usuarioId, estado: 'Pendiente', tamano: 1 } })
       if (rs.data.items && rs.data.items.length) pendiente.value = rs.data.items[0]
     } catch { /* si falla, seguimos normal */ }
-    const pr = await http.get('/productos', { params: { tamano: 100 } })
-    productos.value = pr.data.items
+    productos.value = await listarPaginas('/productos')
   } catch (e) {
     if (e.response?.status === 404) sinCarga.value = true
     else error.value = 'No se pudieron cargar los productos.'

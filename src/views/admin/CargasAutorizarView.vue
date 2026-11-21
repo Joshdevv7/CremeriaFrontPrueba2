@@ -28,7 +28,7 @@
     <div class="toolbar">
       <div class="busc-wrap">
         <svg class="busc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input class="busc-inp" type="text" v-model="busqueda" placeholder="Buscar por repartidor o producto…">
+        <input class="busc-inp" type="text" v-model="busqueda" placeholder="Buscar por repartidor o producto (mínimo 3 caracteres)">
       </div>
       <div class="tabs">
         <button class="tab" :class="{ act: filtroTipo === 'todos' }" @click="filtroTipo = 'todos'">
@@ -107,7 +107,7 @@
           </div>
 
           <div v-if="hayStockInsuficiente" class="banner-aviso">
-            ⚠️ Uno o más productos superan el stock disponible en almacén. Ajusta las cantidades marcadas en rojo para poder autorizar.
+            <CrmIcon name="alert" /> Uno o más productos superan el stock disponible en almacén. Ajusta las cantidades marcadas en rojo para poder autorizar.
           </div>
 
           <div class="m-linea" v-for="l in editable" :key="l.id">
@@ -164,13 +164,13 @@
     <div class="guia-card">
       <button class="guia-toggle" @click="mostrarGuia = !mostrarGuia">
         <div class="gt-l">
-          <span class="gt-ic">💡</span>
+          <span class="gt-ic"><CrmIcon name="bulb" /></span>
           <div>
             <div class="gt-t">¿Cómo funciona la autorización de cargas y reabastecimientos?</div>
             <div class="gt-s">Conoce el control de inventario de almacén a camioneta y el flujo de autorizaciones</div>
           </div>
         </div>
-        <span class="gt-arrow">{{ mostrarGuia ? '▲ Ocultar' : '▼ Ver explicación' }}</span>
+        <span class="gt-arrow"><CrmIcon :name="mostrarGuia ? 'chevron-up' : 'chevron-down'" /> {{ mostrarGuia ? 'Ocultar' : 'Ver explicación' }}</span>
       </button>
 
       <div class="guia-content" v-show="mostrarGuia">
@@ -200,14 +200,17 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 const filtroTipo = ref('todos') // 'todos', 'carga', 'reabastecimiento'
 const mostrarGuia = ref(false)
 
@@ -232,9 +235,9 @@ const filtrados = computed(() => {
     if (filtroTipo.value !== 'todos' && it.tipo !== filtroTipo.value) return false
 
     if (busqueda.value.trim()) {
-      const q = busqueda.value.toLowerCase().trim()
-      const rep = (it.repartidorNombre || '').toLowerCase()
-      const prod = it.lineas.some((l) => (l.productoNombre || '').toLowerCase().includes(q))
+      const q = terminoBusqueda.value
+      const rep = normalizarBusqueda(it.repartidorNombre)
+      const prod = it.lineas.some((l) => normalizarBusqueda((l.productoNombre || '')).includes(q))
       return rep.includes(q) || prod
     }
     return true
@@ -253,11 +256,11 @@ async function cargar() {
   error.value = ''
   try {
     const [cargas, reabs] = await Promise.all([
-      http.get('/cargas', { params: { estado: 'PendienteAutorizacion', tamano: 50 } }),
-      http.get('/cargas/reabastecimientos', { params: { estado: 'Pendiente', tamano: 50 } })
+      listarPaginas('/cargas', { estado: 'PendienteAutorizacion' }),
+      listarPaginas('/cargas/reabastecimientos', { estado: 'Pendiente' })
     ])
 
-    const listaCargas = (cargas.data?.items || []).map((c) => ({
+    const listaCargas = cargas.map((c) => ({
       tipo: 'carga',
       id: c.id,
       repartidorNombre: c.repartidorNombre,
@@ -272,7 +275,7 @@ async function cargar() {
       }))
     }))
 
-    const listaReabs = (reabs.data?.items || []).map((r) => ({
+    const listaReabs = reabs.map((r) => ({
       tipo: 'reabastecimiento',
       id: r.id,
       repartidorNombre: r.repartidorNombre,

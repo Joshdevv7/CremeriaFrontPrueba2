@@ -23,7 +23,7 @@
     <div class="toolbar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por cliente o # pedido…" @input="pagina = 1">
+        <input v-model="buscar" placeholder="Buscar por cliente o # pedido (mínimo 3 caracteres)">
       </div>
 
       <div class="tabs">
@@ -101,7 +101,7 @@
     <!-- Guía interactiva -->
     <div class="guia-card">
       <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-        <div class="guia-icon">💡</div>
+        <div class="guia-icon"><CrmIcon name="bulb" /></div>
         <div class="guia-tit">¿Cómo funciona el módulo de Créditos y Cuentas por Cobrar?</div>
         <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
       </div>
@@ -130,7 +130,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import {
@@ -141,6 +143,7 @@ import {
   logoWhatsapp
 } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -149,7 +152,7 @@ const resumen = ref(null)
 const cargando = ref(true)
 const error = ref('')
 const estado = ref('Pendiente')
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const ocupado = ref(null)
 const revisando = ref(false)
 const avisoRevision = ref('')
@@ -158,6 +161,7 @@ const mostrarGuia = ref(false)
 // Paginación
 const pagina = ref(1)
 const tamano = ref(24)
+watch(terminoBusqueda, () => { pagina.value = 1 })
 
 const filtros = [
   { k: 'Pendiente', t: 'Por cobrar' },
@@ -178,10 +182,10 @@ function setEstado(k) {
 }
 
 const itemsFiltrados = computed(() => {
-  const q = buscar.value.trim().toLowerCase()
+  const q = terminoBusqueda.value
   if (!q) return items.value
   return items.value.filter(c => {
-    const nom = (c.clienteNombre || '').toLowerCase()
+    const nom = normalizarBusqueda([c.clienteNombre, c.clienteTelefono].filter(Boolean).join(' '))
     const ped = String(c.pedidoId || '')
     return nom.includes(q) || ped.includes(q)
   })
@@ -219,10 +223,10 @@ async function cargar() {
   cargando.value = true; error.value = ''
   try {
     const [lista, res] = await Promise.all([
-      http.get('/creditos', { params: { estado: estado.value, tamano: 200 } }),
+      listarPaginas('/creditos', { estado: estado.value }),
       http.get('/creditos/resumen')
     ])
-    items.value = lista.data.items || []
+    items.value = lista
     resumen.value = res.data
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los créditos.'

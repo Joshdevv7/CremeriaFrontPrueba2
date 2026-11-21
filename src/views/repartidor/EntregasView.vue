@@ -3,14 +3,14 @@
     <div class="route-content crm-page">
       <header class="route-header"><div class="brand"><BrandLogo :size="48" /><div><strong>Productos Osuna</strong><small>{{ auth.usuario?.nombre || 'Repartidor' }}</small></div></div><CampanaNotif /></header>
       <p class="route-date">{{ hoy }}</p><h1>Mi ruta</h1>
-      <section class="route-summary" :aria-busy="cargando" aria-label="Resumen de pedidos consultados"><div class="summary-top"><span>Pedidos creados hoy</span><span v-if="!cargando && !error" class="load-status"><CrmIcon name="box" />{{ tieneCarga ? 'Carga abierta' : 'Sin carga abierta' }}</span></div><div class="progress-count"><strong>{{ cargando ? '—' : entregadosRecientes }}</strong><span>de {{ cargando ? '—' : pedidosRecientes.length }} consultados, entregados</span></div><div class="progress-track" role="progressbar" aria-label="Entregados entre los pedidos creados hoy consultados" :aria-valuemin="0" :aria-valuemax="Math.max(1,pedidosRecientes.length)" :aria-valuenow="entregadosRecientes"><span :style="{width:pctProgreso+'%'}"></span></div><p class="summary-scope">Hasta 100 pedidos · Fecha de creación, no de entrega</p><div class="summary-bottom"><span><strong>{{ cargando ? '—' : pendientes.length }}</strong> abiertos en esta lista</span><span>Por entregar <strong>{{ cargando ? '—' : money(totalRuta) }}</strong></span></div></section>
+      <section class="route-summary" :aria-busy="cargando" aria-label="Resumen de pedidos consultados"><div class="summary-top"><span>Pedidos creados hoy</span><span v-if="!cargando && !error" class="load-status"><CrmIcon name="box" />{{ tieneCarga ? 'Carga abierta' : 'Sin carga abierta' }}</span></div><div class="progress-count"><strong>{{ cargando ? '—' : entregadosRecientes }}</strong><span>de {{ cargando ? '—' : pedidosRecientes.length }} consultados, entregados</span></div><div class="progress-track" role="progressbar" aria-label="Entregados entre los pedidos creados hoy consultados" :aria-valuemin="0" :aria-valuemax="Math.max(1,pedidosRecientes.length)" :aria-valuenow="entregadosRecientes"><span :style="{width:pctProgreso+'%'}"></span></div><p class="summary-scope">Fecha de creación, no de entrega</p><div class="summary-bottom"><span><strong>{{ cargando ? '—' : pendientes.length }}</strong> abiertos en esta lista</span><span>Por entregar <strong>{{ cargando ? '—' : money(totalRuta) }}</strong></span></div></section>
       <div v-if="cargando" class="crm-state route-state" role="status">Cargando ruta…</div>
       <div v-else-if="error" class="crm-state error route-state" role="alert"><h2>No se pudo cargar la ruta</h2><p>{{ error }}</p><button class="crm-button" @click="cargar">Reintentar</button></div>
       <template v-else>
         <div v-if="!tieneCarga" class="no-load" role="status"><CrmIcon name="box" /><div><strong>Levanta tu carga para entregar</strong><p>Revisa y prepara los productos de tu jornada.</p></div><button class="crm-button" @click="irACargar">Ir a cargar</button></div>
         <template v-if="pendientes.length">
-          <div class="crm-field route-search"><label for="route-search">Buscar en esta lista</label><div class="search-input"><CrmIcon name="search" /><input id="route-search" v-model="buscar" type="search" placeholder="Cliente, dirección o folio" /><button v-if="buscar" class="clear-search" aria-label="Limpiar búsqueda" @click="buscar = ''"><CrmIcon name="close" /></button></div></div>
-          <template v-if="!buscar.trim() && siguiente.id">
+          <div class="crm-field route-search"><label for="route-search">Buscar en esta lista</label><div class="search-input"><CrmIcon name="search" /><input id="route-search" v-model="buscar" type="search" placeholder="Cliente, dirección o folio (mínimo 3 caracteres)" /><button v-if="buscar" class="clear-search" aria-label="Limpiar búsqueda" @click="buscar = ''"><CrmIcon name="close" /></button></div></div>
+          <template v-if="!terminoBusqueda && siguiente.id">
             <div class="section-heading"><h2>Pedido destacado</h2><small>Primero en esta lista</small></div>
             <section class="next-card" aria-labelledby="next-customer"><div class="map-wrap"><div ref="mapRef" class="route-map" role="region" aria-label="Mapa de los pedidos con ubicación"></div><div v-if="!conCoords" class="no-geo">Sin ubicaciones registradas</div></div><div class="next-body">
               <div class="next-meta"><strong>Pedido #{{ siguiente.id }}</strong><span class="crm-badge neutral">Por entregar</span></div><div class="next-main"><h3 id="next-customer">{{ siguiente.clienteNombreMostrar || siguiente.clienteNombre }}</h3><strong class="amount">{{ money(siguiente.total) }}</strong></div><p class="address"><CrmIcon name="pin" />{{ siguiente.direccion || 'Sin dirección registrada' }}</p>
@@ -19,10 +19,10 @@
               <div v-if="siguiente.clienteTelefono" class="contact-actions"><a class="crm-button" :href="`tel:${siguiente.clienteTelefono}`"><CrmIcon name="phone" />Llamar</a><a class="crm-button" :href="whatsappUrl(siguiente)" target="_blank" rel="noopener noreferrer"><CrmIcon name="message" />WhatsApp</a></div>
             </div></section>
           </template>
-          <div class="section-heading"><h2>{{ buscar.trim() ? 'Resultados' : 'Otros pedidos' }}</h2><small>{{ listaMostrar.length }} en esta lista</small></div>
-          <div v-if="buscar.trim() && !listaMostrar.length" class="crm-state"><h2>Sin coincidencias</h2><p>Prueba otro cliente, dirección o folio.</p><button class="crm-button" @click="buscar = ''">Limpiar búsqueda</button></div>
+          <div class="section-heading"><h2>{{ terminoBusqueda ? 'Resultados' : 'Otros pedidos' }}</h2><small>{{ listaMostrar.length }} en esta lista</small></div>
+          <div v-if="terminoBusqueda && !listaMostrar.length" class="crm-state"><h2>Sin coincidencias</h2><p>Prueba otro cliente, dirección o folio.</p><button class="crm-button" @click="buscar = ''">Limpiar búsqueda</button></div>
           <article v-for="p in listaMostrar" :key="p.id" class="stop-card"><button class="stop-open" @click="iniciar(p.id)"><span class="stop-number">#{{ p.id }}</span><span class="stop-info"><strong>{{ p.clienteNombreMostrar || p.clienteNombre }}</strong><small>{{ p.direccion || 'Sin dirección registrada' }}</small></span><strong class="amount">{{ money(p.total) }}</strong><CrmIcon name="arrow" /></button><div class="stop-contact" v-if="p.clienteTelefono || mapsUrl(p)"><a v-if="p.clienteTelefono" :href="`tel:${p.clienteTelefono}`" class="crm-button" :aria-label="`Llamar a ${p.clienteNombre}`"><CrmIcon name="phone" />Llamar</a><a v-if="p.clienteTelefono" :href="whatsappUrl(p)" class="crm-button" target="_blank" rel="noopener noreferrer" :aria-label="`WhatsApp de ${p.clienteNombre}`"><CrmIcon name="message" />WhatsApp</a><button v-if="mapsUrl(p)" class="crm-button" :aria-label="`Navegar a ${p.clienteNombre}`" @click="navegar(p)"><CrmIcon name="nav" />Navegar</button></div></article>
-          <p class="route-limit">Se muestran hasta 50 pedidos abiertos asignados. El orden de la lista no representa una prioridad ni una ruta optimizada.</p>
+          <p class="route-limit">Se muestran los pedidos abiertos asignados. El orden de la lista no representa una prioridad ni una ruta optimizada.</p>
         </template>
         <div v-else class="crm-state route-state"><CrmIcon name="check" /><h2>Sin pedidos abiertos en esta consulta</h2><p>Vuelve a consultar para comprobar nuevas asignaciones.</p><button class="crm-button" @click="cargar">Actualizar ruta</button></div>
       </template>
@@ -37,13 +37,16 @@ import { IonPage, IonContent, IonRefresher, IonRefresherContent, onIonViewWillEn
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { useAuthStore } from '@/stores/auth'
 import BrandLogo from '@/components/BrandLogo.vue'
 import CampanaNotif from '@/components/CampanaNotif.vue'
 import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { formatMxn as money, lineQuantity } from '@/utils/crmPresentation'
 const router=useRouter(),auth=useAuthStore()
-const pendientes=ref([]),pedidosRecientes=ref([]),itemsSiguiente=ref([]),productos=ref({}),cargando=ref(true),error=ref(''),detalleError=ref(''),tieneCarga=ref(false),buscar=ref(''),toast=ref(false),mapRef=ref(null)
+const pendientes=ref([]),pedidosRecientes=ref([]),itemsSiguiente=ref([]),productos=ref({}),cargando=ref(true),error=ref(''),detalleError=ref(''),tieneCarga=ref(false),toast=ref(false),mapRef=ref(null)
+const { buscar, termino: terminoBusqueda } = useBusqueda()
 let map=null,capaPines=null,mapTimer,toastTimer,controller,solicitud=0,activa=false
 const hoy=ref('')
 const siguiente=computed(()=>pendientes.value[0]||{})
@@ -52,7 +55,7 @@ const entregadosRecientes=computed(()=>pedidosRecientes.value.filter(p=>['Cerrad
 const pctProgreso=computed(()=>pedidosRecientes.value.length?Math.round(entregadosRecientes.value/pedidosRecientes.value.length*100):0)
 const coords=p=>p.latitud!=null&&p.longitud!=null&&Number.isFinite(Number(p.latitud))&&Number.isFinite(Number(p.longitud))&&Math.abs(Number(p.latitud))<=90&&Math.abs(Number(p.longitud))<=180
 const conCoords=computed(()=>pendientes.value.filter(coords).length)
-const listaMostrar=computed(()=>{const q=buscar.value.trim().toLocaleLowerCase('es-MX');return q?pendientes.value.filter(p=>`${p.id} ${p.clienteNombreMostrar||p.clienteNombre||''} ${p.direccion||''}`.toLocaleLowerCase('es-MX').includes(q)):pendientes.value.slice(1)})
+const listaMostrar=computed(()=>terminoBusqueda.value?pendientes.value.filter(p=>coincideBusqueda(terminoBusqueda.value,p.id,p.clienteNombreMostrar,p.clienteNombre,p.direccion,p.clienteTelefono)):pendientes.value.slice(1))
 function iniciar(id){if(!tieneCarga.value){toast.value=true;clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.value=false,3500);return}router.push(`/entrega/${id}`)}
 function irACargar(){router.push('/app/inventario')}
 function mapsUrl(p){if(!p)return null;if(coords(p))return `https://www.google.com/maps/dir/?api=1&destination=${Number(p.latitud)},${Number(p.longitud)}`;return p.direccion?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.direccion)}`:null}
@@ -77,8 +80,8 @@ async function cargar(){
   try{
     try{const {data}=await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`,{signal});if(current!==solicitud||!activa)return;tieneCarga.value=!!data?.id}catch(e){if(e.response?.status===404)tieneCarga.value=false;else throw e}
     const date=new Date();const desde=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
-    const [open,recent]=await Promise.all([http.get('/pedidos',{params:{estado:'Abierto',repartidorId:auth.usuarioId,tamano:50},signal}),http.get('/pedidos',{params:{repartidorId:auth.usuarioId,desde,tamano:100},signal})])
-    if(current!==solicitud||!activa)return;pendientes.value=open.data.items||[];pedidosRecientes.value=recent.data.items||[]
+    const [open,recent]=await Promise.all([listarPaginas('/pedidos',{estado:'Abierto',repartidorId:auth.usuarioId},{signal}),listarPaginas('/pedidos',{repartidorId:auth.usuarioId,desde},{signal})])
+    if(current!==solicitud||!activa)return;pendientes.value=open;pedidosRecientes.value=recent
     if(siguiente.value.id){
       try{const detail=await http.get(`/pedidos/${siguiente.value.id}`,{signal});if(current!==solicitud||!activa)return;itemsSiguiente.value=detail.data.lineas||[];const ids=[...new Set(itemsSiguiente.value.slice(0,2).map(it=>it.productoId))];const catalog=await Promise.allSettled(ids.map(id=>http.get(`/productos/${id}`,{signal})));if(current!==solicitud||!activa)return;catalog.forEach((result,i)=>{if(result.status==='fulfilled')productos.value[ids[i]]=result.value.data;else if(result.reason.code!=='ERR_CANCELED')detalleError.value='Algunas unidades no se pudieron consultar. Revisa el detalle antes de entregar.'})}
       catch(e){if(current===solicitud&&activa&&e.code!=='ERR_CANCELED')detalleError.value='No se pudo consultar el detalle de productos. Puedes volver a intentar actualizar.'}

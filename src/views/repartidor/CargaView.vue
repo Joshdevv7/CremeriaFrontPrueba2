@@ -66,8 +66,8 @@
 
             <div class="search-wrap" v-if="carga.lineas.length > 3">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-              <input v-model="buscarEnCarga" placeholder="Buscar producto en la camioneta…">
-              <button v-if="buscarEnCarga" class="clear-btn" @click="buscarEnCarga = ''">✕</button>
+              <input v-model="buscarEnCarga" placeholder="Buscar producto en la camioneta (mínimo 3 caracteres)">
+              <button v-if="buscarEnCarga" class="clear-btn" @click="buscarEnCarga = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
             </div>
 
             <div>
@@ -151,7 +151,7 @@
         <div class="view" :class="{ show: tab===2 }">
           <div class="search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input v-model="busqueda" placeholder="Buscar producto…">
+            <input v-model="busqueda" placeholder="Buscar producto (mínimo 3 caracteres)">
           </div>
           <div class="ro">
             <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
@@ -199,9 +199,12 @@
   </ion-page>
 </template>
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
@@ -215,12 +218,12 @@ const productos = ref([])
 const creando = ref(false)
 const nueva = reactive({})
 const unidadNueva = reactive({}) // productoId -> 'pza' | 'caja'
-const buscarEnCarga = ref('')
+const { buscar: buscarEnCarga, termino: terminoCarga } = useBusqueda('')
 const confirmarCerrarModal = ref(false)
 const lineasCargaFiltradas = computed(() => {
-  const q = buscarEnCarga.value.trim().toLowerCase()
+  const q = terminoCarga.value
   if (!q) return carga.value?.lineas || []
-  return (carga.value?.lineas || []).filter((l) => l.productoNombre.toLowerCase().includes(q))
+  return (carga.value?.lineas || []).filter((l) => normalizarBusqueda(l.productoNombre).includes(q))
 })
 function pedirConfirmacionCerrar() {
   confirmarCerrarModal.value = true
@@ -232,7 +235,7 @@ async function ejecutarCerrarCarga() {
 function factorP(p) { return p && p.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
 function maxNueva(p) { return unidadNueva[p.id] === 'caja' ? Math.floor(p.stockAlmacen / factorP(p)) : p.stockAlmacen }
 function setUnidadNueva(pid, u) { unidadNueva[pid] = u; nueva[pid] = 0 }
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 const enviando = ref(false)
 const error = ref('')
 const bodyRef = ref(null)
@@ -248,8 +251,8 @@ const pctVendido = computed(() => {
 })
 function pctLinea(l) { return l.cantidadCargada > 0 ? Math.round(l.cantidadVendida / l.cantidadCargada * 100) : 0 }
 const catalogoFiltrado = computed(() => {
-  const t = busqueda.value.trim().toLowerCase()
-  return t ? productos.value.filter((p) => p.nombre.toLowerCase().includes(t)) : productos.value
+  const t = terminoBusqueda.value
+  return productos.value.filter(p => coincideBusqueda(t, p.nombre, p.codigoBarras, p.categoria))
 })
 const totalNueva = computed(() => Object.values(nueva).reduce((s, n) => s + (n || 0), 0))
 function setTab(n) { tab.value = n; bodyRef.value?.scrollTo({ top: 0 }) }
@@ -298,8 +301,7 @@ async function cargarCarga() {
 }
 async function cargarProductos() {
   try {
-    const { data } = await http.get('/productos', { params: { tamano: 100 } })
-    productos.value = data.items
+    productos.value = await listarPaginas('/productos')
   } catch { /* noop */ }
 }
 function construirLineas() {

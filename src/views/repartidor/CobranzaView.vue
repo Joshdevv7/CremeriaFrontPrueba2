@@ -36,8 +36,8 @@
         <!-- BUSCADOR -->
         <div class="search-wrap">
           <svg class="s-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input v-model="buscar" placeholder="Buscar cliente por nombre o teléfono…" />
-          <button v-if="buscar" class="clear-b" @click="buscar = ''">✕</button>
+          <input v-model="buscar" placeholder="Buscar cliente por nombre o teléfono (mínimo 3 caracteres)" />
+          <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
         </div>
 
         <!-- LISTADO -->
@@ -128,7 +128,7 @@
               <div class="ms-title">Cobrar abono</div>
               <div class="ms-sub">{{ modalAbono.clienteNombre }}</div>
             </div>
-            <button class="ms-close" :disabled="procesando" @click="cerrarAbono()" aria-label="Cancelar abono">✕</button>
+            <button class="ms-close" :disabled="procesando" @click="cerrarAbono()" aria-label="Cancelar abono"><CrmIcon name="close" /></button>
           </div>
 
           <div class="ms-body">
@@ -177,10 +177,10 @@
                 </button>
               </div>
               <div class="pm-tip" v-if="metodoAbono === 0">
-                ⚠️ El efectivo cobrado se sumará a tu entrega de caja en el Corte del turno.
+                <CrmIcon name="alert" /> El efectivo cobrado se sumará a tu entrega de caja en el Corte del turno.
               </div>
               <div class="pm-tip" v-else>
-                ℹ️ Transferencia directa a cuenta. No se exige efectivo físico en tu corte.
+                <CrmIcon name="info" /> Transferencia directa a cuenta. No se exige efectivo físico en tu corte.
               </div>
             </div>
 
@@ -205,7 +205,7 @@
       <!-- MODAL DE ÉXITO DE ABONO (RECIBO Y COMPROBANTES) -->
       <div v-if="abonoExito" class="modal-backdrop">
         <div class="modal-sheet exito-sheet">
-          <div class="exito-icon">✓</div>
+          <div class="exito-icon"><CrmIcon name="check" /></div>
           <div class="exito-title">{{ abonoExito.reimpresion ? 'Comprobante de abono' : '¡Abono registrado!' }}</div>
           <div class="exito-sub">{{ abonoExito.clienteNombre }}</div>
 
@@ -264,7 +264,7 @@
               <div class="ms-title">Estado de cuenta</div>
               <div class="ms-sub">{{ kardexData?.clienteNombre || modalKardex.clienteNombre }}</div>
             </div>
-            <button class="ms-close" @click="cerrarKardex()">✕</button>
+            <button class="ms-close" @click="cerrarKardex()" aria-label="Cerrar historial de movimientos"><CrmIcon name="close" /></button>
           </div>
 
           <div class="ms-body" v-if="cargandoKardex">
@@ -359,10 +359,13 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { IonPage, IonContent, IonRefresher, IonRefresherContent } from '@ionic/vue'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { imprimirTicketAbono } from '@/services/printer'
 import { comprobanteAbonoHistorico, metodoPagoAbono } from '@/utils/abonoReceipt'
 
@@ -372,7 +375,7 @@ const cargando = ref(true)
 const error = ref('')
 const deudas = ref([])
 const pedidosRuta = ref([])
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const filtroRuta = ref('ruta') // 'ruta' | 'todos'
 
 // Modales
@@ -408,9 +411,9 @@ const deudoresRuta = computed(() => deudoresTodos.value.filter(d => estaEnRuta(d
 
 const listaFiltrada = computed(() => {
   const base = filtroRuta.value === 'ruta' ? deudoresRuta.value : clientesTodos.value
-  const q = buscar.value.trim().toLowerCase()
+  const q = terminoBusqueda.value
   if (!q) return base
-  return base.filter(d => (d.clienteNombre || '').toLowerCase().includes(q) || (d.telefono || '').includes(q))
+  return base.filter(d => normalizarBusqueda((d.clienteNombre || '')).includes(q) || (d.telefono || '').includes(q))
 })
 
 const totalSaldoMostrado = computed(() => listaFiltrada.value.reduce((s, d) => s + d.saldo, 0))
@@ -426,10 +429,10 @@ async function cargar() {
   try {
     const [dRes, pRes] = await Promise.all([
       http.get('/creditos/deudas-clientes'),
-      http.get('/pedidos', { params: { repartidorId: auth.usuarioId, estado: 'Abierto', tamano: 100 } })
+      listarPaginas('/pedidos', { repartidorId: auth.usuarioId, estado: 'Abierto' })
     ])
     deudas.value = dRes.data || []
-    pedidosRuta.value = pRes.data?.items || []
+    pedidosRuta.value = pRes
 
     // Si en ruta no hay clientes con saldo deudor, cambiar automáticamente a 'todos' para que el chofer no vea pantalla vacía
     if (deudoresRuta.value.length === 0 && clientesTodos.value.length > 0) {
@@ -1010,6 +1013,8 @@ onMounted(() => {
   color: var(--muted);
 }
 .ms-close {
+  display: grid;
+  place-items: center;
   background: var(--paper-2);
   border: none;
   width: 30px;
@@ -1207,6 +1212,7 @@ onMounted(() => {
   font-weight: 900;
   margin-bottom: 10px;
 }
+.exito-icon .crm-icon { width: 28px; height: 28px; }
 .exito-title {
   font-family: "Bricolage Grotesque";
   font-weight: 800;

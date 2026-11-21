@@ -23,7 +23,7 @@
     <div class="toolbar">
       <div class="busc-wrap">
         <svg class="busc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input class="busc-inp" type="text" v-model="busqueda" placeholder="Buscar repartidor por nombre o correo…">
+        <input class="busc-inp" type="text" v-model="busqueda" placeholder="Buscar repartidor por nombre o correo (mínimo 3 caracteres)">
       </div>
       <div class="tabs">
         <button class="tab" :class="{ act: filtroEstado === 'todos' }" @click="filtroEstado = 'todos'">
@@ -44,7 +44,7 @@
 
     <!-- Estado vacío -->
     <div v-else-if="!filtrados.length" class="vacio">
-      <div class="v-ic">🚚</div>
+      <div class="v-ic"><CrmIcon name="truck" /></div>
       <div class="v-t">{{ busqueda ? 'Sin resultados para la búsqueda' : 'No hay repartidores registrados' }}</div>
       <div class="v-s">{{ busqueda ? 'Intenta con otro término o limpia el buscador.' : 'Crea el primer repartidor con el botón “Nuevo repartidor”.' }}</div>
     </div>
@@ -84,13 +84,13 @@
     <div class="guia-card">
       <button class="guia-toggle" @click="mostrarGuia = !mostrarGuia">
         <div class="gt-l">
-          <span class="gt-ic">💡</span>
+          <span class="gt-ic"><CrmIcon name="bulb" /></span>
           <div>
             <div class="gt-t">¿Cómo opera el rol de Repartidor en ruta?</div>
             <div class="gt-s">Conoce el ciclo diario: cargas matutinas, entregas con GPS y liquidación de cortes</div>
           </div>
         </div>
-        <span class="gt-arrow">{{ mostrarGuia ? '▲ Ocultar' : '▼ Ver explicación' }}</span>
+        <span class="gt-arrow"><CrmIcon :name="mostrarGuia ? 'chevron-up' : 'chevron-down'" /> {{ mostrarGuia ? 'Ocultar' : 'Ver explicación' }}</span>
       </button>
 
       <div class="guia-content" v-show="mostrarGuia">
@@ -120,6 +120,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
@@ -131,7 +133,7 @@ const router = useRouter()
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
-const busqueda = ref('')
+const { buscar: busqueda, termino: terminoBusqueda } = useBusqueda('')
 const filtroEstado = ref('todos') // 'todos', 'activos', 'inactivos'
 const mostrarGuia = ref(false)
 
@@ -146,9 +148,9 @@ const filtrados = computed(() => {
     if (filtroEstado.value === 'inactivos' && u.activo) return false
 
     if (busqueda.value.trim()) {
-      const q = busqueda.value.toLowerCase().trim()
-      const n = (u.nombre || '').toLowerCase()
-      const e = (u.email || '').toLowerCase()
+      const q = terminoBusqueda.value
+      const n = normalizarBusqueda(u.nombre)
+      const e = normalizarBusqueda(u.email)
       return n.includes(q) || e.includes(q)
     }
     return true
@@ -222,6 +224,7 @@ onMounted(() => {
 /* Vacio */
 .vacio { text-align: center; padding: 48px 20px; background: var(--surface); border: 1px dashed var(--line); border-radius: 20px; }
 .v-ic { font-size: 36px; margin-bottom: 8px; }
+.v-ic .crm-icon { width: 38px; height: 38px; }
 .v-t { font-family: "Bricolage Grotesque"; font-size: 17px; font-weight: 700; color: var(--ink); }
 .v-s { font-size: 13px; color: var(--muted); margin-top: 4px; }
 

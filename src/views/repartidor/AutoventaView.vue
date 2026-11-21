@@ -71,7 +71,7 @@
               <template v-else>
                 <div class="search">
                   <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-                  <input v-model="buscarCli" placeholder="Buscar cliente…">
+                  <input v-model="buscarCli" placeholder="Buscar cliente (mínimo 3 caracteres)">
                 </div>
                 <div class="cli-lista">
                   <div v-for="c in clientesFiltrados" :key="c.id" class="cli-op" @click="cliente = c">
@@ -96,7 +96,9 @@
 
             <!-- Catálogo de productos de la carga -->
             <div class="sec">¿Qué vende de su carga?</div>
-            <div v-for="l in lineasCarga" :key="l.productoId" class="prod" :class="{ flash: resaltado===l.productoId }" :ref="(el)=>setRef(l.productoId, el)">
+            <input v-model="buscarProducto" class="inp" type="search" aria-label="Buscar producto de la carga" placeholder="Producto o código (mínimo 3 caracteres)">
+            <p v-if="!cargaFiltrada.length" class="muted">No hay productos de la carga que coincidan con la búsqueda.</p>
+            <div v-for="l in cargaFiltrada" :key="l.productoId" class="prod" :class="{ flash: resaltado===l.productoId }" :ref="(el)=>setRef(l.productoId, el)">
               <div class="top">
                 <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
                 <div class="info">
@@ -322,11 +324,13 @@
 </template>
 
 <script setup>
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import PrecioEspecial from '@/components/PrecioEspecial.vue'
 import { precioAplicado, precioEspecialValido, datosPrecioEspecial } from '@/utils/precioEspecial'
 import { useAuthStore } from '@/stores/auth'
@@ -349,7 +353,7 @@ const step = ref(1)
 const lineasCarga = ref([])
 const clientes = ref([])
 const cliente = ref(null)
-const buscarCli = ref('')
+const { buscar: buscarCli, termino: terminoCliente } = useBusqueda('')
 const ocasional = ref(false)
 const nombreOcasional = ref('')
 
@@ -441,11 +445,14 @@ const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const ini = (n) => (n || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
 const clientesFiltrados = computed(() => {
-  const t = buscarCli.value.trim().toLowerCase()
-  return t ? clientes.value.filter((c) => c.nombre.toLowerCase().includes(t)) : clientes.value
+  const t = terminoCliente.value
+  return clientes.value.filter(c => coincideBusqueda(t, c.nombre, c.telefono, c.direccion))
 })
 
 function info(pid) { return infoMap.value[pid] || {} }
+const { buscar: buscarProducto, termino: terminoProducto } = useBusqueda()
+const cargaFiltrada = computed(() => lineasCarga.value.filter(l =>
+  coincideBusqueda(terminoProducto.value, l.productoNombre, info(l.productoId).codigoBarras)))
 function esCaja(l) { return unidad[l.productoId] === 'caja' }
 function factorL(l) { const f = info(l.productoId).piezasPorCaja; return f && f > 0 ? f : 1 }
 function precioOriginalL(l) { return Number(esCaja(l) ? (info(l.productoId).precioCaja || 0) : l.precioVenta) }
@@ -580,6 +587,7 @@ function onScan(code) {
   const l = lineasCarga.value.find((x) => x.productoId === pid)
   if (!l) { aviso(`${nombreMap.value[pid] || 'Ese producto'}: no lo traes en la carga`, 'err'); return }
   if ((cant[l.productoId] || 0) >= maxUnidad(l)) { aviso(`${l.productoNombre}: ya alcanzaste lo disponible`, 'err'); return }
+  buscarProducto.value = ''
   set(l, (cant[l.productoId] || 0) + 1)
   aviso(`${l.productoNombre} agregado (${cant[l.productoId]})`)
   resaltado.value = l.productoId
@@ -733,14 +741,13 @@ onMounted(async () => {
   try {
     const cg = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`)
     lineasCarga.value = (cg.data.lineas || []).filter((l) => l.restante > 0)
-    const cl = await http.get('/clientes', { params: { tamano: 200 } })
-    clientes.value = cl.data.items
+    clientes.value = await listarPaginas('/clientes')
     try {
-      const pr = await http.get('/productos', { params: { tamano: 200 } })
+      const pr = await listarPaginas('/productos')
       const m = {}, info = {}, nom = {}
-      pr.data.items.forEach((x) => {
+      pr.forEach((x) => {
         if (x.codigoBarras) m[normCod(x.codigoBarras)] = x.id
-        info[x.id] = { vendePorCaja: x.vendePorCaja, piezasPorCaja: x.piezasPorCaja, precioCaja: x.precioCaja, precioVenta: x.precioVenta }
+        info[x.id] = { vendePorCaja: x.vendePorCaja, piezasPorCaja: x.piezasPorCaja, precioCaja: x.precioCaja, precioVenta: x.precioVenta, codigoBarras: x.codigoBarras }
         nom[x.id] = x.nombre
       })
       codMap.value = m; infoMap.value = info; nombreMap.value = nom

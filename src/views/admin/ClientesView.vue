@@ -36,7 +36,7 @@
     <div class="toolbar">
       <div class="search">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por nombre, teléfono o dirección…" @input="debounced">
+        <input v-model="buscar" type="search" placeholder="Nombre, teléfono o dirección (mínimo 3 caracteres)">
       </div>
 
       <div class="chips">
@@ -60,7 +60,7 @@
             <div class="nombre-row">
               <span class="nombre">{{ c.nombre }}</span>
               <span v-if="c.saldoDeuda > 0" class="tag-deuda" :class="{ vencido: c.tieneCreditoVencido }">
-                {{ c.tieneCreditoVencido ? '⚠️ Vencido: ' : 'Debe: ' }}{{ money(c.saldoDeuda) }}
+                <CrmIcon v-if="c.tieneCreditoVencido" name="alert" /> {{ c.tieneCreditoVencido ? 'Vencido: ' : 'Debe: ' }}{{ money(c.saldoDeuda) }}
               </span>
             </div>
             <div class="sub">{{ c.direccion || 'Sin dirección registrada' }}</div>
@@ -108,7 +108,7 @@
     <!-- Guía interactiva -->
     <div class="guia-card">
       <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-        <div class="guia-icon">💡</div>
+        <div class="guia-icon"><CrmIcon name="bulb" /></div>
         <div class="guia-tit">¿Cómo funciona la gestión integral de Clientes?</div>
         <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
       </div>
@@ -137,7 +137,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import {
@@ -152,6 +154,7 @@ import {
   bagHandleOutline
 } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -159,14 +162,13 @@ const items = ref([])
 const resumen = ref(null)
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const filtro = ref('todos') // 'todos' | 'gps' | 'nogps' | 'deuda'
 const mostrarGuia = ref(false)
 
 // Paginación
 const pagina = ref(1)
 const tamano = ref(24)
-let timerBusqueda = null
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 
@@ -175,13 +177,7 @@ function setFiltro(f) {
   pagina.value = 1
 }
 
-function debounced() {
-  clearTimeout(timerBusqueda)
-  timerBusqueda = setTimeout(() => {
-    pagina.value = 1
-    cargar()
-  }, 350)
-}
+watch(terminoBusqueda, () => { pagina.value = 1 })
 
 const itemsFiltrados = computed(() => {
   let list = items.value
@@ -192,7 +188,7 @@ const itemsFiltrados = computed(() => {
   } else if (filtro.value === 'deuda') {
     list = list.filter(c => (c.saldoDeuda || 0) > 0)
   }
-  return list
+  return list.filter(c => coincideBusqueda(terminoBusqueda.value, c.nombre, c.telefono, c.direccion, c.id))
 })
 
 const totalPaginas = computed(() => Math.max(1, Math.ceil(itemsFiltrados.value.length / tamano.value)))
@@ -230,10 +226,10 @@ async function cargar() {
   cargando.value = true; error.value = ''
   try {
     const [resList, resResumen] = await Promise.all([
-      http.get('/clientes', { params: { buscar: buscar.value || undefined, tamano: 300 } }),
+      listarPaginas('/clientes'),
       http.get('/clientes/resumen')
     ])
-    items.value = resList.data.items || []
+    items.value = resList
     resumen.value = resResumen.data
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los clientes.'
@@ -293,6 +289,7 @@ onMounted(() => {
 .nombre { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
 .tag-deuda { font-size: 10.5px; font-weight: 700; color: var(--clay); background: var(--clay-soft); padding: 2px 7px; border-radius: 6px; }
 .tag-deuda.vencido { background: #FDE8E4; color: #B33A1F; font-weight: 800; }
+.tag-deuda .crm-icon { width: 13px; height: 13px; }
 .sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tags { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
 .tag { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 7px; display: inline-flex; align-items: center; gap: 4px; }

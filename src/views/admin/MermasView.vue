@@ -4,7 +4,7 @@
     <div class="edu-card">
       <div class="edu-head" @click="guiaAbierta = !guiaAbierta">
         <div class="edu-tit">
-          <span class="edu-ico">💡</span>
+          <span class="edu-ico"><CrmIcon name="bulb" /></span>
           <div>
             <b>¿Cómo opera el ciclo de mermas y reposición con proveedores?</b>
             <div class="edu-sub">Descubre cómo auditar pérdidas, proteger tu corte de caja y recuperar mercancía devuelta</div>
@@ -45,7 +45,7 @@
       <div class="kpi-card">
         <div class="kpi-l">Mermas por revisar</div>
         <div class="kpi-v" :class="{ alert: kpiPorRevisar > 0 }">{{ kpiPorRevisar }}</div>
-        <div class="kpi-s">{{ kpiPorRevisar > 0 ? 'Requieren auditoría inmediata' : 'Al día, sin pendientes 👍' }}</div>
+        <div class="kpi-s"><CrmIcon v-if="!kpiPorRevisar" name="success" /> {{ kpiPorRevisar > 0 ? 'Requieren auditoría inmediata' : 'Al día, sin pendientes' }}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-l">Pérdida económica total</div>
@@ -68,8 +68,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por producto, repartidor o motivo…" @input="onBuscarInput">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''; cargar()">×</button>
+        <input v-model="buscar" type="search" placeholder="Producto, repartidor o motivo (mínimo 3 caracteres)">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
 
       <div class="fechas-box">
@@ -94,11 +94,11 @@
 
     <p v-if="cargando" class="muted">Cargando reportes de merma…</p>
     <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!items.length" class="muted">{{ vacioTexto }}</p>
+    <p v-else-if="!mermasFiltradas.length" class="muted">{{ vacioTexto }}</p>
 
     <!-- LISTADO DE TARJETAS -->
     <div class="grid" v-else>
-      <div v-for="m in items" :key="m.id" class="card" @click="abrir(m)">
+      <div v-for="m in mermasFiltradas" :key="m.id" class="card" @click="abrir(m)">
         <div class="head">
           <div class="chip" :class="escClase(m.escenario)"><ion-icon :icon="alertOutline" /></div>
           <div class="info">
@@ -184,10 +184,13 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, coincideBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import { alertOutline, imageOutline, personOutline } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const items = ref([])
@@ -195,14 +198,15 @@ const cargando = ref(true)
 const error = ref('')
 const errorAccion = ref('')
 const estado = ref('Reportada')
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const fechaDesde = ref('')
 const fechaHasta = ref('')
 const ocupado = ref(false)
 const sel = ref(null)
 const ampliar = ref(false)
 const guiaAbierta = ref(false)
-let buscarTimer = null
+const mermasFiltradas = computed(() => items.value.filter(m =>
+  coincideBusqueda(terminoBusqueda.value, m.productoNombre, m.repartidorNombre, m.motivo, m.id)))
 
 const filtros = [
   { k: 'Reportada', t: 'Por revisar' },
@@ -222,7 +226,7 @@ const estClase = (e) => ({ Reportada: 'amber', Verificada: 'pine', Restablecida:
 
 const vacioTexto = computed(() => {
   if (buscar.value || fechaDesde.value || fechaHasta.value) return 'No se encontraron mermas con los filtros aplicados.'
-  return estado.value === 'Reportada' ? 'No hay mermas por revisar. ¡Todo al día! 👍' : 'Sin mermas en este estado.'
+  return estado.value === 'Reportada' ? 'No hay mermas por revisar. ¡Todo al día!' : 'Sin mermas en este estado.'
 })
 
 // KPIs computados sobre el listado actual
@@ -244,10 +248,6 @@ function abrir(m) { sel.value = m; ampliar.value = false; errorAccion.value = ''
 function cerrar() { sel.value = null }
 function setEstado(k) { estado.value = k; cargar() }
 
-function onBuscarInput() {
-  clearTimeout(buscarTimer)
-  buscarTimer = setTimeout(() => cargar(), 350)
-}
 
 function limpiarFechas() {
   fechaDesde.value = ''
@@ -259,13 +259,11 @@ async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const params = { tamano: 150 }
+    const params = {}
     if (estado.value) params.estado = estado.value
-    if (buscar.value.trim()) params.buscar = buscar.value.trim()
     if (fechaDesde.value) params.desde = fechaDesde.value
     if (fechaHasta.value) params.hasta = fechaHasta.value
-    const { data } = await http.get('/mermas', { params })
-    items.value = data.items || []
+    items.value = await listarPaginas('/mermas', params)
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar las mermas.'
   } finally {

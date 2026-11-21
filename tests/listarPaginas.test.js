@@ -31,6 +31,15 @@ test('mantiene llamadas existentes sin filtros', async () => {
   assert.equal((await listar('/productos')).length, 0)
 })
 
+test('mantiene la señal de cancelación en todas las páginas', async () => {
+  const controller = new AbortController()
+  const listar = cargar(async (ruta, { params, signal }) => {
+    assert.equal(signal, controller.signal)
+    return { data: { items: [params.pagina], total: 2, tamanoPagina: 1, pagina: params.pagina } }
+  })
+  assert.deepEqual(Array.from(await listar('/pedidos', {}, { signal: controller.signal })), [1, 2])
+})
+
 test('no presenta catálogo parcial si falla una página posterior', async () => {
   const listar = cargar(async (ruta, { params }) => {
     if (params.pagina === 2) throw new Error('Sin conexión')

@@ -4,7 +4,7 @@
     <div class="edu-card">
       <div class="edu-head" @click="guiaAbierta = !guiaAbierta">
         <div class="edu-tit">
-          <span class="edu-ico">💡</span>
+          <span class="edu-ico"><CrmIcon name="bulb" /></span>
           <div>
             <b>¿Cómo gestionar proveedores y reorden de mercancía?</b>
             <div class="edu-sub">Optimiza tus compras a proveedores, reabastece por WhatsApp y mantén costos al día</div>
@@ -33,7 +33,7 @@
             <span class="step-badge">3</span>
             <div class="step-content">
               <b>Entrada de compra y costo promedio</b>
-              <p>Al pulsar <b>"Nueva compra"</b> en la tarjeta, el proveedor se preselecciona automáticamente para registrar la factura y recalcular de forma transparente el costo promedio ponderado (CPP).</p>
+              <p>Al pulsar <b>"Nueva compra"</b> en la tarjeta, el proveedor se selecciona automáticamente para registrar la factura y actualizar el costo promedio de los productos.</p>
             </div>
           </div>
         </div>
@@ -68,8 +68,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar proveedor por nombre o teléfono…">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''">×</button>
+        <input v-model="buscar" placeholder="Buscar proveedor por nombre o teléfono (mínimo 3 caracteres)">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
 
       <div class="tabs">
@@ -123,6 +123,8 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
@@ -134,7 +136,7 @@ const router = useRouter()
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const tabActiva = ref('todos')
 const guiaAbierta = ref(false)
 
@@ -147,8 +149,8 @@ const tabs = [
 
 const filtrados = computed(() => {
   return items.value.filter(p => {
-    const texto = buscar.value.trim().toLowerCase()
-    if (texto && ![p.nombre, p.telefono, p.whatsapp].some(valor => String(valor || '').toLowerCase().includes(texto))) return false
+    const texto = terminoBusqueda.value
+    if (texto && ![p.nombre, p.telefono, p.whatsapp].some(valor => normalizarBusqueda(valor).includes(texto))) return false
     if (tabActiva.value === 'wa' && !p.whatsapp) return false
     if (tabActiva.value === 'activos' && !p.activo) return false
     if (tabActiva.value === 'inactivos' && p.activo) return false

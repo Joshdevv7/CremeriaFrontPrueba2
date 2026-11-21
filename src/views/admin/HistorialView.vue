@@ -3,14 +3,14 @@
     <!-- Barra superior de filtros y selección -->
     <div class="top-bar">
       <div class="filtros">
-        <select class="inp sel" v-model="repartidorId" @change="cambiarFiltro">
+        <select class="inp sel" v-model="repartidorId" aria-label="Repartidor del recorrido" @change="cambiarFiltro">
           <option :value="null" disabled>Seleccionar repartidor…</option>
           <option v-for="r in repartidores" :key="r.id" :value="r.id">{{ r.nombre }}</option>
         </select>
         <div class="date-group">
-          <button class="btn-d" @click="moverDia(-1)" title="Día anterior">‹</button>
-          <input class="inp date-inp" type="date" v-model="fecha" @change="cambiarFiltro">
-          <button class="btn-d" @click="moverDia(1)" title="Día siguiente">›</button>
+          <button class="btn-d" @click="moverDia(-1)" aria-label="Día anterior"><CrmIcon name="back" /></button>
+          <input class="inp date-inp" type="date" v-model="fecha" aria-label="Fecha del recorrido" @change="cambiarFiltro">
+          <button class="btn-d" @click="moverDia(1)" aria-label="Día siguiente"><CrmIcon name="arrow" /></button>
           <button class="btn-hoy" :class="{ act: esHoy }" @click="irAHoy">Hoy</button>
         </div>
       </div>
@@ -49,14 +49,14 @@
         <div ref="mapRef" class="map"></div>
         <div v-if="!cargando && !repartidorId" class="nogeo">
           <div class="empty-box">
-            <span class="ico">🚚</span>
+            <CrmIcon class="ico" name="truck" />
             <div class="et">Selecciona un repartidor</div>
             <div class="es">Elige a un miembro del equipo para ver su recorrido y entregas del día seleccionado.</div>
           </div>
         </div>
         <div v-else-if="!cargando && !paradas.length && !traza.length" class="nogeo">
           <div class="empty-box">
-            <span class="ico">📍</span>
+            <CrmIcon class="ico" name="pin" />
             <div class="et">Sin recorrido ni entregas</div>
             <div class="es">No se registraron posiciones GPS ni entregas con ubicación en esta fecha.</div>
           </div>
@@ -87,7 +87,12 @@
           :key="p.id"
           class="stop"
           :class="{ activa: paradaActiva === i }"
+          role="button"
+          tabindex="0"
+          :aria-label="`Centrar parada ${i + 1}: ${p.clienteNombre || p.nombreOcasional || 'Clientes varios'}`"
           @click="enfocarParada(i)"
+          @keydown.enter="enfocarParada(i)"
+          @keydown.space.prevent="enfocarParada(i)"
         >
           <div class="idx">{{ i + 1 }}</div>
           <div class="info">
@@ -112,18 +117,18 @@
 
     <!-- Tarjeta explicativa del funcionamiento del módulo de Recorridos -->
     <div class="guia-card">
-      <button class="guia-toggle" @click="mostrarGuia = !mostrarGuia">
+      <button class="guia-toggle" :aria-expanded="mostrarGuia" aria-controls="route-map-guide" @click="mostrarGuia = !mostrarGuia">
         <div class="gt-l">
-          <span class="gt-ic">💡</span>
+          <CrmIcon class="gt-ic" name="help" />
           <div>
             <div class="gt-t">¿Cómo funciona el mapa de recorridos a costo $0?</div>
             <div class="gt-s">Conoce cómo se registran los puntos y el trazo de ruta sin pagar APIs costosas de Google</div>
           </div>
         </div>
-        <span class="gt-arrow">{{ mostrarGuia ? '▲ Ocultar' : '▼ Ver explicación' }}</span>
+        <span class="gt-arrow"><CrmIcon :name="mostrarGuia ? 'chevron-up' : 'chevron-down'" /> {{ mostrarGuia ? 'Ocultar' : 'Ver explicación' }}</span>
       </button>
 
-      <div class="guia-content" v-show="mostrarGuia">
+      <div id="route-map-guide" class="guia-content" v-show="mostrarGuia">
         <div class="gc-grid">
           <div class="gc-item">
             <div class="gc-num">1</div>
@@ -155,6 +160,7 @@ import { useRoute, useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import http from '@/api/http'
+import CrmIcon from '@/components/CrmIcon.vue'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -466,7 +472,7 @@ onUnmounted(() => {
 
 /* Columnas: Mapa y Lista */
 .cols { display: grid; grid-template-columns: 1.65fr 1fr; gap: 16px; }
-.mapwrap { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); min-height: 480px; }
+.mapwrap { position: relative; isolation: isolate; z-index: 0; min-width: 0; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); min-height: 480px; }
 .map { height: 100%; min-height: 480px; width: 100%; background: #ECF2EC; }
 
 .cargando-overlay { position: absolute; inset: 0; background: rgba(255,253,248,.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; z-index: 1000; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); backdrop-filter: blur(2px); }
@@ -481,7 +487,7 @@ onUnmounted(() => {
 
 .nogeo { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(246,248,246,.9); color: var(--muted); pointer-events: none; padding: 24px; z-index: 500; }
 .empty-box { text-align: center; max-width: 320px; }
-.empty-box .ico { font-size: 34px; display: block; margin-bottom: 8px; }
+.empty-box .ico { width: 34px; height: 34px; display: block; margin: 0 auto 8px; }
 .empty-box .et { font-family: "Bricolage Grotesque"; font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
 .empty-box .es { font-size: 13px; color: var(--muted); line-height: 1.4; }
 
@@ -495,6 +501,7 @@ onUnmounted(() => {
 
 .stop { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 11px 13px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer; transition: all .15s ease; }
 .stop:hover { border-color: var(--pine); transform: translateY(-1px); }
+.stop:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
 .stop.activa { border-color: #D65A31; background: #FFF9F6; box-shadow: 0 4px 14px rgba(214,90,49,.15); }
 .stop.activa .idx { background: #D65A31; }
 
@@ -537,5 +544,13 @@ onUnmounted(() => {
   .mapwrap { min-height: 340px; }
   .map { min-height: 340px; }
   .lista { max-height: 380px; }
+  .filtros { min-width: 0; width: 100%; }
+  .sel { width: 100%; min-width: 0; min-height: 44px; }
+  .date-group { max-width: 100%; }
+  .date-inp { min-width: 0; width: 130px; }
+  .btn-d,.btn-hoy { min-width: 44px; min-height: 44px; }
+  .leyenda { left: 8px; right: 8px; bottom: 8px; gap: 8px; padding: 8px; flex-wrap: wrap; }
+  .guia-toggle { align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .gt-l { min-width: 0; align-items: flex-start; }
 }
 </style>

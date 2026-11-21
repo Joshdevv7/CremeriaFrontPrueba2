@@ -7,25 +7,23 @@
         <!-- Columna Datos Generales -->
         <div class="col">
           <div class="eyebrow">Datos generales</div>
-          <div class="field"><div class="fl">Nombre del producto *</div><input class="inp" v-model="form.nombre" placeholder="Ej. Queso barra 1kg"></div>
-          <div class="field"><div class="fl">Categoría</div><input class="inp" v-model="form.categoria" placeholder="Ej. Lácteos, Abarrotes, Embutidos"></div>
-          <div class="field"><div class="fl">Código de barras</div>
+          <div class="field"><label class="fl" for="product-name">Nombre del producto *</label><input id="product-name" class="inp" v-model="form.nombre" placeholder="Ej. Queso barra 1kg"></div>
+          <div class="field"><label class="fl" for="product-category">Categoría</label><input id="product-category" class="inp" v-model="form.categoria" placeholder="Ej. Lácteos, Abarrotes, Embutidos"></div>
+          <div class="field"><label class="fl" for="product-barcode">Código de barras</label>
             <div class="cod-row">
-              <input class="inp" v-model="form.codigoBarras" placeholder="Ej. 7501000000016" inputmode="numeric">
-              <button class="scan-b" type="button" @click="mostrarScan = true" title="Escanear con cámara"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg></button>
+              <input id="product-barcode" class="inp" v-model="form.codigoBarras" placeholder="Ej. 7501000000016" inputmode="numeric">
+              <button class="scan-b" type="button" @click="mostrarScan = true" title="Escanear con cámara" aria-label="Escanear código de barras con cámara"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg></button>
             </div>
           </div>
-          <div class="field"><div class="fl">Unidad de medida</div>
-            <select class="inp sel" v-model.number="form.unidad"><option :value="0">Pieza (u)</option><option :value="1">Peso (kg)</option><option :value="2">Caja</option></select>
+          <div class="field"><label class="fl" for="product-unit">Unidad de medida</label>
+            <select id="product-unit" class="inp sel" v-model.number="form.unidad"><option :value="0">Pieza</option><option :value="1">Kilogramo (kg)</option><option :value="2">Caja</option></select>
+            <small class="field-help">Precios y existencias se capturan en {{ unidadPlural }}.</small>
           </div>
           <div class="field">
-            <div class="fl">Proveedor habitual</div>
-            <select class="inp sel" v-model="form.proveedorId">
-              <option :value="null">Sin proveedor asignado</option>
-              <option v-for="pv in proveedoresDisponibles" :key="pv.id" :value="pv.id">{{ pv.nombre }}{{ pv.activo ? '' : ' (inactivo)' }}</option>
-            </select>
+            <div id="product-supplier-label" class="fl">Proveedor habitual</div>
+            <BuscadorSelect v-model="form.proveedorId" :opciones="opcionesProveedor" nombre="proveedor" placeholder="Sin proveedor asignado" :incluir-todos="false" aria-labelledby="product-supplier-label" />
             <small v-if="provSeleccionado?.whatsapp" class="prov-wa-hint">
-              📱 WhatsApp configurado: <b>{{ provSeleccionado.whatsapp }}</b> (activo para reorden en 1 toque)
+              WhatsApp configurado: <b>{{ provSeleccionado.whatsapp }}</b> (para solicitar reabastecimiento)
             </small>
           </div>
           <label v-if="!esNuevo" class="estado"><input type="checkbox" v-model="form.activo"> Producto activo</label>
@@ -36,12 +34,13 @@
           <div class="eyebrow">Precios, utilidad e inventario</div>
           <div class="dosfields">
             <div class="field">
-              <div class="fl">Precio de venta *</div>
-              <input class="inp" v-model.number="form.precioVenta" type="number" step="any" placeholder="0.00">
+              <label class="fl" for="product-price">Precio de venta por {{ unidadSingular }} *</label>
+              <input id="product-price" class="inp" v-model.number="form.precioVenta" type="number" step="any" placeholder="0.00">
             </div>
             <div class="field">
-              <div class="fl">Costo promedio (CPP)</div>
-              <input class="inp" v-model.number="form.costoPromedio" type="number" step="any" placeholder="0.00">
+              <label class="fl" for="product-cost">Costo promedio por {{ unidadSingular }}</label>
+              <input id="product-cost" class="inp" v-model.number="form.costoPromedio" aria-describedby="product-cost-help" type="number" step="any" placeholder="0.00">
+              <small id="product-cost-help" class="field-help">Costo de compra promedio de una {{ unidadSingular }}. Se usa para calcular la ganancia.</small>
             </div>
           </div>
 
@@ -49,27 +48,31 @@
           <div class="margen-card" :class="margenPza.clase">
             <div class="margen-main">
               <span class="m-pct">{{ margenPza.pct }}% margen bruto</span>
-              <span class="m-utilidad">{{ money(margenPza.ganancia) }} ganancia / pza</span>
+              <span class="m-utilidad">{{ money(margenPza.ganancia) }} ganancia por {{ unidadSingular }}</span>
             </div>
             <div class="m-sub">Basado en costo unitario de {{ money(form.costoPromedio) }}</div>
           </div>
 
           <div class="field">
-            <div class="fl">Stock físico en almacén</div>
-            <input class="inp" v-model.number="form.stockAlmacen" type="number" step="any" placeholder="0">
+            <label class="fl" for="product-stock">Existencias en almacén ({{ unidadPlural }})</label>
+            <input id="product-stock" class="inp" v-model.number="form.stockAlmacen" type="number" step="any" placeholder="0">
           </div>
 
           <div class="dosfields">
             <div class="field">
-              <div class="fl">Stock mínimo</div>
-              <input class="inp" v-model.number="form.stockMinimo" type="number" step="any" placeholder="0">
+              <label class="fl" for="product-minimum">Existencias mínimas ({{ unidadPlural }})</label>
+              <input id="product-minimum" class="inp" aria-describedby="reorder-help" v-model.number="form.stockMinimo" type="number" step="any" placeholder="0">
             </div>
             <div class="field">
-              <div class="fl">Stock objetivo</div>
-              <input class="inp" v-model.number="form.stockObjetivo" type="number" step="any" placeholder="0">
+              <label class="fl" for="product-target">Existencias deseadas después de reabastecer ({{ unidadPlural }})</label>
+              <input id="product-target" class="inp" aria-describedby="reorder-help reorder-example" v-model.number="form.stockObjetivo" type="number" step="any" placeholder="0">
             </div>
           </div>
-          <p class="hint">Al caer al mínimo, el sistema calcula pedir {{ Math.max(0, (form.stockObjetivo || 0) - (form.stockAlmacen || 0)) }} pzas hasta el objetivo.</p>
+          <div class="reorder-help">
+            <p id="reorder-help">El mínimo activa la alerta cuando las existencias llegan a esa cantidad o bajan de ella. La cantidad deseada es lo que quieres tener en total después de comprar.</p>
+            <p id="reorder-example"><strong>Con tus datos:</strong> tienes {{ cantidad(form.stockAlmacen) }} {{ unidadPlural }}, el mínimo es {{ cantidad(form.stockMinimo) }} y deseas tener {{ cantidad(form.stockObjetivo) }}. {{ Number(form.stockAlmacen) <= Number(form.stockMinimo) ? 'Hay alerta; se sugiere comprar' : 'Para llegar a esa cantidad faltan' }} <strong>{{ cantidad(sugerido) }} {{ unidadPlural }}</strong>.</p>
+            <small>Ejemplo: mínimo 5, cantidad deseada 20 y existencias 4 → compra sugerida de 16.</small>
+          </div>
 
           <!-- Venta por caja -->
           <div class="field caja">
@@ -78,17 +81,17 @@
                 <div class="ct">Venta por caja</div>
                 <div class="cd">Vender el producto por pieza y por caja cerrada</div>
               </div>
-              <button type="button" class="sw" :class="{ on: form.vendePorCaja }" @click="form.vendePorCaja = !form.vendePorCaja"><span></span></button>
+              <button type="button" class="sw" role="switch" aria-label="Habilitar venta por caja" :aria-checked="form.vendePorCaja" :class="{ on: form.vendePorCaja }" @click="form.vendePorCaja = !form.vendePorCaja"><span></span></button>
             </div>
             <div v-if="form.vendePorCaja" class="caja-body">
               <div class="dosfields">
                 <div>
-                  <div class="fl">Piezas por caja *</div>
-                  <input class="inp" v-model.number="form.piezasPorCaja" type="number" min="2" step="1" placeholder="12">
+                  <label class="fl" for="product-box-units">Piezas por caja *</label>
+                  <input id="product-box-units" class="inp" v-model.number="form.piezasPorCaja" type="number" min="2" step="1" placeholder="12">
                 </div>
                 <div>
-                  <div class="fl">Precio de la caja *</div>
-                  <input class="inp" v-model.number="form.precioCaja" type="number" step="any" placeholder="0.00">
+                  <label class="fl" for="product-box-price">Precio de la caja *</label>
+                  <input id="product-box-price" class="inp" v-model.number="form.precioCaja" type="number" step="any" placeholder="0.00">
                 </div>
               </div>
 
@@ -123,6 +126,7 @@ import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
+import BuscadorSelect from '@/components/BuscadorSelect.vue'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -159,6 +163,12 @@ const provSeleccionado = computed(() => {
   return proveedores.value.find(p => p.id === form.proveedorId)
 })
 const proveedoresDisponibles = computed(() => proveedores.value.filter(p => p.activo || p.id === form.proveedorId))
+
+const opcionesProveedor = computed(() => proveedoresDisponibles.value.map(p => ({ ...p, nombre: p.nombre + (p.activo ? '' : ' (inactivo)') })))
+const unidadSingular = computed(() => ['pieza', 'kilogramo', 'caja'][form.unidad] || 'pieza')
+const unidadPlural = computed(() => ['piezas', 'kilogramos', 'cajas'][form.unidad] || 'piezas')
+const sugerido = computed(() => Math.max(0, Number(form.stockObjetivo || 0) - Number(form.stockAlmacen || 0)))
+const cantidad = n => Number(n || 0).toLocaleString('es-MX')
 
 const margenPza = computed(() => {
   const pv = Number(form.precioVenta) || 0
@@ -289,14 +299,16 @@ onMounted(async () => {
 .muted { color: var(--muted); margin-top: 24px; }
 .estado { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 12px 2px; }
+.editor, .col, .field { min-width: 0; }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .col { display: flex; flex-direction: column; gap: 11px; }
 
 .eyebrow { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 4px 2px; }
 .field { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); flex: 1; }
 .dosfields { display: flex; gap: 11px; }
-.fl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
-.inp { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
+.dosfields > * { min-width: 0; }
+.fl { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
+.inp { min-height: 44px; min-width: 0; box-sizing: border-box; width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 11px; padding: 12px 13px; font-family: "Hanken Grotesk"; font-size: 15px; font-weight: 600; color: var(--ink); }
 
 .cod-row { display: flex; gap: 9px; }
 .cod-row .inp { flex: 1; }
@@ -309,7 +321,7 @@ onMounted(async () => {
 
 /* Margen Card */
 .margen-card { border-radius: 13px; padding: 11px 14px; display: flex; flex-direction: column; gap: 2px; }
-.margen-main { display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; font-family: "Bricolage Grotesque"; font-size: 15px; }
+.margen-main { flex-wrap: wrap; gap: 4px 12px; display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; font-family: "Bricolage Grotesque"; font-size: 15px; }
 .m-sub { font-size: 11px; opacity: .85; }
 .m-green { background: var(--pine-tint); color: var(--pine); }
 .m-amber { background: var(--amber-soft); color: #B9781F; }
@@ -337,7 +349,23 @@ onMounted(async () => {
 .margen-caja-card b { color: var(--ink); }
 .mc-gan b { color: var(--pine); }
 
-.sw { width: 50px; height: 30px; border-radius: 16px; border: none; background: var(--line); position: relative; cursor: pointer; flex: 0 0 auto; transition: background .15s; }
-.sw span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+.sw { width: 56px; height: 44px; border-radius: 16px; border: none; background: var(--line); position: relative; cursor: pointer; flex: 0 0 auto; transition: background .15s; }
+.sw span { position: absolute; top: 10px; left: 6px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .sw.on { background: var(--pine); } .sw.on span { transform: translateX(20px); }
+.field-help { display: block; margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+.field :deep(.ss) { display: flex; width: 100%; }
+.field :deep(.ss-btn) { flex: 1; width: 100%; min-width: 0; }
+.reorder-help { background: var(--pine-tint); border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
+.reorder-help p { margin: 0 0 8px; }
+.reorder-help small { display: block; font-size: 12px; }
+.reorder-help strong { color: var(--pine-deep); }
+.estado { min-height: 44px; }
+.estado input { width: 20px; height: 20px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--sky, #2E6F8E); outline-offset: 3px; }
+@media (max-width: 480px) {
+  .dosfields { flex-direction: column; }
+  .guardar-bar { flex-wrap: wrap; max-width: none; }
+  .guardar-bar .cta { flex-basis: 100%; }
+  .margen-caja-card { align-items: flex-start; flex-direction: column; gap: 5px; }
+}
 </style>

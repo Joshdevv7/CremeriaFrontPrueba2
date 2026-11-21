@@ -24,7 +24,7 @@
 
             <!-- Alerta explicativa de pago pendiente -->
             <div v-if="resumen.efectivoPendiente > 0" class="alerta-pend-efectivo">
-              ℹ️ <b>Pago pendiente:</b> Se descontaron {{ money(resumen.efectivoPendiente) }} porque la mercancía se entregó sin recibir el dinero en mano aún.
+              <CrmIcon name="info" /> <b>Pago pendiente:</b> Se descontaron {{ money(resumen.efectivoPendiente) }} porque la mercancía se entregó sin recibir el dinero en mano aún.
             </div>
 
             <div class="rrow" :class="{ total: resumen.efectivoPendiente > 0 }">
@@ -88,7 +88,7 @@
             </div>
           </div>
           <div v-if="ventasCanceladasTurno > 0" class="canc-note">
-            ⚠️ <b>{{ ventasCanceladasTurno }} venta(s) cancelada(s)</b> en este turno · excluidas de tu corte y de tu efectivo esperado.
+            <CrmIcon name="alert" /> <b>{{ ventasCanceladasTurno }} venta(s) cancelada(s)</b> en este turno · excluidas de tu corte y de tu efectivo esperado.
           </div>
 
           <!-- Botón y lista de ventas incluidas en este corte -->
@@ -115,7 +115,7 @@
       <!-- Guía interactiva -->
       <div class="guia-card">
         <div class="guia-header" @click="mostrarGuia = !mostrarGuia">
-          <div class="guia-icon">💡</div>
+          <div class="guia-icon"><CrmIcon name="bulb" /></div>
           <div class="guia-tit">¿Cómo se calcula y concilia el Corte de Caja de Mostrador?</div>
           <div class="guia-badge">{{ mostrarGuia ? 'Ocultar guía' : 'Ver guía' }}</div>
         </div>
@@ -182,6 +182,7 @@
 </template>
 
 <script setup>
+import CrmIcon from '@/components/CrmIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import {

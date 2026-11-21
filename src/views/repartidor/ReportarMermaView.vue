@@ -23,7 +23,7 @@
           <div class="lista" v-if="!seleccion">
             <div class="search">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-              <input v-model="buscar" placeholder="Buscar en mi carga…">
+              <input v-model="buscar" placeholder="Buscar en mi carga (mínimo 3 caracteres)">
             </div>
             <p v-if="!disponibles.length" class="muted">Ya no traes mercancía en la camioneta.</p>
             <div v-for="l in filtrados" :key="l.id" class="prod" @click="elegir(l)">
@@ -81,9 +81,11 @@
 </template>
 
 <script setup>
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, computed, onMounted } from 'vue'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import { useAuthStore } from '@/stores/auth'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
@@ -93,7 +95,7 @@ const auth = useAuthStore()
 const carga = ref(null)
 const cargando = ref(true)
 const sinCarga = ref(false)
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const seleccion = ref(null)
 const cantidad = ref(1)
 const motivo = ref('')
@@ -112,7 +114,7 @@ const codMap = ref({})  // codigoBarras -> productoId
 
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const disponibles = computed(() => (carga.value?.lineas || []).filter((l) => l.restante > 0))
-const filtrados = computed(() => { const t = buscar.value.trim().toLowerCase(); return t ? disponibles.value.filter((l) => l.productoNombre.toLowerCase().includes(t)) : disponibles.value })
+const filtrados = computed(() => { const t = terminoBusqueda.value; return t ? disponibles.value.filter((l) => normalizarBusqueda(l.productoNombre).includes(t)) : disponibles.value })
 const excede = computed(() => seleccion.value && cantidad.value > seleccion.value.restante)
 const motivoFinal = computed(() => (motivoLibre.value.trim() || motivo.value).trim())
 const puede = computed(() => seleccion.value && cantidad.value > 0 && !excede.value && motivoFinal.value && fotoFile)
@@ -162,8 +164,8 @@ onMounted(async () => {
   try {
     const { data } = await http.get(`/cargas/repartidor/${auth.usuarioId}/abierta`); carga.value = data
     try {
-      const pr = await http.get('/productos', { params: { tamano: 200 } })
-      const m = {}; pr.data.items.forEach((x) => { if (x.codigoBarras) m[String(x.codigoBarras).replace(/\s/g, '')] = x.id })
+      const productos = await listarPaginas('/productos')
+      const m = {}; productos.forEach((x) => { if (x.codigoBarras) m[String(x.codigoBarras).replace(/\s/g, '')] = x.id })
       codMap.value = m
     } catch { /* el escaneo por código quedará limitado */ }
   }

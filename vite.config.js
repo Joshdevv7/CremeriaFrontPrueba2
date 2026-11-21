@@ -10,6 +10,7 @@ const projectRoot = realpathSync(fileURLToPath(new URL('.', import.meta.url)))
 export default defineConfig({
   root: projectRoot,
   plugins: [vue()],
+  optimizeDeps: { entries: ['index.html'] },
   resolve: { alias: { '@': path.resolve(projectRoot, 'src') } },
   server: { port: 5173 }
 })

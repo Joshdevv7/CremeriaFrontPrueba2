@@ -36,7 +36,7 @@
             </button>
 
             <p class="nota">
-              Al registrar, sube el inventario físico en almacén y se recalcula automáticamente el Costo Promedio Ponderado (CPP) de cada producto.
+              Al registrar, aumenta la mercancía disponible y se actualiza el costo promedio de cada producto.
             </p>
             <p v-if="error" class="err">{{ error }}</p>
           </div>
@@ -55,7 +55,7 @@
           <div class="search-row">
             <div class="search">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-              <input v-model="buscar" placeholder="Buscar producto por nombre o código…">
+              <input v-model="buscar" placeholder="Buscar producto por nombre o código (mínimo 3 caracteres)">
             </div>
 
             <button
@@ -123,7 +123,7 @@
               <span class="cpp-tag">Nuevo stock y costo promedio:</span>
               <b>{{ fmt(Number(p.stockAlmacen) + piezasLinea(p)) }} {{ p.unidad || 'pzas' }}</b>
               <span class="sep">→</span>
-              <span class="cpp-val">Nuevo CPP: <b>{{ money(calcNuevoCpp(p)) }}</b></span>
+              <span class="cpp-val">Costo promedio después de la compra: <b>{{ money(calcNuevoCpp(p)) }}</b></span>
             </div>
           </div>
 
@@ -139,6 +139,7 @@
 </template>
 
 <script setup>
+import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
@@ -157,7 +158,7 @@ const referencia = ref('')
 const cant = reactive({})
 const costo = reactive({})
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
-const buscar = ref('')
+const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const soloProveedor = ref(false)
 const cargando = ref(true)
 const cargaFallida = ref(false)
@@ -179,11 +180,11 @@ const filtrados = computed(() => {
   if (soloProveedor.value && proveedorId.value) {
     list = list.filter(p => p.proveedorId === proveedorId.value)
   }
-  const t = buscar.value.trim().toLowerCase()
+  const t = terminoBusqueda.value
   if (t) {
     list = list.filter((p) =>
-      p.nombre.toLowerCase().includes(t) ||
-      (p.codigoBarras && p.codigoBarras.toLowerCase().includes(t))
+      normalizarBusqueda(p.nombre).includes(t) ||
+      (p.codigoBarras && normalizarBusqueda(p.codigoBarras).includes(t))
     )
   }
   // Si hay un proveedor seleccionado, ordenar colocando primero los que le corresponden

@@ -1,6 +1,7 @@
 <template>
   <ion-app>
-    <ion-router-outlet />
+    <router-view v-if="esPanel" />
+    <ion-router-outlet v-else />
     <transition name="toast">
       <div v-if="notif.toast" class="toast" @click="notif.toast = null">
         <div class="ic" v-html="iconoToast(notif.toast.tipo)"></div>
@@ -14,7 +15,8 @@
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { IonApp, IonRouterOutlet } from '@ionic/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifStore } from '@/stores/notificaciones'
@@ -22,6 +24,10 @@ import ConfirmHost from '@/components/ConfirmHost.vue'
 
 const auth = useAuthStore()
 const notif = useNotifStore()
+const route = useRoute()
+// The admin children are regular Vue views sharing one persistent shell.
+// Ionic's page stack is reserved for the native delivery and login screens.
+const esPanel = computed(() => route.path === '/panel' || route.path.startsWith('/panel/'))
 
 // Íconos SVG line-art por tipo de notificación (sin emojis)
 const ICONOS = {
