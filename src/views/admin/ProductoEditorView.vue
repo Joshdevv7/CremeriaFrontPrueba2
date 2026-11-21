@@ -110,7 +110,7 @@
         <button class="cta" :disabled="enviando || !form.nombre.trim()" @click="guardar()">
           {{ enviando ? 'Guardando…' : (esNuevo ? 'Crear producto' : 'Guardar cambios') }}
         </button>
-        <button v-if="!esNuevo && form.activo" class="trash" type="button" @click="desactivar()">Desactivar</button>
+        <button v-if="!esNuevo && form.activo" class="trash" type="button" :disabled="enviando" @click="desactivar()">Desactivar</button>
       </div>
     </template>
 
@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
@@ -128,10 +128,12 @@ import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import BuscadorSelect from '@/components/BuscadorSelect.vue'
 
-const emit = defineEmits(['ctx'])
+const props = defineProps({ productoId: { type: [Number, String], default: null }, enModal: Boolean })
+const emit = defineEmits(['ctx', 'guardado', 'ocupado'])
 const route = useRoute()
 const router = useRouter()
-const esNuevo = computed(() => route.name === 'producto-nuevo')
+const productoId = computed(() => props.productoId ?? route.params.id)
+const esNuevo = computed(() => !props.enModal && route.name === 'producto-nuevo')
 const form = reactive({
   nombre: '',
   categoria: '',
@@ -151,6 +153,7 @@ const form = reactive({
 
 const proveedores = ref([])
 const cargando = ref(true), enviando = ref(false), error = ref('')
+watch(enviando, valor => emit('ocupado', valor), { flush: 'sync' })
 const cargaFallida = ref(false)
 const exito = ref(false), exitoTit = ref(''), exitoDet = ref([])
 const mostrarScan = ref(false)
@@ -195,7 +198,7 @@ const margenCaja = computed(() => {
 })
 
 function onScan(code) { form.codigoBarras = String(code || '').trim() }
-function salir() { router.replace('/panel/productos') }
+function salir() { if (props.enModal) emit('guardado'); else router.replace('/panel/productos') }
 
 function payload(activo) {
   const b = {
@@ -222,11 +225,12 @@ function payload(activo) {
 }
 
 async function guardar() {
-  if (!form.nombre.trim()) return
+  if (enviando.value || cargaFallida.value || !form.nombre.trim()) return
   enviando.value = true; error.value = ''
   try {
     if (esNuevo.value) await http.post('/productos', payload())
-    else await http.put(`/productos/${route.params.id}`, payload(form.activo))
+    else await http.put(`/productos/${productoId.value}`, payload(form.activo))
+    if (props.enModal) { emit('guardado'); return }
     exitoTit.value = esNuevo.value ? 'Producto creado' : 'Producto actualizado'
     exitoDet.value = [
       { k: 'Precio de venta', v: money(form.precioVenta) },
@@ -243,17 +247,21 @@ async function guardar() {
 }
 
 async function desactivar() {
+  if (enviando.value || cargaFallida.value) return
   if (!confirm('¿Desactivar este producto? Ya no aparecerá en el catálogo de ventas ni pedidos.')) return
+  enviando.value = true
   try {
-    await http.put(`/productos/${route.params.id}`, payload(false))
+    await http.put(`/productos/${productoId.value}`, payload(false))
     salir()
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudo desactivar.'
+  } finally {
+    enviando.value = false
   }
 }
 
 onMounted(async () => {
-  emit('ctx', { titulo: esNuevo.value ? 'Nuevo producto' : 'Editar producto', sub: '', back: '/panel/productos' })
+  if (!props.enModal) emit('ctx', { titulo: esNuevo.value ? 'Nuevo producto' : 'Editar producto', sub: '', back: '/panel/productos' })
   try {
     proveedores.value = await listarPaginas('/proveedores', { incluirInactivos: true })
     if (esNuevo.value && route.query.proveedorId) {
@@ -267,7 +275,7 @@ onMounted(async () => {
 
   if (!esNuevo.value) {
     try {
-      const { data } = await http.get(`/productos/${route.params.id}`)
+      const { data } = await http.get(`/productos/${productoId.value}`)
       stockAlmacenAnterior = data.stockAlmacen
       costoPromedioAnterior = data.costoPromedio
       Object.assign(form, {

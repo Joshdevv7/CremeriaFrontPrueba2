@@ -1,414 +1,125 @@
 <template>
-  <div class="inventario-page">
-    <!-- TARJETA EDUCATIVA EXPLICATIVA -->
-    <div class="edu-card">
-      <div class="edu-head" @click="guiaAbierta = !guiaAbierta">
-        <div class="edu-tit">
-          <span class="edu-ico"><CrmIcon name="bulb" /></span>
-          <div>
-            <b>¿Cómo se controla el inventario en almacén y en ruta?</b>
-            <div class="edu-sub">Conoce la separación de existencias, venta por caja y el reorden sugerido a proveedores</div>
-          </div>
-        </div>
-        <button type="button" class="edu-btn">{{ guiaAbierta ? 'Ocultar guía' : 'Ver guía' }}</button>
+  <div class="inventario-page crm-page">
+    <button class="crm-button summary-toggle" :aria-expanded="resumenAbierto" aria-controls="inventory-summary" @click="resumenAbierto = !resumenAbierto"><CrmIcon :name="resumenAbierto ? 'chevron-up' : 'chevron-down'" />{{ resumenAbierto ? 'Ocultar' : 'Ver' }} resumen del inventario</button>
+    <section id="inventory-summary" class="inventory-summary" :class="{ 'mobile-open': resumenAbierto }" aria-label="Resumen global del inventario" :aria-busy="cargandoResumen">
+      <div class="summary-card"><span>Valor del inventario</span><strong>{{ resumen ? money(resumen.valorInventario) : '—' }}</strong><small>Existencias a costo promedio</small></div>
+      <div class="summary-card"><span>Productos en catálogo</span><strong>{{ resumen?.totalProductos ?? '—' }}</strong><small>{{ cantidadesGlobales || 'Existencias separadas por unidad' }}</small></div>
+      <div class="summary-card"><span>Requieren reorden</span><strong>{{ resumen?.requierenReorden ?? '—' }}</strong><small>Existencias iguales o inferiores al mínimo</small></div>
+      <div class="summary-card"><span>Agotados</span><strong>{{ resumen?.agotados ?? '—' }}</strong><small>Productos sin existencias en almacén</small></div>
+    </section>
+    <p v-if="errorResumen" class="summary-error" role="alert">{{ errorResumen }} <button class="crm-button" @click="cargarResumen">Reintentar resumen</button></p>
+    <p class="summary-scope">Indicadores de todo el inventario activo. La búsqueda y los filtros se aplican al listado.</p>
+    <p v-if="aviso" class="saved-note" role="status"><CrmIcon name="check" />{{ aviso }}</p>
+    <section class="inventory-panel" aria-labelledby="inventory-heading" :aria-busy="cargando">
+      <div class="inventory-toolbar">
+        <div class="crm-field"><label for="inventory-search">Buscar producto</label><div class="search-box"><CrmIcon name="search" /><input id="inventory-search" v-model="buscar" type="search" maxlength="120" placeholder="Nombre, categoría, código o proveedor" aria-describedby="inventory-search-help"><button v-if="buscar" class="clear-search" aria-label="Limpiar búsqueda" @click="buscar = ''"><CrmIcon name="close" /></button></div><small id="inventory-search-help">Busca en todo el catálogo desde 3 caracteres.<span v-if="buscar.trim() && !listo"> Escribe al menos 3 caracteres para cambiar la búsqueda.</span></small></div>
+        <button class="crm-button refresh" :disabled="cargando || cargandoResumen" aria-label="Actualizar inventario" @click="actualizar"><CrmIcon name="refresh" />Actualizar</button>
+        <div class="inventory-filters" aria-label="Filtrar inventario"><button v-for="tab in tabs" :key="tab.k" :aria-pressed="tabActiva === tab.k" :class="{ active: tabActiva === tab.k }" @click="tabActiva = tab.k"><CrmIcon v-if="tab.icono" :name="tab.icono" />{{ tab.label }}<span v-if="resumen && tab.conteo">{{ resumen[tab.conteo] }}</span></button></div>
       </div>
-
-      <div v-if="guiaAbierta" class="edu-body">
-        <div class="edu-grid">
-          <div class="edu-step">
-            <span class="step-badge">1</span>
-            <div class="step-content">
-              <b>Almacén central vs Cargas en camioneta</b>
-              <p>El stock visible aquí es lo que tienes físicamente en tu bodega. Al autorizar una carga matutina para un chofer, la mercancía se descuenta de almacén. Al liquidar el día, lo no vendido regresa a tu inventario físico.</p>
-            </div>
-          </div>
-          <div class="edu-step">
-            <span class="step-badge">2</span>
-            <div class="step-content">
-              <b>Unidad base y venta por caja</b>
-              <p>Todo el inventario vive estrictamente en unidades base (piezas o kg). Si activas "Venta por caja", el sistema multiplica por el factor de conversión para que nunca haya diferencias entre vender suelto o en paquete.</p>
-            </div>
-          </div>
-          <div class="edu-step">
-            <span class="step-badge">3</span>
-            <div class="step-content">
-              <b>Umbrales de reorden y WhatsApp directo</b>
-              <p>Al caer por debajo de tu <b>Stock mínimo</b>, el sistema calcula cuántas piezas requieres para llegar al <b>Stock objetivo</b>. Si tu proveedor tiene WhatsApp, puedes pedirle surtido con un solo toque.</p>
-            </div>
-          </div>
-        </div>
+      <div class="inventory-heading"><h2 id="inventory-heading">Productos</h2><small>Toca un producto para ver sus detalles</small></div>
+      <div v-if="cargando" class="crm-state" role="status">Cargando página del inventario…</div>
+      <div v-else-if="error" class="crm-state error" role="alert"><h3>No se pudo cargar el inventario</h3><p>{{ error }}</p><button class="crm-button" @click="cargarPagina">Reintentar</button></div>
+      <div v-else-if="!items.length" class="crm-state"><h3>No hay productos con estos filtros</h3><p>Prueba otro nombre, código o proveedor.</p><button class="crm-button" @click="limpiarFiltros">Limpiar filtros</button></div>
+      <div v-else class="inventory-table-wrap">
+        <table class="inventory-table"><thead><tr><th>Producto / proveedor</th><th>En almacén</th><th>Precio de venta</th><th>Estado</th><th><span class="crm-sr-only">Acciones</span></th></tr></thead>
+          <tbody v-for="p in items" :key="p.id" class="inventory-group" :class="{ expanded: abierto === p.id }">
+            <tr class="inventory-row" @click="alternar(p.id)">
+              <td class="product-cell"><button class="product-toggle" :aria-label="`${abierto === p.id ? 'Ocultar' : 'Ver'} detalles de ${p.nombre}`" :aria-expanded="abierto === p.id" :aria-controls="`inventory-detail-${p.id}`" @click.stop="alternar(p.id)"><CrmIcon name="box" /><span><strong>{{ p.nombre }}</strong><small>{{ p.proveedorNombre || 'Sin proveedor asignado' }}</small></span><CrmIcon :name="abierto === p.id ? 'chevron-up' : 'chevron-down'" /></button></td>
+              <td data-label="En almacén"><strong :class="{ shortage: p.requiereReorden }">{{ fmt(p.stockAlmacen) }} {{ unidad(p) }}</strong></td>
+              <td data-label="Precio de venta"><strong>{{ money(p.precioVenta) }}</strong><small>por {{ unidadSingular(p) }}</small></td>
+              <td data-label="Estado"><span class="crm-badge" :class="p.stockAlmacen <= 0 ? 'clay' : p.requiereReorden ? 'amber' : 'pine'">{{ p.stockAlmacen <= 0 ? 'Agotado' : p.requiereReorden ? 'Reabastecer' : 'Disponible' }}</span></td>
+              <td class="row-action"><button v-if="auth.esAdmin" class="crm-button" :aria-label="`Editar ${p.nombre}`" @click.stop="editar(p.id)"><CrmIcon name="bag" />Editar</button><span v-else class="readonly-label">Consulta</span></td>
+            </tr>
+            <tr v-if="abierto === p.id" class="inventory-detail"><td colspan="5"><section :id="`inventory-detail-${p.id}`" role="region" :aria-label="`Detalles de ${p.nombre}`" class="detail-content">
+              <dl class="detail-grid"><div><dt>Código de barras</dt><dd>{{ p.codigoBarras || 'Sin código registrado' }}</dd></div><div><dt>Categoría</dt><dd>{{ p.categoria || 'Sin categoría' }}</dd></div><div><dt>Costo promedio por {{ unidadSingular(p) }}</dt><dd>{{ money(p.costoPromedio) }}</dd></div><div><dt>Margen bruto</dt><dd>{{ margen(p) }}%</dd></div><div><dt>Existencias mínimas</dt><dd>{{ fmt(p.stockMinimo) }} {{ unidad(p) }}</dd></div><div><dt>Existencias deseadas después de reabastecer</dt><dd>{{ fmt(p.stockObjetivo) }} {{ unidad(p) }}</dd></div></dl>
+              <p v-if="p.vendePorCaja" class="box-detail"><CrmIcon name="box" />Venta por caja de {{ fmt(p.piezasPorCaja) }} unidades: <strong>{{ money(p.precioCaja) }}</strong></p>
+              <p v-if="p.requiereReorden" class="reorder-detail">Compra sugerida: <strong>{{ fmt(Math.max(0, p.cantidadSugeridaReorden || 0)) }} {{ unidad(p) }}</strong>. Es la cantidad para alcanzar las existencias deseadas.</p>
+              <div class="detail-actions"><a v-if="p.requiereReorden && p.proveedorWhatsapp" :href="whatsappUrl(p)" target="_blank" rel="noopener noreferrer" class="crm-button"><CrmIcon name="message" />Solicitar reorden por WhatsApp</a><button v-else-if="p.requiereReorden && p.proveedorId" class="crm-button" @click="irAProveedor(p)">Configurar WhatsApp del proveedor</button><button v-if="auth.esAdmin" class="crm-button primary" @click="editar(p.id)">Editar producto</button></div>
+            </section></td></tr>
+          </tbody>
+        </table>
       </div>
-    </div>
-
-    <!-- BARRA DE KPIS DE INVENTARIO -->
-    <div class="kpis">
-      <div class="kpi-card">
-        <div class="kpi-l">Valor total del inventario</div>
-        <div class="kpi-v money">{{ money(kpiValorInventario) }}</div>
-        <div class="kpi-s">Valuación a costo promedio en almacén</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-l">Productos en catálogo</div>
-        <div class="kpi-v">{{ items.length }}</div>
-        <div class="kpi-s">{{ fmt(kpiTotalPiezas) }} piezas físicas en bodega</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-l">Requieren reorden</div>
-        <div class="kpi-v" :class="{ alert: kpiRequierenReorden > 0 }">{{ kpiRequierenReorden }}</div>
-        <div class="kpi-s"><CrmIcon v-if="!kpiRequierenReorden" name="success" /> {{ kpiRequierenReorden > 0 ? 'Stock igual o menor al mínimo' : 'Existencias saludables' }}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-l">Agotados / Sin stock</div>
-        <div class="kpi-v" :class="{ red: kpiAgotados > 0 }">{{ kpiAgotados }}</div>
-        <div class="kpi-s">{{ kpiAgotados > 0 ? 'Productos con 0 existencias' : 'Ningún producto en ceros' }}</div>
-      </div>
-    </div>
-
-    <!-- FILTROS Y BUSCADOR -->
-    <div class="filtros-bar">
-      <div class="search-box">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por nombre, categoría, código o proveedor (mínimo 3 caracteres)">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
-      </div>
-
-      <div class="tabs">
-        <button
-          v-for="t in tabs"
-          :key="t.k"
-          :class="{ on: tabActiva === t.k }"
-          @click="tabActiva = t.k"
-        >
-          <CrmIcon v-if="t.icono" :name="t.icono" /> {{ t.l }}
-          <span class="cnt-badge" v-if="t.k === 'reorden' && kpiRequierenReorden > 0">{{ kpiRequierenReorden }}</span>
-          <span class="cnt-badge red" v-if="t.k === 'agotados' && kpiAgotados > 0">{{ kpiAgotados }}</span>
-        </button>
-      </div>
-    </div>
-
-    <p v-if="cargando" class="muted">Cargando catálogo de productos…</p>
-    <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!filtrados.length" class="muted">{{ vacioTexto }}</p>
-
-    <!-- LISTADO DE PRODUCTOS -->
-    <div class="grid" v-else>
-      <div v-for="p in filtrados" :key="p.id" class="card" @click="editar(p.id)">
-        <div class="card-head">
-          <div class="emoji-chip" :class="chipClase(p)">
-            <CrmIcon :name="p.stockAlmacen <= 0 ? 'close' : p.requiereReorden ? 'alert' : 'box'" />
-          </div>
-
-          <div class="info">
-            <div class="nombre-row">
-              <div class="nombre">{{ p.nombre }}</div>
-              <span v-if="p.stockAlmacen <= 0" class="badge-red">Agotado</span>
-              <span v-else-if="p.requiereReorden" class="badge-amber">Pedir {{ fmt(p.cantidadSugeridaReorden) }}</span>
-            </div>
-
-            <div class="sub">
-              <span class="prov-txt">{{ p.proveedorNombre || 'Sin proveedor' }}</span>
-              <span class="dot">·</span>
-              <span class="cat-txt">{{ p.categoria || 'General' }}</span>
-              <span class="dot">·</span>
-              <span class="uni-txt">{{ p.unidad }}</span>
-            </div>
-          </div>
-
-          <div class="precios-col">
-            <div class="precio-venta">{{ money(p.precioVenta) }}</div>
-            <div class="margen-tag" :class="margenClase(p)">
-              {{ margenPorcentaje(p) }}% margen
-            </div>
-          </div>
-        </div>
-
-        <!-- Barra de existencias y reorden -->
-        <div class="stock-box">
-          <div class="stock-info">
-            <span class="st-lbl">En almacén:</span>
-            <b class="st-val" :class="stockColorClase(p)">{{ fmt(p.stockAlmacen) }} {{ p.unidad || 'pzas' }}</b>
-            <span class="st-umbrales">(mín: {{ fmt(p.stockMinimo) }} · obj: {{ fmt(p.stockObjetivo) }})</span>
-          </div>
-          <div class="costo-prom">Costo promedio: <b>{{ money(p.costoPromedio) }}</b></div>
-        </div>
-
-        <!-- Indicador de venta por caja -->
-        <div v-if="p.vendePorCaja" class="caja-strip">
-          <span><CrmIcon name="box" /> Venta por caja ({{ p.piezasPorCaja }} pzas):</span>
-          <b>{{ money(p.precioCaja) }} / caja</b>
-        </div>
-
-        <!-- Acciones al pie -->
-        <div class="card-pie">
-          <!-- Botón WhatsApp si requiere reorden y tiene número -->
-          <button
-            v-if="p.requiereReorden && p.proveedorWhatsapp"
-            class="btn-wa-reorden"
-            @click.stop="pedirWhatsapp(p)"
-            title="Solicitar pedido de reorden a proveedor por WhatsApp"
-          >
-            <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.4A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.2 1.1-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2 .2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.3.1.1.1.5-.1 1Z"/></svg>
-            <span>Pedir reorden (WhatsApp)</span>
-          </button>
-
-          <button
-            v-else-if="p.requiereReorden && !p.proveedorWhatsapp && (p.proveedorId || auth.esAdmin)"
-            class="btn-sin-wa"
-            @click.stop="irAProveedor(p)"
-            :title="p.proveedorId ? 'Configura el WhatsApp del proveedor' : 'Asigna un proveedor al producto'"
-          >
-            <span>{{ p.proveedorId ? 'Configurar WhatsApp de proveedor' : 'Asignar proveedor' }}</span>
-          </button>
-
-          <button v-if="auth.esAdmin" class="btn-editar-prod" @click.stop="editar(p.id)">
-            <span>Editar</span>
-            <ion-icon :icon="chevronForward" />
-          </button>
-        </div>
-      </div>
-    </div>
+      <div v-if="!error" class="inventory-footer"><span aria-live="polite">{{ total ? (pagina - 1) * tamano + 1 : 0 }}–{{ Math.min(pagina * tamano, total) }} de {{ total }} productos</span><nav class="pager" aria-label="Páginas de inventario"><button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="pagina--"><CrmIcon name="back" /></button><button v-for="n in paginasVisibles" :key="n" :disabled="cargando" :aria-label="`Página ${n}`" :aria-current="pagina === n ? 'page' : undefined" @click="pagina = n">{{ n }}</button><button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="pagina++"><CrmIcon name="arrow" /></button></nav></div>
+    </section>
+    <details class="inventory-guide"><summary><CrmIcon name="help" />Cómo leer el inventario y el reorden</summary><p>Las existencias corresponden al almacén. Los productos autorizados para una carga se descuentan de aquí y lo devuelto al cerrar la carga regresa al almacén.</p><p>El mínimo activa una alerta cuando las existencias llegan a esa cantidad o bajan de ella. Las existencias deseadas indican lo que quieres tener después de comprar. Si tienes 4 y deseas 20, la compra sugerida es 16.</p><p>Las cajas de venta contienen el número de unidades indicado en cada producto. Las piezas y los kilogramos se cuentan por separado.</p><router-link to="/panel/alertas-stock">Ver todas las alertas de stock</router-link></details>
+    <CrmDialog :open="edicion !== null" :dismissible="false" wide labelledby="inventory-edit-title"><template v-if="edicion !== null"><div class="crm-dialog-head"><h2 id="inventory-edit-title">Editar producto</h2><button class="crm-button" :disabled="editorOcupado" aria-label="Cerrar edición" @click="cerrarEditor"><CrmIcon name="close" /></button></div><ProductoEditorView :key="edicion" :producto-id="edicion" en-modal @guardado="productoGuardado" @ocupado="editorOcupado = $event" /><div class="crm-dialog-actions"><button class="crm-button" :disabled="editorOcupado" @click="cerrarEditor">Cancelar</button></div></template></CrmDialog>
   </div>
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onBeforeUnmount, watch, defineAsyncComponent } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import http from '@/api/http'
 import CrmIcon from '@/components/CrmIcon.vue'
-import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import CrmDialog from '@/components/CrmDialog.vue'
+import { useBusqueda } from '@/composables/useBusqueda'
 import { useAuthStore } from '@/stores/auth'
-import { IonIcon } from '@ionic/vue'
-import { chevronForward } from 'ionicons/icons'
-import { listarPaginas } from '@/api/listarPaginas'
-
+const ProductoEditorView = defineAsyncComponent(() => import('@/views/admin/ProductoEditorView.vue'))
 const emit = defineEmits(['ctx'])
-const router = useRouter()
-const route = useRoute()
-const items = ref([])
-const cargando = ref(true)
-const error = ref('')
-const { buscar: buscar, termino: terminoBusqueda } = useBusqueda(String(route.query.buscar || ''))
-watch(() => route.query.buscar, value => { buscar.value = String(value || '') })
-const tabActiva = ref('todos')
-const guiaAbierta = ref(false)
-
-const tabs = [
-  { k: 'todos', l: 'Todos' },
-  { k: 'reorden', l: 'Requieren reorden', icono: 'alert' },
-  { k: 'agotados', l: 'Agotados', icono: 'close' },
-  { k: 'caja', l: 'Por caja', icono: 'box' }
-]
-
-const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
-
-const filtrados = computed(() => {
-  let list = items.value
-  if (tabActiva.value === 'reorden') list = list.filter(p => p.requiereReorden)
-  else if (tabActiva.value === 'agotados') list = list.filter(p => p.stockAlmacen <= 0)
-  else if (tabActiva.value === 'caja') list = list.filter(p => p.vendePorCaja)
-
-  const t = terminoBusqueda.value
-  if (t) {
-    list = list.filter(p =>
-      normalizarBusqueda(p.nombre).includes(t) ||
-      (p.categoria && normalizarBusqueda(p.categoria).includes(t)) ||
-      (p.codigoBarras && normalizarBusqueda(p.codigoBarras).includes(t)) ||
-      (p.proveedorNombre && normalizarBusqueda(p.proveedorNombre).includes(t))
-    )
-  }
-  return list
-})
-
-// KPIs
-const kpiValorInventario = computed(() => {
-  return items.value.reduce((s, p) => s + (Math.max(0, Number(p.stockAlmacen) || 0) * (Number(p.costoPromedio) || 0)), 0)
-})
-
-const kpiTotalPiezas = computed(() => {
-  return items.value.reduce((s, p) => s + Math.max(0, Number(p.stockAlmacen) || 0), 0)
-})
-
-const kpiRequierenReorden = computed(() => items.value.filter(p => p.requiereReorden).length)
-const kpiAgotados = computed(() => items.value.filter(p => p.stockAlmacen <= 0).length)
-
-const vacioTexto = computed(() => {
-  if (buscar.value) return 'No se encontraron productos con ese criterio de búsqueda.'
-  if (tabActiva.value === 'reorden') return '¡Excelente! No hay productos que requieran reorden en este momento.'
-  if (tabActiva.value === 'agotados') return 'No hay productos con existencias en ceros.'
-  return 'No hay productos registrados. Crea uno con “Nuevo producto”.'
-})
-
-function chipClase(p) {
-  if (p.stockAlmacen <= 0) return 'chip-red'
-  if (p.requiereReorden) return 'chip-amber'
-  return 'chip-green'
-}
-
-function stockColorClase(p) {
-  if (p.stockAlmacen <= 0) return 'txt-red'
-  if (p.requiereReorden) return 'txt-amber'
-  return 'txt-green'
-}
-
-function margenPorcentaje(p) {
-  const pv = Number(p.precioVenta) || 0
-  const cp = Number(p.costoPromedio) || 0
-  if (pv <= 0) return '0'
-  const m = ((pv - cp) / pv) * 100
-  return m.toFixed(1)
-}
-
-function margenClase(p) {
-  const pv = Number(p.precioVenta) || 0
-  const cp = Number(p.costoPromedio) || 0
-  if (pv <= 0 || pv <= cp) return 'm-red'
-  const m = ((pv - cp) / pv) * 100
-  if (m < 20) return 'm-amber'
-  return 'm-green'
-}
-
-const auth = useAuthStore()
-function editar(id) { if (auth.esAdmin) router.push(`/panel/producto/${id}`) }
-function irAProveedor(p) {
-  if (p.proveedorId) router.push(`/panel/proveedor/${p.proveedorId}`)
-  else router.push(`/panel/producto/${p.id}`)
-}
-
-function pedirWhatsapp(p) {
-  const wa = (p.proveedorWhatsapp || '').replace(/[^\d]/g, '')
-  if (!wa) return
-  const cant = p.cantidadSugeridaReorden || (p.stockObjetivo - p.stockAlmacen) || 1
-  const texto = encodeURIComponent(
-    `Hola, de Distribuidora te solicito pedido de reorden para el producto "${p.nombre}": ${fmt(cant)} ${p.unidad || 'piezas'}. Saludos!`
-  )
-  window.open(`https://wa.me/${wa}?text=${texto}`, '_blank')
-}
-
-async function cargar() {
-  cargando.value = true
-  error.value = ''
+const auth = useAuthStore(), route = useRoute(), router = useRouter()
+const items = ref([]), total = ref(0), pagina = ref(1), cargando = ref(true), error = ref('')
+const resumen = ref(null), cargandoResumen = ref(true), errorResumen = ref(''), abierto = ref(null)
+const edicion = ref(null), editorOcupado = ref(false), aviso = ref(''), tabActiva = ref('todos')
+const resumenAbierto = ref(false)
+const { buscar, termino, listo } = useBusqueda(String(route.query.buscar || ''))
+const tamano = 20
+let controller, resumenController, solicitud = 0, resumenSolicitud = 0, disposed = false
+const tabs = [{ k: 'todos', label: 'Todos' }, { k: 'reorden', label: 'Requieren reorden', icono: 'alert', conteo: 'requierenReorden' }, { k: 'agotados', label: 'Agotados', icono: 'close', conteo: 'agotados' }, { k: 'caja', label: 'Por caja', icono: 'box', conteo: 'porCaja' }]
+const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano)))
+const paginasVisibles = computed(() => { const inicio = Math.max(1, Math.min(pagina.value - 2, totalPaginas.value - 4)); return Array.from({ length: Math.min(5, totalPaginas.value) }, (_, i) => inicio + i) })
+const money = n => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt = n => Number(n || 0).toLocaleString('es-MX')
+const unidad = p => ({ Pieza: 'piezas', Peso: 'kg', Caja: 'cajas' }[p.unidad] || 'unidades')
+const unidadSingular = p => ({ Pieza: 'pieza', Peso: 'kg', Caja: 'caja' }[p.unidad] || 'unidad')
+const margen = p => Number(p.precioVenta) > 0 ? ((Number(p.precioVenta) - Number(p.costoPromedio)) / Number(p.precioVenta) * 100).toFixed(1) : '0.0'
+const cantidadesGlobales = computed(() => !resumen.value ? '' : [[resumen.value.piezas, 'piezas'], [resumen.value.kilogramos, 'kg'], [resumen.value.cajas, 'cajas']].filter(([n]) => n > 0).map(([n, u]) => `${fmt(n)} ${u}`).join(' · ') || 'Sin existencias en almacén')
+function alternar(id) { abierto.value = abierto.value === id ? null : id }
+function editar(id) { if (auth.esAdmin) { edicion.value = id; editorOcupado.value = false } }
+function cerrarEditor() { if (!editorOcupado.value) edicion.value = null }
+function irAProveedor(p) { router.push(`/panel/proveedor/${p.proveedorId}`) }
+function whatsappUrl(p) { const texto = `Hola, solicito reorden de ${fmt(Math.max(0, p.cantidadSugeridaReorden || 0))} ${unidad(p)} de ${p.nombre}.`; return `https://wa.me/${String(p.proveedorWhatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(texto)}` }
+function limpiarFiltros() { buscar.value = ''; tabActiva.value = 'todos' }
+async function cargarPagina() {
+  const current = ++solicitud
+  controller?.abort(); controller = new AbortController(); cargando.value = true; error.value = ''
   try {
-    items.value = await listarPaginas('/productos')
-  } catch (e) {
-    error.value = e.response?.data?.mensaje || 'No se pudieron cargar los productos.'
-  } finally {
-    cargando.value = false
-  }
+    const { data } = await http.get('/productos', { params: { pagina: pagina.value, tamano, buscar: termino.value || undefined, filtro: tabActiva.value }, signal: controller.signal })
+    if (disposed || current !== solicitud) return
+    if (!Array.isArray(data.items) || !Number.isInteger(data.total) || data.pagina !== pagina.value || data.tamanoPagina !== tamano) throw new Error('Respuesta de inventario inválida')
+    total.value = data.total
+    if (pagina.value > totalPaginas.value) { pagina.value = totalPaginas.value; return }
+    items.value = data.items; abierto.value = null
+  } catch (e) { if (!disposed && current === solicitud && e.code !== 'ERR_CANCELED') { items.value = []; error.value = e.response?.data?.mensaje || 'Revisa tu conexión y vuelve a intentar.' } }
+  finally { if (!disposed && current === solicitud) cargando.value = false }
 }
-
-onMounted(() => {
-  emit('ctx', {
-    titulo: 'Inventario',
-    sub: 'Existencias en almacén, valuación y reorden a proveedores',
-    back: null,
-    acciones: { boton: { texto: 'Nuevo producto', to: '/panel/producto/nuevo' } }
-  })
-  cargar()
-})
+async function cargarResumen() {
+  const current = ++resumenSolicitud
+  resumenController?.abort(); resumenController = new AbortController(); cargandoResumen.value = true; errorResumen.value = ''
+  try {
+    const { data } = await http.get('/productos/resumen', { signal: resumenController.signal })
+    if (disposed || current !== resumenSolicitud) return
+    if (!Number.isInteger(data.totalProductos)) throw new Error('Respuesta de resumen inválida')
+    resumen.value = data
+  } catch (e) { if (!disposed && current === resumenSolicitud && e.code !== 'ERR_CANCELED') errorResumen.value = 'No se pudo actualizar el resumen global.' }
+  finally { if (!disposed && current === resumenSolicitud) cargandoResumen.value = false }
+}
+function actualizar() { return Promise.all([cargarPagina(), cargarResumen()]) }
+async function productoGuardado() { edicion.value = null; editorOcupado.value = false; aviso.value = 'Producto actualizado. Se conservaron tu búsqueda y página.'; await actualizar() }
+watch(pagina, cargarPagina)
+watch([termino, tabActiva], () => { if (pagina.value !== 1) pagina.value = 1; else cargarPagina() })
+watch(() => route.query.buscar, value => { buscar.value = String(value || '') })
+onMounted(() => { emit('ctx', { titulo: 'Inventario', sub: 'Consulta por páginas y despliega cada producto para ver sus detalles.', back: null, acciones: { boton: { texto: 'Nuevo producto', to: '/panel/producto/nuevo' } } }); actualizar() })
+onBeforeUnmount(() => { disposed = true; controller?.abort(); resumenController?.abort() })
 </script>
 
 <style scoped>
-.inventario-page { display: flex; flex-direction: column; gap: 14px; }
-.muted { color: var(--muted); margin-top: 24px; text-align: center; font-weight: 500; }
-.err { color: var(--clay); font-weight: 600; margin-top: 24px; }
-
-/* Tarjeta Educativa */
-.edu-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
-.edu-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; cursor: pointer; background: var(--paper-2); }
-.edu-tit { display: flex; align-items: center; gap: 12px; }
-.edu-ico { font-size: 22px; flex: 0 0 auto; }
-.edu-tit b { font-family: "Bricolage Grotesque"; font-size: 15px; font-weight: 700; color: var(--ink); display: block; }
-.edu-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.edu-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; padding: 6px 12px; border-radius: 10px; cursor: pointer; flex: 0 0 auto; }
-.edu-body { padding: 16px 18px; border-top: 1px solid var(--line); background: var(--surface); }
-.edu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; }
-.edu-step { display: flex; gap: 12px; align-items: flex-start; }
-.step-badge { width: 26px; height: 26px; border-radius: 50%; background: var(--pine); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex: 0 0 auto; margin-top: 2px; }
-.step-content b { font-size: 13.5px; font-weight: 700; color: var(--ink); }
-.step-content p { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
-
-/* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; }
-.kpi-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
-.kpi-l { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.kpi-v { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 26px; letter-spacing: -.02em; color: var(--ink); margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
-.kpi-v.money { color: var(--ink); }
-.kpi-v.alert { color: #B9781F; }
-.kpi-v.red { color: var(--clay); }
-.kpi-s { font-size: 11.5px; color: var(--muted); font-weight: 500; }
-.kpi-s .crm-icon { width: 14px; height: 14px; }
-
-/* Filtros y buscador */
-.filtros-bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-.search-box { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 9px 13px; flex: 1; min-width: 260px; max-width: 440px; box-shadow: var(--shadow); }
-.search-box svg { width: 17px; height: 17px; stroke: var(--muted); fill: none; stroke-width: 2.2; flex: 0 0 auto; }
-.search-box input { border: none; background: transparent; outline: none; font-size: 13.5px; font-weight: 500; color: var(--ink); width: 100%; }
-.clear-b { border: none; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; }
-
-.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-.tabs button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: "Hanken Grotesk"; font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 11px; cursor: pointer; box-shadow: var(--shadow); display: inline-flex; align-items: center; gap: 6px; }
-.tabs button.on { background: var(--pine); color: #fff; border-color: var(--pine); }
-.cnt-badge { background: #B9781F; color: #fff; font-size: 10.5px; font-weight: 800; border-radius: 8px; padding: 1px 6px; }
-.cnt-badge.red { background: var(--clay); }
-
-/* Grid de Productos */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr)); gap: 12px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 15px; box-shadow: var(--shadow); cursor: pointer; display: flex; flex-direction: column; gap: 11px; transition: transform .12s, border-color .12s; }
-.card:hover { transform: translateY(-2px); border-color: var(--pine); }
-
-.card-head { display: flex; align-items: center; gap: 12px; }
-.emoji-chip { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; font-size: 20px; flex: 0 0 auto; }
-.chip-green { background: var(--pine-tint); }
-.chip-amber { background: var(--amber-soft); }
-.chip-red { background: var(--clay-soft); }
-
-.info { flex: 1; min-width: 0; }
-.nombre-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.nombre { font-weight: 700; font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
-.badge-amber { font-size: 9.5px; font-weight: 800; background: var(--amber-soft); color: #B9781F; padding: 2px 7px; border-radius: 6px; text-transform: uppercase; }
-.badge-red { font-size: 9.5px; font-weight: 800; background: var(--clay-soft); color: var(--clay); padding: 2px 7px; border-radius: 6px; text-transform: uppercase; }
-
-.sub { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.prov-txt { color: var(--ink-soft); font-weight: 600; }
-.dot { color: var(--line); }
-
-.precios-col { text-align: right; flex: 0 0 auto; }
-.precio-venta { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ink); }
-.margen-tag { font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 1px 5px; display: inline-block; margin-top: 2px; }
-.m-green { background: var(--pine-tint); color: var(--pine); }
-.m-amber { background: var(--amber-soft); color: #B9781F; }
-.m-red { background: var(--clay-soft); color: var(--clay); }
-
-/* Stock Box */
-.stock-box { display: flex; align-items: center; justify-content: space-between; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; font-size: 12px; }
-.stock-info { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
-.st-lbl { color: var(--muted); font-weight: 500; }
-.st-val { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 14px; }
-.st-umbrales { color: var(--muted); font-size: 11px; }
-.costo-prom { color: var(--muted); font-size: 11.5px; }
-.costo-prom b { color: var(--ink-soft); }
-
-.txt-green { color: var(--pine); }
-.txt-amber { color: #B9781F; }
-.txt-red { color: var(--clay); }
-
-/* Venta por caja */
-.caja-strip { font-size: 11.5px; background: var(--sky-soft); color: #1F5269; border-radius: 9px; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; }
-.caja-strip b { font-family: "Bricolage Grotesque"; font-weight: 700; }
-
-/* Botones de acción */
-.card-pie { display: flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 4px; }
-@media (max-width: 430px) {
-  .card-head { display: grid; grid-template-columns: auto minmax(0, 1fr); }
-  .precios-col { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; text-align: left; }
-  .stock-box, .caja-strip, .card-pie { flex-wrap: wrap; gap: 6px 8px; }
-  .card-pie button { min-height: 44px; }
-}
-.btn-wa-reorden { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; background: #1AA75A; color: #fff; font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; border-radius: 11px; padding: 8px 12px; cursor: pointer; }
-.btn-wa-reorden svg { width: 14px; height: 14px; fill: #fff; }
-
-.btn-sin-wa { flex: 1; border: 1px dashed var(--line); background: var(--paper-2); color: var(--muted); font-family: "Bricolage Grotesque"; font-weight: 600; font-size: 11px; border-radius: 11px; padding: 8px 10px; cursor: pointer; }
-
-.btn-editar-prod { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--paper-2); color: var(--ink-soft); font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 12px; border-radius: 11px; padding: 8px 12px; cursor: pointer; }
-.btn-editar-prod ion-icon { font-size: 14px; }
+.inventario-page{display:flex;flex-direction:column;gap:14px;min-width:0}.inventory-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary-card{padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;display:grid;gap:8px;min-width:0}.summary-card>span{font-size:12px;font-weight:700;color:var(--ink-soft)}.summary-card strong{font-size:26px;font-family:"Bricolage Grotesque";overflow-wrap:anywhere}.summary-card small,.summary-scope{color:var(--ink-soft);font-size:12px;line-height:1.5}.summary-scope{margin:0}.summary-error{margin:0;color:var(--clay);display:flex;gap:10px;align-items:center;flex-wrap:wrap}.saved-note{padding:12px;border-radius:10px;background:var(--pine-tint);color:var(--pine);display:flex;align-items:center;gap:8px;margin:0}
+.inventory-panel{border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden;min-width:0}.inventory-toolbar{padding:20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start}.crm-field{min-width:0}.crm-field>small{font-size:12px;line-height:1.5;color:var(--ink-soft)}.search-box{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:10px;padding:0 12px;min-height:46px;margin:8px 0}.search-box input{border:0;outline:none;background:transparent;min-width:0;width:100%;min-height:44px;font:inherit;font-size:16px;color:var(--ink)}.clear-search{display:grid;place-items:center;border:0;background:transparent;color:var(--ink-soft);width:44px;height:44px;flex:none;cursor:pointer}.refresh{align-self:start;margin-top:26px}.inventory-filters{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}.inventory-filters button{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink-soft);font:inherit;font-size:13px;font-weight:700;padding:9px 12px;min-height:44px;cursor:pointer}.inventory-filters button.active{background:var(--pine-tint);color:var(--pine);border-color:var(--pine)}.inventory-filters button span{font-size:11px;background:var(--paper-2);padding:2px 6px;border-radius:6px}.inventory-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-block:1px solid var(--line)}.inventory-heading h2{font-size:17px;margin:0}.inventory-heading small{font-size:12px;color:var(--ink-soft)}
+.inventory-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}.inventory-table th{background:var(--paper);font-size:11px;color:var(--ink-soft);padding:12px 16px;font-weight:700}.inventory-row{cursor:pointer}.inventory-row:hover{background:var(--pine-tint)}.inventory-table td{padding:16px;border-bottom:1px solid var(--line);vertical-align:middle}.inventory-table td small{display:block;margin-top:5px;font-size:11px;color:var(--ink-soft)}.product-cell{width:40%;max-width:380px}.product-toggle{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;font:inherit;color:var(--ink);text-align:left;padding:0;min-height:44px;cursor:pointer}.product-toggle>span{flex:1;min-width:0}.product-toggle strong{overflow-wrap:anywhere;font-size:14px}.product-toggle>svg:first-child{color:var(--pine)}.shortage{color:var(--clay)}.row-action{text-align:right}.readonly-label{font-size:12px;color:var(--ink-soft)}.inventory-detail>td{padding:0;background:var(--paper)}.detail-content{padding:20px}.detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0}.detail-grid div{min-width:0}.detail-grid dt{font-size:12px;color:var(--ink-soft);margin-bottom:6px;line-height:1.5}.detail-grid dd{font-size:14px;font-weight:700;margin:0;overflow-wrap:anywhere}.box-detail,.reorder-detail{margin:16px 0 0;font-size:13px;line-height:1.6}.box-detail{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.detail-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.inventory-footer{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:12px;color:var(--ink-soft)}.pager{display:flex;gap:6px}.pager button{display:grid;place-items:center;min-width:40px;min-height:44px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--pine);font:inherit;cursor:pointer}.pager button[aria-current=page]{background:var(--pine);color:white}.pager button:disabled{opacity:.45;cursor:default}.inventory-guide{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:16px;font-size:13px;line-height:1.7}.inventory-guide summary{font-weight:700;cursor:pointer}.inventory-guide summary svg{margin-right:6px}.inventory-guide p{margin:12px 0}.inventory-guide a{color:var(--pine);text-decoration:underline}.inventory-panel :focus-visible,.inventory-guide :focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+.summary-toggle{display:none}
+@media(max-width:1100px){.inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-table th,.inventory-table td{padding-inline:12px}}
+@media(max-width:1024px){.summary-toggle{display:flex;justify-content:space-between}.inventory-summary{display:none}.inventory-summary.mobile-open{display:grid}}
+@media(max-width:1024px){.inventory-table,.inventory-table-wrap{display:block;width:100%;min-width:0}.inventory-table thead{display:none}.inventory-table{padding:14px}.inventory-group{display:block;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow)}.inventory-group:last-child{margin-bottom:0}.inventory-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;padding:16px}.inventory-table td{border:0;padding:0;min-width:0}.product-cell{grid-column:1/-1;width:auto;max-width:none;padding-bottom:14px!important;border-bottom:1px solid var(--line)!important}.inventory-row td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--ink-soft);margin-bottom:7px}.row-action{text-align:right;align-self:end}.inventory-detail{display:block}.inventory-detail>td{display:block;padding:0;border-top:1px solid var(--line)}.detail-content{padding:16px}.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-heading{align-items:start;flex-direction:column;gap:6px}.inventory-footer{flex-direction:column;align-items:stretch}.pager{justify-content:center;flex-wrap:wrap}}
+@media(max-width:480px){.inventory-toolbar{padding:16px;grid-template-columns:minmax(0,1fr)}.refresh{margin:0;justify-self:start}.summary-card{padding:14px}.summary-card strong{font-size:23px}.inventory-filters button{padding-inline:9px;font-size:12px}.detail-grid{grid-template-columns:1fr}.detail-actions .crm-button{width:100%;justify-content:center}.inventory-footer{padding:14px}.pager{gap:4px}.pager button{min-width:34px}.inventory-table{padding:10px}.inventory-row{padding:14px;gap:12px}}
+@media(max-width:360px){.inventory-summary{grid-template-columns:1fr}.pager button{min-width:30px}}
 </style>
