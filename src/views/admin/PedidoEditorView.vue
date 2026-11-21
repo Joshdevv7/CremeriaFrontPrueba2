@@ -29,8 +29,8 @@
               <div class="meta">
                 <div class="nm">{{ p.nombre }}</div>
                 <div class="pr">
-                  <template v-if="unidad[p.id] === 'caja'">{{ money(p.precioCaja) }} / caja · {{ (cant[p.id]||0) * p.piezasPorCaja }} pzas · almacén {{ fmt(p.stockAlmacen) }}</template>
-                  <template v-else>{{ money(p.precioVenta) }} / pza · almacén {{ fmt(p.stockAlmacen) }}</template>
+                  <template v-if="unidad[p.id] === 'caja'">{{ money(precioUnidad(p.id)) }} / caja · {{ (cant[p.id]||0) * factor(p) }} pzas · almacén {{ fmt(p.stockAlmacen) }}</template>
+                  <template v-else>{{ money(precioUnidad(p.id)) }} / pza · almacén {{ fmt(p.stockAlmacen) }}</template>
                 </div>
               </div>
               <div class="stepper">
@@ -39,10 +39,12 @@
                 <button @click="inc(p.id)">+</button>
               </div>
             </div>
-            <div v-if="p.vendePorCaja" class="uni">
+            <div v-if="p.vendePorCaja || factoresOriginales[p.id]" class="uni">
               <button :class="{ on: unidad[p.id] !== 'caja' }" @click="setUnidad(p.id, 'pza')">Pieza</button>
-              <button :class="{ on: unidad[p.id] === 'caja' }" @click="setUnidad(p.id, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
+              <button :class="{ on: unidad[p.id] === 'caja' }" @click="setUnidad(p.id, 'caja')">Caja ({{ factor(p) }})</button>
             </div>
+            <PrecioEspecial v-if="(cant[p.id] || 0) > 0" v-model="preciosEspeciales[p.id]"
+              :original="precioCatalogo(p.id)" :producto="p.nombre" :unidad="unidad[p.id] === 'caja' ? 'caja' : 'pieza'" :disabled="enviando" />
             <div v-if="excede(p)" class="warn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
               <span v-if="unidad[p.id] === 'caja'">Solo caben {{ maxCajas(p) }} caja(s) ({{ fmt(p.stockAlmacen) }} pzas en almacén)</span>
@@ -68,6 +70,8 @@ import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import BuscadorSelect from '@/components/BuscadorSelect.vue'
+import PrecioEspecial from '@/components/PrecioEspecial.vue'
+import { precioAplicado, precioEspecialValido, datosPrecioEspecial, cargarPrecioEspecial } from '@/utils/precioEspecial'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
@@ -76,6 +80,11 @@ const esNuevo = computed(() => route.name === 'pedido-nuevo')
 const clientes = ref([]), repartidores = ref([]), productos = ref([])
 const clienteId = ref(null), repartidorId = ref(null)
 const cant = reactive({})
+const preciosEspeciales = reactive({})
+const preciosOriginales = reactive({})
+const lineasExistentes = reactive({})
+const presentacionesOriginales = reactive({})
+const factoresOriginales = reactive({})
 const unidad = reactive({})  // productoId -> 'pza' | 'caja'
 const cargando = ref(true), enviando = ref(false), error = ref('')
 const exito = ref(false), exitoChips = ref([]), exitoDetalle = ref([]), exitoSub = ref(''), exitoTit = ref('')
@@ -87,19 +96,27 @@ const prodRefs = {}
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const productoMap = computed(() => Object.fromEntries(productos.value.map((p) => [p.id, p])))
-function precioUnidad(id) { const p = productoMap.value[id]; if (!p) return 0; return unidad[id] === 'caja' ? p.precioCaja : p.precioVenta }
+function precioCatalogo(id) {
+  const p = productoMap.value[id]
+  if (!p) return 0
+  return presentacionesOriginales[id] === (unidad[id] || 'pza') && preciosOriginales[id] != null
+    ? preciosOriginales[id]
+    : (unidad[id] === 'caja' ? p.precioCaja : p.precioVenta)
+}
+function precioUnidad(id) { return precioAplicado(precioCatalogo(id), preciosEspeciales[id]) }
 const total = computed(() => Object.entries(cant).reduce((s, [id, q]) => s + (q || 0) * precioUnidad(id), 0))
 const totalLineas = computed(() => Object.values(cant).reduce((s, q) => s + (q || 0), 0))
 
 // ---- stock / exceso ----
-function factor(p) { return (p.vendePorCaja && p.piezasPorCaja > 0) ? p.piezasPorCaja : 1 }
+function factor(p) { return factoresOriginales[p.id] ?? ((p.vendePorCaja && p.piezasPorCaja > 0) ? p.piezasPorCaja : 1) }
 // piezas requeridas de un producto según su unidad actual
 function piezasReq(p) { const q = cant[p.id] || 0; return unidad[p.id] === 'caja' ? q * factor(p) : q }
 function maxCajas(p) { return Math.floor((p.stockAlmacen || 0) / factor(p)) }
 function excede(p) { return piezasReq(p) > (p.stockAlmacen || 0) }
 const hayExceso = computed(() => productos.value.some((p) => excede(p)))
 
-const puedeCrear = computed(() => clienteId.value && repartidorId.value && totalLineas.value > 0 && !hayExceso.value)
+const puedeCrear = computed(() => clienteId.value && repartidorId.value && totalLineas.value > 0 && !hayExceso.value &&
+  Object.entries(cant).filter(([, q]) => q > 0).every(([id]) => precioEspecialValido(preciosEspeciales[id])))
 
 function inc(id) { cant[id] = (cant[id] || 0) + 1 }
 function dec(id) { if (cant[id] > 0) cant[id]-- }
@@ -111,7 +128,11 @@ function setCant(id, val) {
 function autoRepartidor() { const c = clientes.value.find((x) => x.id === clienteId.value); if (c?.repartidorId) repartidorId.value = c.repartidorId }
 function salir() { router.replace('/panel/pedidos') }
 function setProdRef(id, el) { if (el) prodRefs[id] = el }
-function setUnidad(id, u) { unidad[id] = u }
+function setUnidad(id, u) {
+  if ((unidad[id] || 'pza') === u) return
+  unidad[id] = u
+  delete preciosEspeciales[id]
+}
 
 function normCod(x) { return String(x || '').replace(/\s/g, '') }
 async function onScan(code) {
@@ -129,7 +150,14 @@ async function onScan(code) {
 async function guardar() {
   if (!puedeCrear.value) return
   enviando.value = true; error.value = ''
-  const lineas = Object.entries(cant).filter(([, q]) => q > 0).map(([productoId, cantidad]) => ({ productoId: Number(productoId), cantidad, esCaja: unidad[productoId] === 'caja' }))
+  const lineas = Object.entries(cant).filter(([, q]) => q > 0).map(([productoId, cantidad]) => ({
+    productoId: Number(productoId), cantidad, esCaja: unidad[productoId] === 'caja',
+    ...datosPrecioEspecial(preciosEspeciales[productoId]),
+    ...(!esNuevo.value ? {
+      pedidoLineaId: presentacionesOriginales[productoId] === (unidad[productoId] || 'pza') ? lineasExistentes[productoId] : undefined,
+      precioEspecial: !!preciosEspeciales[productoId]
+    } : {})
+  }))
   try {
     const body = { clienteId: clienteId.value, repartidorId: repartidorId.value, esVentaLibre: false, lineas }
     if (esNuevo.value) await http.post('/pedidos', body)
@@ -157,6 +185,11 @@ async function cargar() {
       data.lineas.forEach((l) => {
         if (l.esCaja && l.piezasPorCaja > 0) { unidad[l.productoId] = 'caja'; cant[l.productoId] = l.cantidadPedida / l.piezasPorCaja }
         else cant[l.productoId] = l.cantidadPedida
+        if (l.precioOriginal != null) preciosOriginales[l.productoId] = l.precioOriginal
+        preciosEspeciales[l.productoId] = cargarPrecioEspecial(l)
+        lineasExistentes[l.productoId] = l.id
+        presentacionesOriginales[l.productoId] = l.esCaja ? 'caja' : 'pza'
+        if (l.esCaja && l.piezasPorCaja > 0) factoresOriginales[l.productoId] = l.piezasPorCaja
       })
     } else if (route.query.clienteId) {
       const qCliId = Number(route.query.clienteId)

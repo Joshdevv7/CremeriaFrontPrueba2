@@ -40,6 +40,7 @@
       </div>
     </div>
 
+    <p v-if="errorProveedores" class="err">{{ errorProveedores }}</p>
     <!-- BARRA DE KPIS -->
     <div class="kpis">
       <div class="kpi-card">
@@ -124,6 +125,7 @@
             <div class="linea-info">
               <span class="ln">{{ l.productoNombre }}</span>
               <span class="lc">{{ cantMostrar(l) }} × {{ costoMostrar(l) }}</span>
+              <span v-if="l.historicoCompleto === false && l.esCaja" class="lc">Cantidad en unidad base. La presentación de caja original no quedó registrada.</span>
             </div>
             <span class="ls">{{ money(l.subtotal) }}</span>
           </div>
@@ -145,12 +147,15 @@ import { ref, computed, onMounted } from 'vue'
 import { IonIcon } from '@ionic/vue'
 import { cubeOutline, chevronDown, chevronUp, documentTextOutline } from 'ionicons/icons'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
+import { limitesFechaCompra } from '@/utils/compra'
 
 const emit = defineEmits(['ctx'])
 const items = ref([])
 const proveedores = ref([])
 const cargando = ref(true)
 const error = ref('')
+const errorProveedores = ref('')
 const abierta = ref(null)
 const descargando = ref(null)
 const buscar = ref('')
@@ -159,14 +164,15 @@ const fechaDesde = ref('')
 const fechaHasta = ref('')
 const guiaAbierta = ref(false)
 let buscarTimer = null
+let ultimaCarga = 0
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const fecha = (f) => new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 function esCajaLinea(l) { return !!l.esCaja && l.piezasPorCaja > 0 }
-function cantMostrar(l) { return esCajaLinea(l) ? `${fmt(l.cantidad / l.piezasPorCaja)} caja(s)` : `${fmt(l.cantidad)} pzas` }
-function costoMostrar(l) { return esCajaLinea(l) ? `${money(l.costoUnitario * l.piezasPorCaja)} / caja` : `${money(l.costoUnitario)} / pza` }
+function cantMostrar(l) { return esCajaLinea(l) ? `${fmt(l.cantidad / l.piezasPorCaja)} caja(s)` : `${fmt(l.cantidad)} ${l.unidad === 'Peso' ? 'kg' : 'uds'}` }
+function costoMostrar(l) { return esCajaLinea(l) ? `${money(l.costoCapturado ?? l.costoUnitario * l.piezasPorCaja)} / caja` : `${money(l.costoUnitario)} / ${l.unidad === 'Peso' ? 'kg' : 'ud'}` }
 
 function toggle(id) { abierta.value = abierta.value === id ? null : id }
 
@@ -231,20 +237,21 @@ async function descargarPdf(c) {
 }
 
 async function cargar() {
+  const carga = ++ultimaCarga
   cargando.value = true
   error.value = ''
   try {
-    const params = { tamano: 150 }
+    const params = limitesFechaCompra(fechaDesde.value, fechaHasta.value)
     if (filtroProveedorId.value) params.proveedorId = filtroProveedorId.value
     if (buscar.value.trim()) params.buscar = buscar.value.trim()
-    if (fechaDesde.value) params.desde = fechaDesde.value
-    if (fechaHasta.value) params.hasta = fechaHasta.value
-    const { data } = await http.get('/compras', { params })
-    items.value = data.items || []
+    const compras = await listarPaginas('/compras', params)
+    if (carga !== ultimaCarga) return
+    items.value = compras
   } catch (e) {
+    if (carga !== ultimaCarga) return
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar las compras.'
   } finally {
-    cargando.value = false
+    if (carga === ultimaCarga) cargando.value = false
   }
 }
 
@@ -256,9 +263,8 @@ onMounted(async () => {
     acciones: { boton: { texto: 'Nueva compra', to: '/panel/compra/nuevo' } }
   })
   try {
-    const pv = await http.get('/proveedores', { params: { tamano: 200 } })
-    proveedores.value = pv.data?.items || []
-  } catch { /* continuar */ }
+    proveedores.value = await listarPaginas('/proveedores', { incluirInactivos: true })
+  } catch { errorProveedores.value = 'No se pudieron cargar los proveedores del filtro. Recarga la página para volver a intentar.' }
   cargar()
 })
 </script>

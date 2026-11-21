@@ -54,6 +54,8 @@
               <button :class="{ on: !esCaja(p.id) }" :aria-pressed="!esCaja(p.id)" @click="setUnidad(p, 'pza')">Pieza</button>
               <button :class="{ on: esCaja(p.id) }" :aria-pressed="esCaja(p.id)" @click="setUnidad(p, 'caja')">Caja ({{ p.piezasPorCaja }})</button>
             </div>
+            <PrecioEspecial v-if="(cant[p.id] || 0) > 0" v-model="preciosEspeciales[p.id]"
+              :original="precioCatalogo(p)" :producto="p.nombre" :unidad="esCaja(p.id) ? 'caja' : 'pieza'" :disabled="enviando" />
           </div>
           <p v-if="!filtrados.length" class="muted">No hay productos que coincidan con la búsqueda o filtro.</p>
         </div>
@@ -176,7 +178,7 @@
             </dl>
             <ul class="resumen-productos" aria-label="Productos del ticket">
               <li v-for="id in lineasActivas" :key="id">
-                <span>{{ cant[id] }} × {{ pmap[id]?.nombre }}{{ esCaja(id) ? ' (caja)' : '' }}</span>
+                <span>{{ cant[id] }} × {{ pmap[id]?.nombre }}{{ esCaja(id) ? ' (caja)' : '' }}<small v-if="preciosEspeciales[id]">Precio especial {{ money(precioL(pmap[id])) }}</small></span>
                 <b>{{ money(cant[id] * precioL(pmap[id])) }}</b>
               </li>
             </ul>
@@ -261,6 +263,8 @@ import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import { imprimirTicketVenta } from '@/services/printer'
+import PrecioEspecial from '@/components/PrecioEspecial.vue'
+import { precioAplicado, precioEspecialValido, datosPrecioEspecial } from '@/utils/precioEspecial'
 
 const emit = defineEmits(['ctx'])
 const anchoMovil = window.matchMedia('(max-width: 900px)')
@@ -301,6 +305,7 @@ const clientesFiltrados = computed(() => {
 const buscar = ref('')
 const filtroProd = ref('todos') // 'todos' | 'stock' | 'cajas'
 const cant = reactive({})
+const preciosEspeciales = reactive({})
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
 const pmap = computed(() => Object.fromEntries(productos.value.map((p) => [p.id, p])))
 
@@ -320,12 +325,14 @@ const lineasActivas = computed(() => Object.entries(cant).filter(([, q]) => q > 
 
 function esCaja(id) { return unidad[id] === 'caja' }
 function factor(p) { return p?.vendePorCaja && p.piezasPorCaja > 0 ? p.piezasPorCaja : 1 }
-function precioL(p) { return esCaja(p.id) ? (p.precioCaja || 0) : p.precioVenta }
+function precioCatalogo(p) { return esCaja(p.id) ? (p.precioCaja || 0) : p.precioVenta }
+function precioL(p) { return precioAplicado(precioCatalogo(p), preciosEspeciales[p.id]) }
 function maxUnidad(p) { return esCaja(p.id) ? Math.floor((p.stockAlmacen || 0) / factor(p)) : (p.stockAlmacen || 0) }
 function setUnidad(p, u) {
   if (esCaja(p.id) === (u === 'caja')) return
   unidad[p.id] = u
   cant[p.id] = 0
+  delete preciosEspeciales[p.id]
 }
 function inc(p) { cant[p.id] = Math.min((cant[p.id] || 0) + 1, maxUnidad(p)) }
 function dec(p) { if (cant[p.id] > 0) cant[p.id]-- }
@@ -402,7 +409,8 @@ const fechaLimiteTxt = computed(() => fechaLimite.value.toLocaleDateString('es-M
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 const clienteElegido = computed(() => ocasional.value || !!cliente.value)
-const puede = computed(() => total.value > 0 && clienteElegido.value)
+const puede = computed(() => total.value > 0 && clienteElegido.value &&
+  lineasActivas.value.every(id => precioEspecialValido(preciosEspeciales[id])))
 const pagoValido = computed(() => metodoElegido.value &&
   (metodo.value !== 0 || pagoPendiente.value || Number(pagaCon.value) >= total.value))
 const puedeAvanzar = computed(() => [
@@ -449,7 +457,10 @@ const ticketMsg = ref('')
 async function vender() {
   if (!puede.value || enviando.value) return
   enviando.value = true; error.value = ''; ticketMsg.value = ''
-  const lineas = lineasActivas.value.map((id) => ({ productoId: id, cantidad: cant[id], esCaja: esCaja(id) }))
+  const lineas = lineasActivas.value.map((id) => ({
+    productoId: id, cantidad: cant[id], esCaja: esCaja(id),
+    ...datosPrecioEspecial(preciosEspeciales[id])
+  }))
   const body = { metodoPago: metodo.value, pagoPendiente: metodo.value === 3 ? false : pagoPendiente.value, lineas }
   if (ocasional.value) { body.clienteId = 0; body.nombreOcasional = nombreOcasional.value.trim() || 'Clientes varios' }
   else body.clienteId = cliente.value.id
@@ -539,6 +550,7 @@ async function nuevaVenta() {
   descargandoPdf.value = false
   Object.keys(cant).forEach((k) => delete cant[k])
   Object.keys(unidad).forEach((k) => delete unidad[k])
+  Object.keys(preciosEspeciales).forEach(k => delete preciosEspeciales[k])
   cliente.value = null; nombreOcasional.value = ''; ocasional.value = false
   buscar.value = ''; buscarCli.value = ''; filtroProd.value = 'todos'; error.value = ''
   metodoElegido.value = false
@@ -779,6 +791,7 @@ onUnmounted(() => {
   .resumen-pago dd { margin: 0; text-align: right; font-weight: 700; }
   .resumen-pago dd, .resumen-productos span { min-width: 0; overflow-wrap: anywhere; }
   .resumen-productos b { white-space: nowrap; }
+  .resumen-productos small { display: block; color: var(--pine); margin-top: 5px; }
 
   .acciones-venta {
     display: grid;

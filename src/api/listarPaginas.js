@@ -1,9 +1,9 @@
 import http from '@/api/http'
 
-export async function listarPaginas(ruta) {
+export async function listarPaginas(ruta, filtros = {}) {
   const registros = []
   for (let pagina = 1; ; pagina++) {
-    const { data } = await http.get(ruta, { params: { pagina, tamano: 100 } })
+    const { data } = await http.get(ruta, { params: { ...filtros, pagina, tamano: 100 } })
     const { items, total, tamanoPagina } = data
     if (!Array.isArray(items) || !Number.isInteger(total) || !Number.isInteger(tamanoPagina)
       || tamanoPagina < 1 || data.pagina !== pagina) {

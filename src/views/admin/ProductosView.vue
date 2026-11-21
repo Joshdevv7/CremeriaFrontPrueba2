@@ -68,8 +68,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar por nombre, categoría o código de barras…" @input="onBuscarInput">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''; cargar()">×</button>
+        <input v-model="buscar" placeholder="Buscar por nombre, categoría, código o proveedor…">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''">×</button>
       </div>
 
       <div class="tabs">
@@ -154,12 +154,12 @@
           </button>
 
           <button
-            v-else-if="p.requiereReorden && !p.proveedorWhatsapp"
+            v-else-if="p.requiereReorden && !p.proveedorWhatsapp && (p.proveedorId || auth.esAdmin)"
             class="btn-sin-wa"
             @click.stop="irAProveedor(p)"
-            title="Configura el WhatsApp del proveedor para pedir en 1 toque"
+            :title="p.proveedorId ? 'Configura el WhatsApp del proveedor' : 'Asigna un proveedor al producto'"
           >
-            <span>Configurar WhatsApp de proveedor</span>
+            <span>{{ p.proveedorId ? 'Configurar WhatsApp de proveedor' : 'Asignar proveedor' }}</span>
           </button>
 
           <button v-if="auth.esAdmin" class="btn-editar-prod" @click.stop="editar(p.id)">
@@ -173,22 +173,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { IonIcon } from '@ionic/vue'
 import { chevronForward } from 'ionicons/icons'
-import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
+const route = useRoute()
 const items = ref([])
 const cargando = ref(true)
 const error = ref('')
-const buscar = ref('')
+const buscar = ref(String(route.query.buscar || ''))
+watch(() => route.query.buscar, value => { buscar.value = String(value || '') })
 const tabActiva = ref('todos')
 const guiaAbierta = ref(false)
-let buscarTimer = null
 
 const tabs = [
   { k: 'todos', l: 'Todos' },
@@ -283,19 +284,11 @@ function pedirWhatsapp(p) {
   window.open(`https://wa.me/${wa}?text=${texto}`, '_blank')
 }
 
-function onBuscarInput() {
-  clearTimeout(buscarTimer)
-  buscarTimer = setTimeout(() => cargar(), 350)
-}
-
 async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const params = { tamano: 250 }
-    if (buscar.value.trim()) params.buscar = buscar.value.trim()
-    const { data } = await http.get('/productos', { params })
-    items.value = data.items || []
+    items.value = await listarPaginas('/productos')
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los productos.'
   } finally {

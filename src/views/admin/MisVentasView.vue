@@ -115,6 +115,7 @@
               <span class="lc">{{ cantMostrar(l) }} × {{ precioMostrar(l) }}</span>
               <span class="ls">{{ money(l.subtotal) }}</span>
             </div>
+            <AuditoriaPrecios :eventos="detalle.auditoriaPrecios" />
 
             <div class="acciones" v-if="v.estado !== 'Cancelado'">
               <button class="pdf-b" :disabled="descargando === v.id" @click="descargarPdf(v)">
@@ -258,6 +259,7 @@ import {
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { imprimirTicketVenta } from '@/services/printer'
+import AuditoriaPrecios from '@/components/AuditoriaPrecios.vue'
 
 const emit = defineEmits(['ctx'])
 const auth = useAuthStore()

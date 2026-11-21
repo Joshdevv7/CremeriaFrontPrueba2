@@ -1,7 +1,8 @@
 <template>
   <div class="editor-wrap">
     <p v-if="cargando" class="muted">Cargando datos del proveedor…</p>
-    <template v-else>
+    <p v-if="error" class="err">{{ error }}</p>
+    <template v-if="!cargando && !cargaFallida">
       <div class="form-cols" v-show="!exito">
         <!-- Columna Datos -->
         <div class="col-form">
@@ -24,16 +25,16 @@
             <input class="inp" v-model="form.telefono" placeholder="Ej. 667 123 4567" inputmode="tel" maxlength="15">
           </div>
 
-          <p v-if="error" class="err">{{ error }}</p>
+          <label v-if="!esNuevo" class="estado"><input type="checkbox" v-model="form.activo"> Proveedor activo</label>
 
           <div class="guardar-bar">
             <button class="cta" :disabled="enviando || !form.nombre.trim()" @click="guardar()">
               {{ enviando ? 'Guardando…' : (esNuevo ? 'Crear proveedor' : 'Guardar cambios') }}
             </button>
-            <button v-if="!esNuevo" class="btn-compra-rapida" type="button" @click="irACompra">
+            <button v-if="!esNuevo && form.activo" class="btn-compra-rapida" type="button" @click="irACompra">
               Nueva compra
             </button>
-            <button v-if="!esNuevo" class="trash" type="button" @click="desactivar()">Desactivar</button>
+            <button v-if="!esNuevo && form.activo" class="trash" type="button" @click="desactivar()">Desactivar</button>
           </div>
         </div>
 
@@ -45,7 +46,7 @@
                 <b>Productos surtidos</b>
                 <span class="cnt">{{ productosAsociados.length }}</span>
               </div>
-              <router-link to="/panel/producto/nuevo" class="ph-link">+ Nuevo producto</router-link>
+              <router-link v-if="form.activo" :to="{ path: '/panel/producto/nuevo', query: { proveedorId: route.params.id } }" class="ph-link">+ Nuevo producto</router-link>
             </div>
 
             <div v-if="!productosAsociados.length" class="prods-vacio">
@@ -79,16 +80,20 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 
 const emit = defineEmits(['ctx'])
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const esNuevo = computed(() => route.params.id === 'nuevo')
-const form = reactive({ nombre: '', whatsapp: '', telefono: '' })
+const form = reactive({ nombre: '', whatsapp: '', telefono: '', activo: true })
 const productosAsociados = ref([])
 const cargando = ref(true), enviando = ref(false), error = ref('')
+const cargaFallida = ref(false)
 const exito = ref(false), exitoTit = ref(''), exitoDet = ref([])
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -96,7 +101,13 @@ const fmt = (n) => Number(n || 0).toLocaleString('es-MX')
 
 function salir() { router.replace('/panel/proveedores') }
 function filtrarWa() { form.whatsapp = (form.whatsapp || '').replace(/[^\d ]/g, '').slice(0, 15) }
-function verProducto(id) { router.push(`/panel/producto/${id}`) }
+function verProducto(id) {
+  if (auth.esAdmin) router.push(`/panel/producto/${id}`)
+  else {
+    const producto = productosAsociados.value.find(p => p.id === id)
+    router.push({ path: '/panel/productos', query: { buscar: producto?.nombre || '' } })
+  }
+}
 function irACompra() { router.push(`/panel/compra/nuevo?proveedorId=${route.params.id}`) }
 
 async function guardar() {
@@ -105,7 +116,7 @@ async function guardar() {
   const body = { nombre: form.nombre.trim(), whatsapp: form.whatsapp?.trim() || null, telefono: form.telefono?.trim() || null }
   try {
     if (esNuevo.value) await http.post('/proveedores', body)
-    else await http.put(`/proveedores/${route.params.id}`, { ...body, activo: true })
+    else await http.put(`/proveedores/${route.params.id}`, { ...body, activo: form.activo })
     exitoTit.value = esNuevo.value ? 'Proveedor creado' : 'Proveedor actualizado'
     exitoDet.value = [{ k: 'WhatsApp', v: form.whatsapp || '—' }, { k: 'Teléfono', v: form.telefono || '—' }]
     exito.value = true
@@ -125,16 +136,18 @@ onMounted(async () => {
     try {
       const [provRes, prodRes] = await Promise.all([
         http.get(`/proveedores/${route.params.id}`),
-        http.get('/productos', { params: { tamano: 200 } })
+        listarPaginas('/productos')
       ])
       Object.assign(form, {
         nombre: provRes.data.nombre,
         whatsapp: provRes.data.whatsapp || '',
-        telefono: provRes.data.telefono || ''
+        telefono: provRes.data.telefono || '',
+        activo: provRes.data.activo
       })
       const provId = Number(route.params.id)
-      productosAsociados.value = (prodRes.data?.items || []).filter(p => p.proveedorId === provId)
+      productosAsociados.value = prodRes.filter(p => p.proveedorId === provId)
     } catch {
+      cargaFallida.value = true
       error.value = 'No se pudo cargar la información del proveedor.'
     }
   }
@@ -144,6 +157,7 @@ onMounted(async () => {
 
 <style scoped>
 .editor-wrap { max-width: 960px; }
+.estado { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .muted { color: var(--muted); margin-top: 24px; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 12px 2px; }
 

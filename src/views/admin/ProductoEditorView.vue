@@ -1,7 +1,8 @@
 <template>
   <div class="editor">
     <p v-if="cargando" class="muted">Cargando producto…</p>
-    <template v-else>
+    <p v-if="error" class="err">{{ error }}</p>
+    <template v-if="!cargando && !cargaFallida">
       <div class="form" v-show="!exito">
         <!-- Columna Datos Generales -->
         <div class="col">
@@ -21,12 +22,13 @@
             <div class="fl">Proveedor habitual</div>
             <select class="inp sel" v-model="form.proveedorId">
               <option :value="null">Sin proveedor asignado</option>
-              <option v-for="pv in proveedores" :key="pv.id" :value="pv.id">{{ pv.nombre }}</option>
+              <option v-for="pv in proveedoresDisponibles" :key="pv.id" :value="pv.id">{{ pv.nombre }}{{ pv.activo ? '' : ' (inactivo)' }}</option>
             </select>
             <small v-if="provSeleccionado?.whatsapp" class="prov-wa-hint">
               📱 WhatsApp configurado: <b>{{ provSeleccionado.whatsapp }}</b> (activo para reorden en 1 toque)
             </small>
           </div>
+          <label v-if="!esNuevo" class="estado"><input type="checkbox" v-model="form.activo"> Producto activo</label>
         </div>
 
         <!-- Columna Precios e Inventario -->
@@ -101,13 +103,11 @@
         </div>
       </div>
 
-      <p v-if="error" class="err">{{ error }}</p>
-
       <div class="guardar-bar" v-show="!exito">
         <button class="cta" :disabled="enviando || !form.nombre.trim()" @click="guardar()">
           {{ enviando ? 'Guardando…' : (esNuevo ? 'Crear producto' : 'Guardar cambios') }}
         </button>
-        <button v-if="!esNuevo" class="trash" type="button" @click="desactivar()">Desactivar</button>
+        <button v-if="!esNuevo && form.activo" class="trash" type="button" @click="desactivar()">Desactivar</button>
       </div>
     </template>
 
@@ -120,6 +120,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 
@@ -140,19 +141,24 @@ const form = reactive({
   proveedorId: null,
   vendePorCaja: false,
   piezasPorCaja: 12,
-  precioCaja: 0
+  precioCaja: 0,
+  activo: true
 })
 
 const proveedores = ref([])
 const cargando = ref(true), enviando = ref(false), error = ref('')
+const cargaFallida = ref(false)
 const exito = ref(false), exitoTit = ref(''), exitoDet = ref([])
 const mostrarScan = ref(false)
 const U = { Pieza: 0, Peso: 1, Caja: 2 }
+let stockAlmacenAnterior = 0
+let costoPromedioAnterior = 0
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const provSeleccionado = computed(() => {
   return proveedores.value.find(p => p.id === form.proveedorId)
 })
+const proveedoresDisponibles = computed(() => proveedores.value.filter(p => p.activo || p.id === form.proveedorId))
 
 const margenPza = computed(() => {
   const pv = Number(form.precioVenta) || 0
@@ -197,7 +203,11 @@ function payload(activo) {
     piezasPorCaja: form.vendePorCaja ? Number(form.piezasPorCaja) || 0 : 1,
     precioCaja: form.vendePorCaja ? Number(form.precioCaja) || 0 : 0
   }
-  if (activo !== undefined) b.activo = activo
+  if (activo !== undefined) {
+    b.activo = activo
+    b.stockAlmacenAnterior = stockAlmacenAnterior
+    b.costoPromedioAnterior = costoPromedioAnterior
+  }
   return b
 }
 
@@ -206,7 +216,7 @@ async function guardar() {
   enviando.value = true; error.value = ''
   try {
     if (esNuevo.value) await http.post('/productos', payload())
-    else await http.put(`/productos/${route.params.id}`, payload(true))
+    else await http.put(`/productos/${route.params.id}`, payload(form.activo))
     exitoTit.value = esNuevo.value ? 'Producto creado' : 'Producto actualizado'
     exitoDet.value = [
       { k: 'Precio de venta', v: money(form.precioVenta) },
@@ -235,13 +245,21 @@ async function desactivar() {
 onMounted(async () => {
   emit('ctx', { titulo: esNuevo.value ? 'Nuevo producto' : 'Editar producto', sub: '', back: '/panel/productos' })
   try {
-    const pv = await http.get('/proveedores', { params: { tamano: 150 } })
-    proveedores.value = pv.data.items || []
-  } catch { proveedores.value = [] }
+    proveedores.value = await listarPaginas('/proveedores', { incluirInactivos: true })
+    if (esNuevo.value && route.query.proveedorId) {
+      const proveedorId = Number(route.query.proveedorId)
+      if (proveedores.value.some(p => p.id === proveedorId && p.activo)) form.proveedorId = proveedorId
+    }
+  } catch {
+    error.value = 'No se pudieron cargar los proveedores. Recarga la página antes de guardar.'
+    cargaFallida.value = true
+  }
 
   if (!esNuevo.value) {
     try {
       const { data } = await http.get(`/productos/${route.params.id}`)
+      stockAlmacenAnterior = data.stockAlmacen
+      costoPromedioAnterior = data.costoPromedio
       Object.assign(form, {
         nombre: data.nombre,
         categoria: data.categoria || '',
@@ -255,9 +273,11 @@ onMounted(async () => {
         proveedorId: data.proveedorId || null,
         vendePorCaja: !!data.vendePorCaja,
         piezasPorCaja: data.piezasPorCaja || 12,
-        precioCaja: data.precioCaja || 0
+        precioCaja: data.precioCaja || 0,
+        activo: data.activo
       })
     } catch {
+      cargaFallida.value = true
       error.value = 'No se pudo cargar el producto.'
     }
   }
@@ -267,6 +287,7 @@ onMounted(async () => {
 
 <style scoped>
 .muted { color: var(--muted); margin-top: 24px; }
+.estado { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .err { color: var(--clay); font-size: 13px; font-weight: 600; margin: 12px 2px; }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .col { display: flex; flex-direction: column; gap: 11px; }

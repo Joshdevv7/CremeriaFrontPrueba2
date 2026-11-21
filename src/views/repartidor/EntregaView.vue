@@ -72,7 +72,7 @@
                   <div class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l9-4.5 9 4.5v9l-9 4.5-9-4.5v-9z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg></div>
                   <div class="line-info">
                     <div class="nm">{{ l.productoNombre }}</div>
-                    <div class="sub">Pedido: <b>{{ fmtQty(l.cantidadPedida) }}</b><span v-if="l.conCarga"> · Traes <b :class="{ falta: l.disponible < l.cantidadPedida }">{{ fmtQty(l.disponible) }}</b></span> · {{ money2(l.precioUnitario) }}</div>
+                    <div class="sub">Pedido: <b>{{ fmtQty(l.cantidadPedida) }} pzas</b><span v-if="l.conCarga"> · Traes <b :class="{ falta: l.disponible < l.cantidadPedida }">{{ fmtQty(l.disponible) }}</b></span> · {{ money2(precioCapturadoL(l)) }} / {{ l.esCaja ? 'caja' : 'pieza' }}</div>
                   </div>
                   <div class="stepper">
                     <button @click="dec(i)" :disabled="l.entregado<=0">−</button>
@@ -80,6 +80,9 @@
                     <button @click="inc(i)" :disabled="l.entregado>=maxEnt(l)">+</button>
                   </div>
                 </div>
+                <PrecioEspecial :model-value="l.especial" @update:model-value="actualizarPrecioEspecial(l, $event)"
+                  :original="l.precioOriginal" :producto="l.productoNombre"
+                  :unidad="l.esCaja ? 'caja' : 'pieza'" :disabled="enviando" />
                 <div class="diff" v-show="l.entregado < l.cantidadPedida">
                   <span class="txt"><b>{{ fmtQty(l.cantidadPedida - l.entregado) }}</b> sin entregar</span>
                   <div class="seg2">
@@ -90,6 +93,8 @@
               </div>
             </div>
           </div>
+
+          <AuditoriaPrecios v-if="step === 1" :eventos="pedido?.auditoriaPrecios" />
 
           <!-- PASO 2: COBRO -->
           <div class="view" :class="{ show: step===2 }">
@@ -229,7 +234,7 @@
             <div class="k">Total de la entrega<b>{{ totalEntregado }} de {{ totalPedido }} productos</b></div>
             <div class="v">{{ money(total) }}</div>
           </div>
-          <button class="cta" :class="{ green: step===3 }" :disabled="enviando" @click="next()">
+          <button class="cta" :class="{ green: step===3 }" :disabled="enviando || !preciosValidos" @click="next()">
             <span>{{ botonTexto }}</span>
             <svg v-if="step<3" class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </button>
@@ -403,6 +408,9 @@ import { usePrecargaEfectivo } from '@/composables/usePrecargaEfectivo'
 import { useRoute, useRouter } from 'vue-router'
 import { IonPage, IonContent } from '@ionic/vue'
 import http from '@/api/http'
+import PrecioEspecial from '@/components/PrecioEspecial.vue'
+import AuditoriaPrecios from '@/components/AuditoriaPrecios.vue'
+import { precioAplicado, precioEspecialValido, datosPrecioEspecial, cargarPrecioEspecial } from '@/utils/precioEspecial'
 import { tomarFotoNativa, obtenerUbicacion, esNativo } from '@/composables/useNativo'
 import { imprimirTicketEntrega, imprimirTicketAbono } from '@/services/printer'
 
@@ -569,7 +577,19 @@ const fechaLimite = (() => { const d = new Date(); d.setDate(d.getDate() + 7); r
 const fechaLimiteTexto = computed(() =>
   fechaLimite.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
 
-const total = computed(() => lineas.reduce((s, l) => s + l.entregado * l.precioUnitario, 0))
+function factorL(l) { return l.esCaja && l.piezasPorCaja > 0 ? l.piezasPorCaja : 1 }
+function precioCapturadoL(l) { return precioAplicado(l.precioOriginal, l.especial) }
+function precioPiezaL(l) { return precioCapturadoL(l) / factorL(l) }
+function actualizarPrecioEspecial(l, especial) {
+  l.especial = especial
+  l.precioEditado = true
+}
+function cambiosPrecio(l) {
+  if (!l.precioEditado) return { precioEspecial: null }
+  return l.especial ? datosPrecioEspecial(l.especial) : { precioEspecial: false }
+}
+const preciosValidos = computed(() => lineas.every(l => precioEspecialValido(l.especial)))
+const total = computed(() => lineas.reduce((s, l) => s + l.entregado * precioPiezaL(l), 0))
 const { efectivoRecibido, marcarEfectivoEditado } = usePrecargaEfectivo(
   total,
   computed(() => pay.value === 'efectivo' && !pagoPendiente.value)
@@ -633,6 +653,10 @@ function salir() { router.replace('/app/entregas') }
 
 async function next() {
   error.value = ''
+  if (!preciosValidos.value) {
+    error.value = 'Revisa los precios especiales: deben ser mayores a cero y tener máximo dos decimales.'
+    return
+  }
   if (step.value < 3) {
     step.value++
     if (step.value === 3) capturarGps()
@@ -719,6 +743,7 @@ async function reprogramar() {
 
 async function confirmar() {
   error.value = ''
+  if (!preciosValidos.value || enviando.value) return
   if (!fotoFile) {
     error.value = 'La foto de entrega es obligatoria para cerrar el pedido.'
     return
@@ -739,7 +764,8 @@ async function confirmar() {
         pedidoLineaId: l.id,
         cantidadEntregada: l.entregado,
         cantidadMermada: l.fate === 'mer' ? (l.cantidadPedida - l.entregado) : 0,
-        motivoMerma: l.fate === 'mer' ? 'Merma en entrega' : null
+        motivoMerma: l.fate === 'mer' ? 'Merma en entrega' : null,
+        ...cambiosPrecio(l)
       }))
     }
 
@@ -804,7 +830,7 @@ function datosParaImprimir() {
       return {
         nombre: l.productoNombre,
         cantidad: esCaja ? l.entregado / l.piezasPorCaja : l.entregado,
-        precio: esCaja ? l.precioUnitario * l.piezasPorCaja : l.precioUnitario
+        precio: precioCapturadoL(l)
       }
     })
   }
@@ -852,6 +878,8 @@ onMounted(async () => {
       lineas.push({
         id: l.id, productoId: l.productoId, productoNombre: l.productoNombre,
         cantidadPedida: l.cantidadPedida, precioUnitario: l.precioUnitario,
+        precioOriginal: Number(l.precioOriginal ?? l.precioCapturado ?? l.precioUnitario * factorL(l)),
+        especial: cargarPrecioEspecial(l), precioEditado: false,
         esCaja: l.esCaja, piezasPorCaja: l.piezasPorCaja,
         disponible, conCarga, entregado: max, fate: 'dev'
       })

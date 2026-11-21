@@ -50,7 +50,7 @@
         <td data-label="Repartidor"><span :class="{ unassigned: !p.repartidorNombre }">{{ p.repartidorNombre || 'Sin asignar' }}</span></td>
         <td data-label="Total" class="money-col"><strong>{{ money(p.total) }}</strong></td>
         <td class="row-actions">
-          <button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="detallePedido = p">Ver detalle</button>
+          <button class="detail-button" :aria-label="`Ver detalle del pedido ${p.id}`" @click="abrirDetalle(p)">Ver detalle</button>
           <button v-if="auth.esAdmin && p.estado === 'Abierto'" class="icon-action" :aria-label="`Editar pedido ${p.id}`" @click="editar(p.id)"><CrmIcon name="bag" /><span class="compact-action-label">Editar</span></button>
           <button v-if="auth.esVendedor && p.estado === 'Abierto' && !p.esVentaLibre" class="detail-button" @click="abrirAsignacion(p)">Asignar repartidor</button>
           <button v-if="puedeCobrar(p)" class="icon-action" :aria-label="`Registrar pago del pedido ${p.id}`" @click="abrirPago(p)"><CrmIcon name="cash" /><span class="compact-action-label">Registrar pago</span></button>
@@ -67,7 +67,7 @@
     </section>
     <p class="scope-note">Indicadores de la página visible. En pedidos abiertos, el total es lo solicitado; en cerrados, lo entregado. El pago del pedido no indica el saldo de crédito del cliente.</p>
     <details class="order-guide"><summary><CrmIcon name="help" />Entender estados de entrega y pago</summary><p>Entrega y pago son independientes. Los pedidos abiertos se pueden editar o eliminar. Venta libre incluye mostrador y ruta. Una venta a crédito puede conservar saldo por cobrar: revísalo en Clientes. Registrar pago conserva el método que ya tiene el pedido.</p></details>
-    <CrmDialog :open="!!detallePedido" labelledby="order-detail-title" @close="detallePedido = null"><template v-if="detallePedido"><div class="crm-dialog-head"><div><h2 id="order-detail-title">Pedido #{{ detallePedido.id }}</h2><p>{{ detallePedido.clienteNombreMostrar || detallePedido.clienteNombre }}</p></div><button class="crm-button crm-close" aria-label="Cerrar detalle" data-initial-focus @click="detallePedido = null"><CrmIcon name="close" /></button></div><dl class="order-details"><div><dt>Entrega</dt><dd>{{ deliveryLabel(detallePedido.estado) }}</dd></div><div><dt>Pago del pedido</dt><dd>{{ sinCobro(detallePedido) ? 'Sin cobro confirmado' : textoPago(detallePedido) }}</dd></div><div><dt>Método registrado</dt><dd>{{ metodoTexto(detallePedido.metodoPago) }}</dd></div><div><dt>Origen</dt><dd>{{ detallePedido.esVentaLibre ? 'Venta libre · mostrador / ruta' : 'Preventa' }}</dd></div><div><dt>Repartidor</dt><dd>{{ detallePedido.repartidorNombre || 'Sin asignar' }}</dd></div><div><dt>Total {{ detallePedido.estado === 'Abierto' ? 'solicitado' : 'del pedido' }}</dt><dd>{{ money(detallePedido.total) }} MXN</dd></div></dl><p v-if="detallePedido.metodoPago === 'Credito'" class="credit-explanation">Saldo de crédito no disponible en esta consulta. Revisa la cuenta del cliente.</p><div class="crm-dialog-actions"><button class="crm-button" @click="detallePedido = null">Volver</button></div></template></CrmDialog>
+    <CrmDialog :open="!!detallePedido" labelledby="order-detail-title" @close="detallePedido = null"><template v-if="detallePedido"><div class="crm-dialog-head"><div><h2 id="order-detail-title">Pedido #{{ detallePedido.id }}</h2><p>{{ detallePedido.clienteNombreMostrar || detallePedido.clienteNombre }}</p></div><button class="crm-button crm-close" aria-label="Cerrar detalle" data-initial-focus @click="detallePedido = null"><CrmIcon name="close" /></button></div><dl class="order-details"><div><dt>Entrega</dt><dd>{{ deliveryLabel(detallePedido.estado) }}</dd></div><div><dt>Pago del pedido</dt><dd>{{ sinCobro(detallePedido) ? 'Sin cobro confirmado' : textoPago(detallePedido) }}</dd></div><div><dt>Método registrado</dt><dd>{{ metodoTexto(detallePedido.metodoPago) }}</dd></div><div><dt>Origen</dt><dd>{{ detallePedido.esVentaLibre ? 'Venta libre · mostrador / ruta' : 'Preventa' }}</dd></div><div><dt>Repartidor</dt><dd>{{ detallePedido.repartidorNombre || 'Sin asignar' }}</dd></div><div><dt>Total {{ detallePedido.estado === 'Abierto' ? 'solicitado' : 'del pedido' }}</dt><dd>{{ money(detallePedido.total) }} MXN</dd></div></dl><p v-if="detallePedido.metodoPago === 'Credito'" class="credit-explanation">Saldo de crédito no disponible en esta consulta. Revisa la cuenta del cliente.</p><p v-if="detalleCargando" role="status">Cargando historial…</p><p v-if="detalleError" role="alert" class="payment-error">{{ detalleError }} <button class="crm-button" @click="abrirDetalle(detallePedido)">Reintentar</button></p><AuditoriaPrecios :eventos="detallePrecios" /><div class="crm-dialog-actions"><button class="crm-button" @click="detallePedido = null">Volver</button></div></template></CrmDialog>
     <CrmDialog :open="!!pagoModal" :dismissible="!pagoGuardando" labelledby="payment-title" describedby="payment-description" @close="cerrarPago"><template v-if="pagoModal"><div class="crm-dialog-head"><div><h2 id="payment-title">Registrar pago de pedido</h2><p id="payment-description">{{ pagoModal.clienteNombreMostrar || pagoModal.clienteNombre }} · {{ money(pagoModal.total) }} MXN</p></div><button class="crm-button crm-close" :disabled="pagoGuardando" aria-label="Cerrar registro de pago" @click="cerrarPago"><CrmIcon name="close" /></button></div><form @submit.prevent="guardarPago"><p class="payment-method">Método registrado: <strong>{{ metodoTexto(pagoModal.metodoPago) }}</strong><small>El registro de pago conserva este método.</small></p><div class="crm-field"><label for="payment-reference">Folio o referencia (opcional)</label><input id="payment-reference" v-model="pagoFolio" data-initial-focus maxlength="60" :disabled="pagoGuardando" placeholder="Folio del comprobante" /></div><p v-if="pagoError" class="payment-error" role="alert">{{ pagoError }}</p><div class="crm-dialog-actions"><button class="crm-button" type="button" :disabled="pagoGuardando" @click="cerrarPago">Cancelar</button><button class="crm-button primary" type="submit" :disabled="pagoGuardando">{{ pagoGuardando ? 'Guardando…' : 'Registrar pago' }}</button></div></form></template></CrmDialog>
     <CrmDialog :open="!!pedidoAsignacion" :dismissible="!asignando" labelledby="assignment-title" @close="cerrarAsignacion">
       <form v-if="pedidoAsignacion" @submit.prevent="guardarAsignacion">
@@ -87,6 +87,7 @@ import http from '@/api/http'
 import { confirmar } from '@/composables/useConfirm'
 import CrmIcon from '@/components/CrmIcon.vue'
 import CrmDialog from '@/components/CrmDialog.vue'
+import AuditoriaPrecios from '@/components/AuditoriaPrecios.vue'
 import { formatMxn as money, deliveryLabel, deliveryTone } from '@/utils/crmPresentation'
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -99,6 +100,21 @@ const filtrosActivos = computed(() => [estado, pago, origen, clienteId, repartid
 const clientes = ref([]), repartidores = ref([]), pagina = ref(1), total = ref(0)
 const tamano = 20
 const pagoModal = ref(null), pagoFolio = ref(''), pagoGuardando = ref(false), pagoError = ref(''), detallePedido = ref(null)
+const detallePrecios = ref([]), detalleCargando = ref(false), detalleError = ref('')
+async function abrirDetalle(pedido) {
+  detallePedido.value = pedido
+  detallePrecios.value = []
+  detalleError.value = ''
+  detalleCargando.value = true
+  try {
+    const { data } = await http.get('/pedidos/' + pedido.id)
+    if (detallePedido.value?.id === pedido.id) detallePrecios.value = data.auditoriaPrecios || []
+  } catch {
+    if (detallePedido.value?.id === pedido.id) detalleError.value = 'No se pudo cargar el historial de precios.'
+  } finally {
+    if (detallePedido.value?.id === pedido.id) detalleCargando.value = false
+  }
+}
 let solicitud = 0, controller, catalogController, disposed = false
 const estados = [{ v:'Abierto',t:'Abierto' },{ v:'EnRuta',t:'En ruta' },{ v:'CerradoCompleto',t:'Completa' },{ v:'CerradoParcial',t:'Parcial' },{ v:'CerradoNoEntregado',t:'No entregado' },{ v:'Cancelado',t:'Cancelada' }]
 const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / tamano)))

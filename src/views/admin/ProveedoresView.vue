@@ -68,8 +68,8 @@
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar proveedor por nombre o teléfono…" @input="onBuscarInput">
-        <button v-if="buscar" class="clear-b" @click="buscar = ''; cargar()">×</button>
+        <input v-model="buscar" placeholder="Buscar proveedor por nombre o teléfono…">
+        <button v-if="buscar" class="clear-b" @click="buscar = ''">×</button>
       </div>
 
       <div class="tabs">
@@ -102,7 +102,7 @@
         </div>
 
         <div class="card-acciones">
-          <button class="btn-compra" @click.stop="nuevaCompra(p)" title="Registrar compra a este proveedor">
+          <button v-if="p.activo" class="btn-compra" @click.stop="nuevaCompra(p)" title="Registrar compra a este proveedor">
             <ion-icon :icon="cartOutline" />
             <span>Nueva compra</span>
           </button>
@@ -127,7 +127,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import { cubeOutline, cartOutline, createOutline } from 'ionicons/icons'
-import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
@@ -137,7 +137,6 @@ const error = ref('')
 const buscar = ref('')
 const tabActiva = ref('todos')
 const guiaAbierta = ref(false)
-let buscarTimer = null
 
 const tabs = [
   { k: 'todos', l: 'Todos' },
@@ -148,6 +147,8 @@ const tabs = [
 
 const filtrados = computed(() => {
   return items.value.filter(p => {
+    const texto = buscar.value.trim().toLowerCase()
+    if (texto && ![p.nombre, p.telefono, p.whatsapp].some(valor => String(valor || '').toLowerCase().includes(texto))) return false
     if (tabActiva.value === 'wa' && !p.whatsapp) return false
     if (tabActiva.value === 'activos' && !p.activo) return false
     if (tabActiva.value === 'inactivos' && p.activo) return false
@@ -176,19 +177,11 @@ function whatsapp(p) {
   window.open(`https://wa.me/${num}`, '_blank')
 }
 
-function onBuscarInput() {
-  clearTimeout(buscarTimer)
-  buscarTimer = setTimeout(() => cargar(), 350)
-}
-
 async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const params = { tamano: 150, incluirInactivos: true }
-    if (buscar.value.trim()) params.buscar = buscar.value.trim()
-    const { data } = await http.get('/proveedores', { params })
-    items.value = data.items || []
+    items.value = await listarPaginas('/proveedores', { incluirInactivos: true })
   } catch (e) {
     error.value = e.response?.data?.mensaje || 'No se pudieron cargar los proveedores.'
   } finally {

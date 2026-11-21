@@ -1,7 +1,8 @@
 <template>
   <div class="editor">
     <p v-if="cargando" class="muted">Cargando catálogo y proveedores…</p>
-    <template v-else>
+    <p v-if="cargaFallida" class="err">{{ error }}</p>
+    <template v-if="!cargando && !cargaFallida">
       <div class="form" v-show="!exito">
         <!-- Columna Izquierda: Proveedor y Resumen -->
         <div class="col selects">
@@ -94,7 +95,7 @@
 
               <div class="stepper">
                 <button @click="dec(p.id)" :disabled="(cant[p.id]||0)<=0">−</button>
-                <input class="q" type="number" min="0" inputmode="numeric" :value="cant[p.id] || 0" @input="setCant(p.id, $event.target.value)" @focus="$event.target.select()">
+                <input class="q" type="number" min="0" step="any" inputmode="decimal" :value="cant[p.id] || 0" @input="setCant(p.id, $event.target.value)" @focus="$event.target.select()">
                 <button @click="inc(p.id)">+</button>
               </div>
             </div>
@@ -141,6 +142,8 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
+import { listarPaginas } from '@/api/listarPaginas'
+import { cantidadCompra } from '@/utils/compra'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 
@@ -157,6 +160,7 @@ const unidad = reactive({}) // productoId -> 'pza' | 'caja'
 const buscar = ref('')
 const soloProveedor = ref(false)
 const cargando = ref(true)
+const cargaFallida = ref(false)
 const enviando = ref(false)
 const error = ref('')
 const exito = ref(false)
@@ -215,10 +219,9 @@ function asegurarCosto(id) {
   }
 }
 function inc(id) { cant[id] = (cant[id] || 0) + 1; asegurarCosto(id) }
-function dec(id) { if (cant[id] > 0) cant[id]-- }
+function dec(id) { if (cant[id] > 0) cant[id] = Math.max(0, cant[id] - 1) }
 function setCant(id, val) {
-  let n = parseInt(String(val).replace(/[^\d]/g, ''), 10)
-  if (isNaN(n) || n < 0) n = 0
+  const n = cantidadCompra(val)
   cant[id] = n
   if (n > 0) asegurarCosto(id)
 }
@@ -299,11 +302,11 @@ onMounted(async () => {
   emit('ctx', { titulo: 'Nueva compra', sub: 'Entrada de mercancía a almacén', back: '/panel/compras' })
   try {
     const [pv, pr] = await Promise.all([
-      http.get('/proveedores', { params: { tamano: 200 } }),
-      http.get('/productos', { params: { tamano: 200 } })
+      listarPaginas('/proveedores'),
+      listarPaginas('/productos')
     ])
-    proveedores.value = pv.data.items || []
-    productos.value = pr.data.items || []
+    proveedores.value = pv
+    productos.value = pr
 
     // Preseleccionar si viene por URL (ej. desde ProveedoresView)
     if (route.query.proveedorId) {
@@ -314,6 +317,7 @@ onMounted(async () => {
       }
     }
   } catch {
+    cargaFallida.value = true
     error.value = 'No se pudieron cargar los proveedores o productos.'
   } finally {
     cargando.value = false

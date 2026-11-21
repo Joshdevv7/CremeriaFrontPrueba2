@@ -116,6 +116,9 @@
                 <button :class="{ on: !esCaja(l) }" @click="setUnidad(l, 'pza')">Pieza</button>
                 <button :class="{ on: esCaja(l) }" @click="setUnidad(l, 'caja')">Caja ({{ info(l.productoId).piezasPorCaja }})</button>
               </div>
+              <PrecioEspecial v-if="(cant[l.productoId] || 0) > 0"
+                v-model="preciosEspeciales[l.productoId]" :original="precioOriginalL(l)"
+                :producto="l.productoNombre" :unidad="esCaja(l) ? 'caja' : 'pieza'" :disabled="enviando" />
             </div>
             <p v-if="!lineasCarga.length" class="muted2">No traes productos disponibles en la carga.</p>
           </div>
@@ -324,6 +327,8 @@ import { useRouter } from 'vue-router'
 import { IonPage, IonContent, IonIcon } from '@ionic/vue'
 import { cashOutline, swapHorizontalOutline, cardOutline, timeOutline, swapHorizontal } from 'ionicons/icons'
 import http from '@/api/http'
+import PrecioEspecial from '@/components/PrecioEspecial.vue'
+import { precioAplicado, precioEspecialValido, datosPrecioEspecial } from '@/utils/precioEspecial'
 import { useAuthStore } from '@/stores/auth'
 import { usePrecargaEfectivo } from '@/composables/usePrecargaEfectivo'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
@@ -358,6 +363,7 @@ const nombreMostrar = computed(() =>
   ocasional.value ? (nombreOcasional.value.trim() || 'Clientes varios') : (cliente.value?.nombre || ''))
 
 const cant = reactive({})
+const preciosEspeciales = reactive({})
 const metodo = ref(0)
 const referencia = ref('')
 const pagoPendiente = ref(false)
@@ -442,9 +448,15 @@ const clientesFiltrados = computed(() => {
 function info(pid) { return infoMap.value[pid] || {} }
 function esCaja(l) { return unidad[l.productoId] === 'caja' }
 function factorL(l) { const f = info(l.productoId).piezasPorCaja; return f && f > 0 ? f : 1 }
-function precioL(l) { return esCaja(l) ? (info(l.productoId).precioCaja || 0) : l.precioVenta }
+function precioOriginalL(l) { return Number(esCaja(l) ? (info(l.productoId).precioCaja || 0) : l.precioVenta) }
+function precioL(l) { return precioAplicado(precioOriginalL(l), preciosEspeciales[l.productoId]) }
 function maxUnidad(l) { return esCaja(l) ? Math.floor(l.restante / factorL(l)) : l.restante }
-function setUnidad(l, u) { unidad[l.productoId] = u; cant[l.productoId] = 0 }
+function setUnidad(l, u) {
+  if ((unidad[l.productoId] || 'pza') === u) return
+  unidad[l.productoId] = u
+  cant[l.productoId] = 0
+  delete preciosEspeciales[l.productoId]
+}
 function setRef(id, el) { if (el) refs[id] = el }
 
 function set(l, val) {
@@ -488,8 +500,11 @@ const lineasSeleccionadas = computed(() => {
 
 const validoCliente = computed(() =>
   ocasional.value ? true : !!cliente.value)
+const preciosValidos = computed(() => lineasSeleccionadas.value.every(l =>
+  precioEspecialValido(preciosEspeciales[l.productoId])))
 
 const puedeAvanzar = computed(() => {
+  if (!preciosValidos.value) return false
   if (step.value === 1) return validoCliente.value && lineasSeleccionadas.value.length > 0 && total.value > 0
   if (step.value === 2) return total.value > 0
   return total.value > 0 && validoCliente.value
@@ -514,6 +529,10 @@ function back() {
 
 async function next() {
   error.value = ''
+  if (!preciosValidos.value) {
+    error.value = 'Revisa los precios especiales: deben ser mayores a cero y tener máximo dos decimales.'
+    return
+  }
   if (step.value === 1) {
     if (!validoCliente.value) {
       error.value = 'Selecciona un cliente registrado.'
@@ -573,7 +592,8 @@ async function vender() {
   const lineas = lineasSeleccionadas.value.map((l) => ({
     productoId: l.productoId,
     cantidad: l.cantidad,
-    esCaja: l.esCaja
+    esCaja: l.esCaja,
+    ...datosPrecioEspecial(preciosEspeciales[l.productoId])
   }))
   if (!lineas.length) { error.value = 'Agrega al menos un producto.'; return }
   
