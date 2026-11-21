@@ -18,7 +18,13 @@ La API aplicará búsqueda y filtros antes de contar y paginar, con orden establ
 2. [x] Añadir filtros y resumen al backend manteniendo los parámetros actuales del catálogo para ventas.
 3. [x] Añadir prueba de navegador que exija una sola página, búsquedas con debounce, detalles desplegables y edición modal.
 4. [x] Implementar listado compacto, paginación, errores/reintentos y cancelación de consultas anteriores. Reutilizar editor sin navegar al guardar.
-5. [ ] Verificar backend, frontend, celulares/tabletas/escritorio, permisos y guardado concurrente. Revisar antes de publicar backend y después frontend; verificar disponibilidad y sincronizar Android.
+5. [x] Verificar backend, frontend, celulares/tabletas/escritorio, permisos y guardado concurrente. Revisar antes de publicar backend y después frontend; verificar disponibilidad y sincronizar Android.
+
+## Verificación
+
+Pruebas de consultas y compilación .NET sin advertencias ni errores. El modelo de EF no tiene cambios pendientes de migración. Las 29 pruebas de frontend y el build pasan. Navegador con 123 registros, perfiles Admin y Vendedor y tamaños de 320 a 1280 px: una sola página inicial, búsqueda global con debounce, cancelación de respuestas anteriores, detalle sin consultas adicionales, edición modal, permisos, reintento, vacío y conservación de página al guardar.
+
+Publicados backend `7f98364` y frontend `a03b591`. La comprobación de solo lectura sobre la API publicada confirmó 55 productos activos, 20 en la primera página, resumen global y filtros correctos, y `/health/ready` disponible. Recursos Android sincronizados.
 
 ## Casos importantes
 
