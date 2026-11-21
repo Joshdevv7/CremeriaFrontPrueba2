@@ -27,8 +27,8 @@
             <div class="v">{{ money(total) }}</div>
 
             <div class="resumen-pzas" v-if="lineasActivas.length > 0">
-              <span>Total de piezas a ingresar:</span>
-              <b>{{ fmt(totalPiezasIngresadas) }} pzas</b>
+              <span>Cantidades a ingresar:</span>
+              <b>{{ resumenUnidadesIngresadas }}</b>
             </div>
 
             <button class="cta" :disabled="enviando || !puede" @click="registrar()">
@@ -38,6 +38,7 @@
             <p class="nota">
               Al registrar, aumenta la mercancía disponible y se actualiza el costo promedio de cada producto.
             </p>
+            <p v-if="costosPendientes" class="err">Captura un costo de compra mayor a cero, con máximo ocho decimales, para cada producto seleccionado.</p>
             <p v-if="error" class="err">{{ error }}</p>
           </div>
         </div>
@@ -89,39 +90,39 @@
                   <span v-if="p.proveedorId === proveedorId && proveedorId" class="tag-prov">Surtido habitual</span>
                 </div>
                 <div class="pr">
-                  Costo actual: <b>{{ money(p.costoPromedio) }}</b> · En almacén: <b>{{ fmt(p.stockAlmacen) }} {{ p.unidad || 'pzas' }}</b>
+                  Costo promedio por {{ unidadBaseCompra(p).singular }}: <b>{{ money(p.costoPromedio) }}</b> · En almacén: <b>{{ fmt(p.stockAlmacen) }} {{ unidadBaseCompra(p).plural }}</b>
                 </div>
               </div>
 
               <div class="stepper">
                 <button @click="dec(p.id)" :disabled="(cant[p.id]||0)<=0">−</button>
-                <input class="q" type="number" min="0" step="any" inputmode="decimal" :value="cant[p.id] || 0" @input="setCant(p.id, $event.target.value)" @focus="$event.target.select()">
+                <input class="q" type="number" min="0" step="any" inputmode="decimal" :aria-label="`Cantidad de ${p.nombre} en ${unidad[p.id] === 'caja' ? (unidadBaseCompra(p).singular === 'caja' ? 'paquetes' : 'cajas') : unidadBaseCompra(p).plural}`" :value="cant[p.id] || 0" @input="setCant(p.id, $event.target.value)" @focus="$event.target.select()">
                 <button @click="inc(p.id)">+</button>
               </div>
             </div>
 
             <!-- Modalidad por caja o pieza -->
-            <div v-if="p.vendePorCaja" class="uni">
-              <button type="button" :class="{ on: unidad[p.id] !== 'caja' }" @click="setUnidad(p.id, 'pza')">Comprar por Pieza</button>
-              <button type="button" :class="{ on: unidad[p.id] === 'caja' }" @click="setUnidad(p.id, 'caja')">Comprar por Caja ({{ p.piezasPorCaja }} pzas)</button>
+            <div v-if="factorCompra(p, 'caja') > 1" class="uni">
+              <button type="button" :class="{ on: unidad[p.id] !== 'caja' }" @click="setUnidad(p.id, 'pza')">Comprar por {{ unidadBaseCompra(p).singular }}{{ unidadBaseCompra(p).singular === 'caja' ? ' completa' : '' }}</button>
+              <button type="button" :class="{ on: unidad[p.id] === 'caja' }" @click="setUnidad(p.id, 'caja')">Comprar por {{ unidadBaseCompra(p).singular === 'caja' ? 'paquete' : 'caja' }} de {{ p.piezasPorCaja }} {{ unidadBaseCompra(p).plural }}</button>
             </div>
 
             <!-- Entrada de costo -->
             <div v-if="(cant[p.id]||0)>0" class="costo">
               <div class="costo-lbl">
-                <span>{{ unidad[p.id] === 'caja' ? 'Costo por caja en esta compra:' : 'Costo unitario por pieza en esta compra:' }}</span>
-                <small v-if="unidad[p.id]==='caja'">= {{ (cant[p.id]||0) * p.piezasPorCaja }} piezas a {{ money((Number(costo[p.id])||0) / (p.piezasPorCaja||1)) }} c/u</small>
+                <span>Costo por {{ unidad[p.id] === 'caja' ? (unidadBaseCompra(p).singular === 'caja' ? 'paquete' : 'caja') : unidadBaseCompra(p).singular }}{{ unidadBaseCompra(p).singular === 'caja' && unidad[p.id] !== 'caja' ? ' completa' : '' }} en esta compra:</span>
+                <small v-if="unidad[p.id]==='caja'">= {{ fmt(piezasLinea(p)) }} {{ unidadBaseCompra(p).plural }} a {{ money((Number(costo[p.id])||0) / factorCompra(p, unidad[p.id])) }} por {{ unidadBaseCompra(p).singular }}</small>
               </div>
               <div class="cinp">
                 <span>$</span>
-                <input v-model.number="costo[p.id]" type="number" step="any" placeholder="0.00">
+                <input v-model.number="costo[p.id]" type="number" min="0.00000001" step="any" :aria-label="`Costo de compra de ${p.nombre}`" placeholder="Captura costo">
               </div>
             </div>
 
             <!-- Preview del nuevo Costo Promedio Ponderado -->
             <div v-if="(cant[p.id]||0)>0" class="cpp-preview">
               <span class="cpp-tag">Nuevo stock y costo promedio:</span>
-              <b>{{ fmt(Number(p.stockAlmacen) + piezasLinea(p)) }} {{ p.unidad || 'pzas' }}</b>
+              <b>{{ fmt(Number(p.stockAlmacen) + piezasLinea(p)) }} {{ unidadBaseCompra(p).plural }}</b>
               <span class="sep">→</span>
               <span class="cpp-val">Costo promedio después de la compra: <b>{{ money(calcNuevoCpp(p)) }}</b></span>
             </div>
@@ -144,7 +145,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
 import { listarPaginas } from '@/api/listarPaginas'
-import { cantidadCompra } from '@/utils/compra'
+import { cantidadCompra, factorCompra, unidadBaseCompra, costoCompraValido, convertirCostoCompra, subtotalCompraCentavos, costoPromedioCompra } from '@/utils/compra'
 import ExitoOverlay from '@/components/ExitoOverlay.vue'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 
@@ -157,6 +158,7 @@ const proveedorId = ref(null)
 const referencia = ref('')
 const cant = reactive({})
 const costo = reactive({})
+const costosOrigen = {} // Last captured cost and presentation; conversions do not overwrite it.
 const unidad = reactive({}) // productoId -> 'pza' | 'caja'
 const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const soloProveedor = ref(false)
@@ -199,7 +201,7 @@ const filtrados = computed(() => {
 })
 
 const lineasActivas = computed(() => Object.entries(cant).filter(([, q]) => q > 0).map(([id]) => Number(id)))
-const total = computed(() => lineasActivas.value.reduce((s, id) => s + (cant[id] || 0) * (Number(costo[id]) || 0), 0))
+const total = computed(() => Number(lineasActivas.value.reduce((s, id) => s + subtotalCompraCentavos(cant[id], costo[id]), 0n)) / 100)
 
 const totalPiezasIngresadas = computed(() => {
   return lineasActivas.value.reduce((s, id) => {
@@ -209,14 +211,44 @@ const totalPiezasIngresadas = computed(() => {
   }, 0)
 })
 
+const resumenUnidadesIngresadas = computed(() => {
+  const cantidades = new Map()
+  for (const id of lineasActivas.value) {
+    const p = pmap.value[id]
+    if (!p) continue
+    const etiqueta = unidadBaseCompra(p).plural
+    cantidades.set(etiqueta, (cantidades.get(etiqueta) || 0) + piezasLinea(p))
+  }
+  return [...cantidades].map(([etiqueta, cantidad]) => `${fmt(cantidad)} ${etiqueta}`).join(' · ')
+})
+
 const provNombre = computed(() => proveedores.value.find((p) => p.id === proveedorId.value)?.nombre || '')
-const puede = computed(() => proveedorId.value && lineasActivas.value.length > 0)
+const costosPendientes = computed(() => lineasActivas.value.some(id => !costoCompraValido(costo[id])))
+const puede = computed(() => proveedorId.value && lineasActivas.value.length > 0 && !costosPendientes.value)
 
 function setRef(id, el) { if (el) refs[id] = el }
-function setUnidad(id, u) { unidad[id] = u; costo[id] = 0 }
+function setUnidad(id, u) {
+  if ((unidad[id] || 'pza') === u) return
+  const p = pmap.value[id]
+  if (u === 'caja' && factorCompra(p, u) === 1) return
+  asegurarCosto(id)
+  let origen = costosOrigen[id]
+  // v-model edits are new captured costs. Conversions retain their original
+  // anchor so a manual box cost survives a round trip through a repeating ratio.
+  if (!Object.is(costo[id], origen.mostrado)) {
+    origen = { valor: costo[id], factor: factorCompra(p, unidad[id]) }
+    costosOrigen[id] = origen
+  }
+  unidad[id] = u
+  costo[id] = convertirCostoCompra(origen.valor, origen.factor, factorCompra(p, u))
+  origen.mostrado = costo[id]
+}
 function asegurarCosto(id) {
   if (costo[id] === undefined) {
-    costo[id] = unidad[id] === 'caja' ? 0 : (pmap.value[id]?.costoPromedio || 0)
+    const p = pmap.value[id]
+    const valor = costoCompraValido(p?.costoPromedio) ? Number(p.costoPromedio) : ''
+    costo[id] = convertirCostoCompra(valor, 1, factorCompra(p, unidad[id]))
+    costosOrigen[id] = { valor, factor: 1, mostrado: costo[id] }
   }
 }
 function inc(id) { cant[id] = (cant[id] || 0) + 1; asegurarCosto(id) }
@@ -229,24 +261,13 @@ function setCant(id, val) {
 
 function piezasLinea(p) {
   const c = cant[p.id] || 0
-  const esCaja = unidad[p.id] === 'caja' && p.vendePorCaja && p.piezasPorCaja > 0
-  return esCaja ? c * p.piezasPorCaja : c
+  return c * factorCompra(p, unidad[p.id])
 }
 
 function calcNuevoCpp(p) {
   const c = cant[p.id] || 0
-  const cost = Number(costo[p.id]) || 0
   if (c <= 0) return p.costoPromedio
-  const esCaja = unidad[p.id] === 'caja' && p.vendePorCaja && p.piezasPorCaja > 0
-  const piezasNuevas = esCaja ? c * p.piezasPorCaja : c
-  const costoPorPieza = esCaja ? (cost / p.piezasPorCaja) : cost
-  const stockActual = Number(p.stockAlmacen) || 0
-  const costoActual = Number(p.costoPromedio) || 0
-  const nuevoStock = stockActual + piezasNuevas
-  if (stockActual > 0 && nuevoStock > 0) {
-    return Math.round(((stockActual * costoActual + piezasNuevas * costoPorPieza) / nuevoStock) * 10000) / 10000
-  }
-  return costoPorPieza
+  return costoPromedioCompra(p.stockAlmacen, p.costoPromedio, c, costo[p.id], factorCompra(p, unidad[p.id]))
 }
 
 function salir() { router.replace('/panel/compras') }
@@ -261,7 +282,7 @@ async function onScan(code) {
   }
   if (!cant[p.id]) {
     cant[p.id] = 1
-    costo[p.id] = unidad[p.id] === 'caja' ? 0 : (p.costoPromedio || 0)
+    asegurarCosto(p.id)
   }
   scanMsg.value = `Agregado: ${p.nombre} — ajusta cantidad y costo`
   setTimeout(() => { scanMsg.value = '' }, 2500)
@@ -272,7 +293,7 @@ async function onScan(code) {
 }
 
 async function registrar() {
-  if (!puede.value) return
+  if (enviando.value || !puede.value) return
   enviando.value = true
   error.value = ''
   const lineas = lineasActivas.value.map((id) => {
@@ -288,7 +309,7 @@ async function registrar() {
     exitoDet.value = [
       { k: 'Proveedor', v: provNombre.value },
       { k: 'Productos', v: `${lineas.length} artículo(s)` },
-      { k: 'Piezas totales', v: `${fmt(totalPiezasIngresadas.value)} pzas` },
+      { k: 'Cantidades ingresadas', v: resumenUnidadesIngresadas.value },
       { k: 'Total factura', v: money(total.value) }
     ]
     exito.value = true

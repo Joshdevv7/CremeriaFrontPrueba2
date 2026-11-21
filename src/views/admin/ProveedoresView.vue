@@ -41,34 +41,35 @@
     </div>
 
     <!-- BARRA DE KPIS -->
-    <div class="kpis">
+    <div class="kpis" v-if="resumen">
       <div class="kpi-card">
         <div class="kpi-l">Proveedores totales</div>
-        <div class="kpi-v">{{ items.length }}</div>
-        <div class="kpi-s">{{ kpiActivos }} activos en operación</div>
+        <div class="kpi-v">{{ resumen.totalProveedores }}</div>
+        <div class="kpi-s">{{ resumen.activos }} activos en operación</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-l">Con WhatsApp de reorden</div>
-        <div class="kpi-v ok">{{ kpiConWa }}</div>
+        <div class="kpi-v ok">{{ resumen.conWhatsapp }}</div>
         <div class="kpi-s">Listos para solicitud automática</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-l">Productos asociados</div>
-        <div class="kpi-v sky">{{ kpiTotalProductos }}</div>
+        <div class="kpi-v sky">{{ resumen.totalProductos }}</div>
         <div class="kpi-s">Artículos vinculados a proveedores</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-l">Proveedores inactivos</div>
-        <div class="kpi-v" :class="{ alert: kpiInactivos > 0 }">{{ kpiInactivos }}</div>
-        <div class="kpi-s">{{ kpiInactivos > 0 ? 'Sin surtido reciente' : 'Ninguno dado de baja' }}</div>
+        <div class="kpi-v" :class="{ alert: resumen.inactivos > 0 }">{{ resumen.inactivos }}</div>
+        <div class="kpi-s">{{ resumen.inactivos > 0 ? 'Sin surtido reciente' : 'Ninguno dado de baja' }}</div>
       </div>
     </div>
 
+    <p v-if="errorResumen" class="err" role="alert">{{ errorResumen }} <button class="btn-edit" @click="cargarResumen">Reintentar resumen</button></p>
     <!-- BUSCADOR Y PESTAÑAS -->
     <div class="filtros-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input v-model="buscar" placeholder="Buscar proveedor por nombre o teléfono (mínimo 3 caracteres)">
+        <input v-model="buscar" type="search" aria-label="Buscar proveedor" placeholder="Buscar proveedor por nombre o teléfono (mínimo 3 caracteres)">
         <button v-if="buscar" class="clear-b" @click="buscar = ''" aria-label="Limpiar búsqueda"><CrmIcon name="close" /></button>
       </div>
 
@@ -79,13 +80,13 @@
       </div>
     </div>
 
-    <p v-if="cargando" class="muted">Cargando proveedores…</p>
-    <p v-else-if="error" class="err">{{ error }}</p>
-    <p v-else-if="!filtrados.length" class="muted">{{ vacioTexto }}</p>
+    <p v-if="cargando" class="muted" role="status">Cargando página de proveedores…</p>
+    <p v-else-if="error" class="err" role="alert">{{ error }} <button class="btn-edit" @click="cargar">Reintentar</button></p>
+    <p v-else-if="!items.length" class="muted">{{ vacioTexto }}</p>
 
     <!-- LISTADO DE TARJETAS -->
     <div class="grid" v-else>
-      <div v-for="p in filtrados" :key="p.id" class="card" :class="{ inactivo: !p.activo }">
+      <div v-for="p in items" :key="p.id" class="card" :class="{ inactivo: !p.activo }">
         <div class="card-top">
           <div class="chip"><ion-icon :icon="cubeOutline" /></div>
           <div class="info" @click="editar(p.id)">
@@ -119,26 +120,36 @@
         </div>
       </div>
     </div>
+    <nav class="pager" v-if="!error && totalPaginas > 1" aria-label="Páginas de proveedores">
+      <button :disabled="cargando || pagina <= 1" aria-label="Página anterior" @click="irPagina(pagina - 1)">‹</button>
+      <button v-for="n in paginasVisibles" :key="n" :disabled="cargando" :aria-label="`Página ${n}`" :aria-current="pagina === n ? 'page' : undefined" @click="irPagina(n)">{{ n }}</button>
+      <button :disabled="cargando || pagina >= totalPaginas" aria-label="Página siguiente" @click="irPagina(pagina + 1)">›</button>
+    </nav>
+    <p v-if="!cargando && !error" class="cuenta" aria-live="polite">{{ total ? (pagina - 1) * tamano + 1 : 0 }}–{{ Math.min(pagina * tamano, total) }} de {{ total }} proveedores</p>
   </div>
 </template>
 
 <script setup>
 import CrmIcon from '@/components/CrmIcon.vue'
-import { useBusqueda, normalizarBusqueda } from '@/composables/useBusqueda'
+import { useBusqueda } from '@/composables/useBusqueda'
+import { useListadoPaginado } from '@/composables/useListadoPaginado'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IonIcon } from '@ionic/vue'
 import { cubeOutline, cartOutline, createOutline } from 'ionicons/icons'
-import { listarPaginas } from '@/api/listarPaginas'
+import http from '@/api/http'
 
 const emit = defineEmits(['ctx'])
 const router = useRouter()
-const items = ref([])
-const cargando = ref(true)
-const error = ref('')
 const { buscar: buscar, termino: terminoBusqueda } = useBusqueda('')
 const tabActiva = ref('todos')
 const guiaAbierta = ref(false)
+const { items, resumen, cargando, error, errorResumen, total, pagina, tamano, totalPaginas,
+  paginasVisibles, irPagina, cargar, cargarResumen, actualizar } = useListadoPaginado({
+  obtenerPagina: config => http.get('/proveedores', config),
+  obtenerResumen: config => http.get('/proveedores/resumen', config),
+  filtros: () => ({ buscar: terminoBusqueda.value || undefined, filtro: tabActiva.value, incluirInactivos: true })
+})
 
 const tabs = [
   { k: 'todos', l: 'Todos' },
@@ -146,22 +157,6 @@ const tabs = [
   { k: 'activos', l: 'Activos' },
   { k: 'inactivos', l: 'Inactivos' }
 ]
-
-const filtrados = computed(() => {
-  return items.value.filter(p => {
-    const texto = terminoBusqueda.value
-    if (texto && ![p.nombre, p.telefono, p.whatsapp].some(valor => normalizarBusqueda(valor).includes(texto))) return false
-    if (tabActiva.value === 'wa' && !p.whatsapp) return false
-    if (tabActiva.value === 'activos' && !p.activo) return false
-    if (tabActiva.value === 'inactivos' && p.activo) return false
-    return true
-  })
-})
-
-const kpiActivos = computed(() => items.value.filter(p => p.activo).length)
-const kpiInactivos = computed(() => items.value.filter(p => !p.activo).length)
-const kpiConWa = computed(() => items.value.filter(p => p.whatsapp && p.activo).length)
-const kpiTotalProductos = computed(() => items.value.reduce((s, p) => s + (p.totalProductos || 0), 0))
 
 const vacioTexto = computed(() => {
   if (buscar.value) return 'No se encontraron proveedores con ese criterio.'
@@ -179,18 +174,6 @@ function whatsapp(p) {
   window.open(`https://wa.me/${num}`, '_blank')
 }
 
-async function cargar() {
-  cargando.value = true
-  error.value = ''
-  try {
-    items.value = await listarPaginas('/proveedores', { incluirInactivos: true })
-  } catch (e) {
-    error.value = e.response?.data?.mensaje || 'No se pudieron cargar los proveedores.'
-  } finally {
-    cargando.value = false
-  }
-}
-
 onMounted(() => {
   emit('ctx', {
     titulo: 'Proveedores',
@@ -198,7 +181,7 @@ onMounted(() => {
     back: null,
     acciones: { boton: { texto: 'Nuevo proveedor', to: '/panel/proveedor/nuevo' } }
   })
-  cargar()
+  actualizar()
 })
 </script>
 
@@ -206,6 +189,11 @@ onMounted(() => {
 .proveedores-page { display: flex; flex-direction: column; gap: 14px; }
 .muted { color: var(--muted); margin-top: 24px; text-align: center; font-weight: 500; }
 .err { color: var(--clay); font-weight: 600; margin-top: 24px; }
+.pager { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pager button { display: grid; place-items: center; min-width: 34px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink-soft); font: inherit; font-weight: 700; cursor: pointer; }
+.pager button[aria-current=page] { background: var(--pine); color: #fff; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.cuenta { color: var(--muted); font-size: 12px; text-align: center; margin: 0; }
 
 /* Tarjeta Educativa */
 .edu-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
